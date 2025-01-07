@@ -25,11 +25,22 @@ from watchdog.observers import Observer
 
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
 bindist_dir = os.path.join(script_dir, "bindist")
 # Add 'bindist' to the beginning of sys.path
 print(bindist_dir)
 sys.path.insert(0, bindist_dir)
 # import polymask as pm
+=======
+bindist_dir = os.path.join(script_dir, 'bindist')
+bin_dir = os.path.join(script_dir,'bin')
+# Add 'bindist' to the beginning of sys.path
+print(bindist_dir)
+sys.path.insert(0, bindist_dir)
+sys.path.insert(0,bin_dir)
+# import polymask as pm
+import fmask
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
 
 # insert GSASII into the path so we can import its functions
 # sys.path.insert(0, 'C:/Users/amerritt/AppData/Local/gsas2full/GSASII/bindist') #polymask, fmask
@@ -102,8 +113,13 @@ class image_monitor(RegexMatchingEventHandler):
         #'_ext' not on base images
         # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif.metadata$"
         # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif$"
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         reg_image = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
         # reg for integral data files
+=======
+        reg_image = r"(?P<directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+        #reg for integral data files
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         ###
         regs = [reg_image]
         RegexMatchingEventHandler.__init__(self, regexes=regs)
@@ -1000,8 +1016,13 @@ def getmaps(
     imctrls = cache["Image Controls"]
     TA = Make2ThetaAzimuthMap(imctrls, (0, imctrls["size"][0]), (0, imctrls["size"][1]))
     if save:
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         imctrlname = imctrlname.split("\\")[-1].split("/")[-1]
         path1 = os.path.join(pathmaps, imctrlname)
+=======
+        imctrlname = os.path.split(imctrlname)[1]
+        path1 =  os.path.join(pathmaps,imctrlname)
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         im = Image.fromarray(TA[0])
         im.save(os.path.splitext(path1)[0] + "_2thetamap.tif")
         cache["pixelTAmap"] = TA[0]
@@ -1267,6 +1288,7 @@ def gradient_cache(image_shape, center, footprint):
     # print("Kernels calculated, getting convolutions")
     r_hat, phi_hat = r_and_phi_hat(image_shape, center)
     t1 = time.time()
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
     print(
         "Gradient time spent on calculations that should be saved to cache: {0:.2f}s".format(
             t1 - t0
@@ -1278,6 +1300,10 @@ def gradient_cache(image_shape, center, footprint):
         "kernel_x": kernel_x,
         "kernel_y": kernel_y,
     }
+=======
+    print("Gradient time spent on cache calculations: {0:.2f}s".format(t1-t0))
+    return_dict = {'r_hat': r_hat, 'phi_hat': phi_hat, 'kernel_x': kernel_x, 'kernel_y': kernel_y}
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
     return return_dict
 
 
@@ -1803,6 +1829,7 @@ class CacheCreator(QtCore.QObject):
         # path1 =  os.path.join(pathmaps,imctrlname)
         # im = Image.fromarray(TA[0])
         # im.save(os.path.splitext(path1)[0] + '_2thetamap.tif')
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         imsave = Image.fromarray(predef_mask["image"])
         imsave.save(
             self.directory
@@ -1823,6 +1850,18 @@ class CacheCreator(QtCore.QObject):
         image_dict["Image Controls"]["pixelSize"] = [150.0, 150.0]
         self.cache["Image Controls"]["pixelSize"] = [150.0, 150.0]
         # cache['Masks'] = img.getMasks()
+=======
+        imsave = Image.fromarray(predef_mask['image'])
+        imsave.save(os.path.join(self.directory, "maps", os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_predef.tif"))
+        imsave = Image.fromarray(flatfield_image)
+        imsave.save(os.path.join(self.directory, "maps", os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"))
+        self.cache['Image Controls'] = image_dict['Image Controls']
+        #TODO: Look at image size?
+        #img.setControl('pixelSize',[150.0,150.0])
+        image_dict['Image Controls']['pixelSize'] = [150.0,150.0]
+        self.cache['Image Controls']['pixelSize'] = [150.0,150.0]
+        #cache['Masks'] = img.getMasks()
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         # self.cache['Masks'] = image_dict['Masks']
         # cache['intMaskMap'] = img.IntMaskMap() # calc mask & TA arrays to save for integrations
         # for k,v in img_copy['Image Controls'].items():
@@ -1832,6 +1871,7 @@ class CacheCreator(QtCore.QObject):
         #        print(k, img.data['Image Controls'][k])
         # Missing 5: size, samplechangerpos, det2theta, ImageTag, formatName
         # [2880,2880] None 0.0 None GSAS-II known TIF image
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         # only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
 
         self.cache["intMaskMap"] = MakeUseMask(
@@ -1854,6 +1894,24 @@ class CacheCreator(QtCore.QObject):
         center[1] = center[1] * 1000.0 / self.cache["Image Controls"]["pixelSize"][1]
         self.cache["center"] = center
         image_dict["center"] = center
+=======
+        #only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
+        
+        # self.cache['intMaskMap'] = MakeUseMask(image_dict['Image Controls'],image_dict['Masks'],blkSize=self.blkSize)
+        #cache['intTAmap'] = img.IntThetaAzMap()
+        self.cache['intTAmap'] = MakeUseTA(image_dict['Image Controls'],self.blkSize)
+        #cache['FrameMask'] = img.MaskFrameMask() # calc Frame mask & T array to save for Pixel masking
+        self.cache['FrameMask'] = MaskFrameMask(image_dict)
+        #cache['maskTmap'] = img.MaskThetaMap()
+        self.cache['maskTmap'] = Make2ThetaAzimuthMap(image_dict['Image Controls'],(0,image_dict['Image Controls']['size'][0]),(0,image_dict['Image Controls']['size'][1]))[0]
+        getmaps(self.cache,self.imctrlname,os.path.join(self.directory,"maps"))
+        #2th fairly linear along center; calc 2th - pixelsize conversion
+        center = self.cache['Image Controls']['center']
+        center[0] = center[0]*1000./self.cache['Image Controls']['pixelSize'][0]
+        center[1] = center[1]*1000./self.cache['Image Controls']['pixelSize'][1]
+        self.cache['center'] = center
+        image_dict['center'] = center
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         # self.cache['d2th'] = (self.cache['pixelTAmap'][int(center[1]),0] - self.cache['pixelTAmap'][int(center[1]),99])/100
         self.cache["esdMul"] = 3
         numChansAzim = 360
@@ -1959,11 +2017,19 @@ class SingleIterator(QtCore.QObject):
         # img.setMasks(cache['Masks'],True)  # True: reset threshold masks
         # image_dict['Masks'] = self.cache['Masks']
         single_iter_times.append(time.time())
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         time_checkpoints.append("Cache")
         print("Data after loading controls")
         # print(img.data)
         # print(img.data['Image Controls'])
         # print(img.data['Comments'])
+=======
+        time_checkpoints.append('Cache')
+        # print("Data after loading controls")
+        #print(img.data)
+        #print(img.data['Image Controls'])
+        #print(img.data['Comments'])
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         print("Cache")
         # for k,v in cache.items():
         #    print(k,v)
@@ -1974,6 +2040,7 @@ class SingleIterator(QtCore.QObject):
         # mask_nonzero = nonzeromask(image_dict['image'])
         nonpositive_mask = ~nonzeromask(image_dict["image"], mask_negative=True)
         imsave = Image.fromarray(nonpositive_mask)
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         imsave.save(
             self.directory
             + "\\masks\\"
@@ -1982,6 +2049,9 @@ class SingleIterator(QtCore.QObject):
             + self.number
             + "_nonpositive.tif"
         )
+=======
+        imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_nonpositive.tif'))
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         # frame_and_predef = np.logical_or(self.cache['FrameMask'],self.cache['predef_mask'])
         # frame_and_predef = np.logical_or(frame_and_predef,~mask_nonzero)
         predef_and_nonpositive = np.logical_or(
@@ -2021,9 +2091,13 @@ class SingleIterator(QtCore.QObject):
         # outlier_mask = img.data['Masks']['SpotMask']['spotMask']
         outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]
         imsave = Image.fromarray(outlier_mask)
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         imsave.save(
             self.directory + "\\masks\\" + self.name + "-" + self.number + "_om.tif"
         )
+=======
+        imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_om.tif'))
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         single_iter_times.append(time.time())
         time_checkpoints.append("Outlier Mask")
         # close holes
@@ -2034,6 +2108,7 @@ class SingleIterator(QtCore.QObject):
                 outlier_mask, footprint=ski.morphology.square(3)
             )
             imsave = Image.fromarray(closed_mask)
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
             imsave.save(
                 self.directory
                 + "\\masks\\"
@@ -2042,9 +2117,13 @@ class SingleIterator(QtCore.QObject):
                 + self.number
                 + "_closedmask.tif"
             )
+=======
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_closedmask.tif'))
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         elif self.closing_method == "remove_small":
             closed_mask = ski.morphology.remove_small_holes(outlier_mask, 6)
             imsave = Image.fromarray(closed_mask)
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
             imsave.save(
                 self.directory
                 + "\\masks\\"
@@ -2053,6 +2132,9 @@ class SingleIterator(QtCore.QObject):
                 + self.number
                 + "_closedmask.tif"
             )
+=======
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_closedmask.tif'))
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         elif (self.closing_method == None) or (self.closing_method == ""):
             closed_mask = outlier_mask
         else:
@@ -2066,6 +2148,7 @@ class SingleIterator(QtCore.QObject):
             print("Splitting the mask")
         # spots, arcs = split_h_and_grad(image_dict['image'],image_dict['Image Controls']['center'],closed_mask,image_dict['grad'])
         # split_spots, split_arcs = current_splitting_method(image_dict['image'],closed_mask,image_dict['pixelQmap'],image_dict['gradient'])
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         (
             split_spots,
             split_arcs,
@@ -2146,6 +2229,29 @@ class SingleIterator(QtCore.QObject):
             + self.number
             + "_radial_grad_2.tif"
         )
+=======
+        return_steps = False
+        if return_steps:
+            split_spots, split_arcs, spots_table, base_arc, qgrad_arc, azim_grad_2, radial_grad_2 = current_splitting_method(image_dict['image'],closed_mask,self.cache['pixelQmap'],self.cache['pixelAzmap'],self.cache['gradient'],return_steps=return_steps,interpolate=False,predef_mask=nonpositive_mask,predef_mask_extended=predef_mask_extended)
+            imsave = Image.fromarray(split_spots)
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_spots.tif'))
+            imsave = Image.fromarray(split_arcs)
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_arcs.tif'))
+            imsave = Image.fromarray(base_arc)
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_qwidth_arc.tif'))
+            imsave = Image.fromarray(qgrad_arc)
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_qgrad_arc.tif'))
+            imsave = Image.fromarray(azim_grad_2)
+            imsave.save(os.path.join(self.directory, "grads", self.name + '-' + self.number + '_azim_grad_2.tif'))
+            imsave = Image.fromarray(radial_grad_2)
+            imsave.save(os.path.join(self.directory, "grads", self.name + '-' + self.number + '_radial_grad_2.tif'))
+        else:
+            split_spots, split_arcs, spots_table = current_splitting_method(image_dict['image'],closed_mask,self.cache['pixelQmap'],self.cache['pixelAzmap'],self.cache['gradient'],return_steps=return_steps,interpolate=False,predef_mask=nonpositive_mask,predef_mask_extended=predef_mask_extended)
+            imsave = Image.fromarray(split_spots)
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_spots.tif'))
+            imsave = Image.fromarray(split_arcs)
+            imsave.save(os.path.join(self.directory, "masks", self.name + '-' + self.number + '_arcs.tif'))
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         single_iter_times.append(time.time())
         time_checkpoints.append("Mask Splitting 0.1")
 
@@ -2234,12 +2340,18 @@ class SingleIterator(QtCore.QObject):
         single_iter_times.append(time.time())
         time_checkpoints.append("Integration")
         # save integrals
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         integral_file_base = (
             self.directory + "\\integrals\\" + self.name + "-" + self.number
         )
+=======
+        # integral_file_base = self.directory + '\\integrals\\' + self.name + '-' + self.number
+        integral_file_base = os.path.join(self.directory, 'integrals', self.name + '-' + self.number)
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         # print(len(hist_base), len(hist_om), len(hist_spotsmasked), len(hist_arcsmasked), len(hist_closed), len(hist_closedspotsmasked), len(hist_closedarcsmasked))
         # hist_base[0].Export(directory + '\\integrals\\' + name + '-' + number + '_base.xye','.xye')
         # Export_xye(hist_base[0],directory + '\\integrals\\' + name + '-' + number + '_base.xye')
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         Export_xye(
             self.name + "-" + self.number + "_base",
             hist_base.T,
@@ -2247,6 +2359,10 @@ class SingleIterator(QtCore.QObject):
             error=False,
         )
         # hist_om[0].Export(directory + '\\integrals\\' + name + '-' + number + '_om.xye','.xye')
+=======
+        Export_xye(self.name + '-' + self.number + '_base', hist_base.T, integral_file_base + '_base.xye', error=False)
+        #hist_om[0].Export(directory + '\\integrals\\' + name + '-' + number + '_om.xye','.xye')
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         # Export_xye(hist_om[0],directory + '\\integrals\\' + name + '-' + number + '_om.xye')
         # hist_spotsmasked[0].Export(directory + '\\integrals\\' + name + '-' + number + '_spotsmasked.xye','.xye')
         # Export_xye(hist_spotsmasked[0],directory + '\\integrals\\' + name + '-' + number + '_spotsmasked.xye')
@@ -2254,6 +2370,7 @@ class SingleIterator(QtCore.QObject):
         # Export_xye(hist_arcsmasked[0],directory + '\\integrals\\' + name + '-' + number + '_arcsmasked.xye')
         # hist_closed[0].Export(directory + '\\integrals\\' + name + '-' + number + '_closed.xye','.xye')
         # Export_xye(hist_closed[0],directory + '\\integrals\\' + name + '-' + number + '_closed.xye')
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         Export_xye(
             self.name + "-" + self.number + "_closed",
             hist_closed.T,
@@ -2276,6 +2393,15 @@ class SingleIterator(QtCore.QObject):
             integral_file_base + "_closedarcsmasked.xye",
             error=False,
         )
+=======
+        Export_xye(self.name + '-' + self.number + '_closed', hist_closed.T, integral_file_base + '_closed.xye', error=False)
+        #hist_closedspotsmasked[0].Export(directory + '\\integrals\\' + name + '-' + number + '_closedspotsmasked.xye','.xye')
+        # Export_xye(hist_closedspotsmasked[0],directory + '\\integrals\\' + name + '-' + number + '_closedspotsmasked.xye')
+        Export_xye(self.name + '-' + self.number + '_closedspotsmasked', hist_closedspotsmasked.T, integral_file_base + '_closedspotsmasked.xye', error=False)
+        #hist_closedarcsmasked[0].Export(directory + '\\integrals\\' + name + '-' + number + '_closedarcsmasked.xye','.xye')
+        # Export_xye(hist_closedarcsmasked[0],directory + '\\integrals\\' + name + '-' + number + '_closedarcsmasked.xye')
+        Export_xye(self.name + '-' + self.number + '_closedarcsmasked', hist_closedarcsmasked.T, integral_file_base + '_closedarcsmasked.xye', error=False)
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         single_iter_times.append(time.time())
         time_checkpoints.append("Writing integrals to disk")
         # delete temporary project
@@ -2286,7 +2412,11 @@ class SingleIterator(QtCore.QObject):
         # single_iter_times.append(time.time())
 
         # stats
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
         stats_prefix = self.directory + "\\stats\\" + self.name
+=======
+        stats_prefix = os.path.join(self.directory, 'stats', self.name)
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         # spots stats
         spots_table.to_csv(stats_prefix + "-" + self.number + "_spots_stats.csv")
         # ~ 950 KB for table
@@ -2314,9 +2444,13 @@ class SingleIterator(QtCore.QObject):
             # turn int back to '00001' format, padded to 5 digits
             prev_number = f"{number_int_prev:05}"
         try:
+<<<<<<< HEAD:src/xrdpipeline/pipeline.py
             previous_image = ski.io.imread(
                 self.directory + "\\" + self.name + "-" + prev_number + self.ext
             ).astype(np.float32)
+=======
+            previous_image = ski.io.imread(os.path.join(self.directory, self.name + '-' + prev_number + self.ext)).astype(np.float32)
+>>>>>>> 27d7e25 (Generalize pipeline file directories for any OS):pipeline.py
         except:
             previous_image = image_dict["image"].astype(np.float32)
         csim_f = 1 - spatial.distance.cosine(
@@ -2784,8 +2918,8 @@ if __name__ == "__main__":
     if args.imctrl:
         if os.path.exists(PathWrap(args.imctrl)):
             imgctrl = PathWrap(args.imctrl)
-        elif os.path.exists(directory + "\\" + args.imctrl):
-            imgctrl = directory + "\\" + args.imctrl
+        elif os.path.exists(os.path.join(directory, args.imctrl)):
+            imgctrl = os.path.join(directory, args.imctrl)
         else:
             print(
                 "Image control file not found in this directory or in specified directory."
