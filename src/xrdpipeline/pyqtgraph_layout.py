@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
+import PySide6
 import pyqtgraph as pg
 import tifffile as tf
 from pyqtgraph.Qt import QtCore, QtWidgets
@@ -432,27 +433,25 @@ class KeyPressWindow(QtWidgets.QWidget):
         )
         keylist = []
         tiflist = {}
-        for tif in fulltiflist:  # Probably losing sort here
-            # key = tif.split("\\")[-1].split("/")[-1].split("-")[0] # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
-            key = tif.split("\\")[-1].split("/")[-1]
+        for tif in fulltiflist: # Probably losing sort here
+            #key = tif.split("\\")[-1].split("/")[-1].split("-")[0] # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
+            key = os.path.split(tif)[1]
             key = key[0 : re.search(r"(\d{5})", key).start(0)]
             if key not in keylist:
                 keylist.append(key)
                 tiflist[key] = []
-            # initialimage = tif[0:re.search(r'(\d+)\D+$', tif).end(1)] # string from the start to the end of the last set of numbers.
-            initialimage = tif.split("\\")[-1].split("/")[-1].split(".tif")[0]
+            #initialimage = tif[0:re.search(r'(\d+)\D+$', tif).end(1)] # string from the start to the end of the last set of numbers.
+            initialimage = os.path.splitext(os.path.split(tif)[1])[0]
             if initialimage not in tiflist[key]:
                 tiflist[key].append(initialimage)
         self.settings.keylist = keylist
         self.settings.tiflist = tiflist
         # get size of first image, if it exists
         self.settings.image_size = self.get_image_size(
-            self.settings.directory
-            + "\\"
-            + self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
-                self.settings.curr_pos
-            ]
-            + ".tif"
+            os.path.join(
+                self.settings.directory,
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]+".tif"
+            )
         )
 
     def get_image_size(self, imagename):
@@ -468,9 +467,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.contour_widget.update_integral_list()
         last_completed = self.tabbed_area.contour_widget.integral_filelist[-1]
         # print(last_completed.split("\\")[1].split(self.tabbed_area.contour_widget.integral_extension)[0])
-        last_completed = last_completed.split("\\")[-1].split(
-            self.tabbed_area.contour_widget.integral_extension
-        )[0]
+        last_completed = os.path.splitext(os.path.split(last_completed)[1])[0]
         # print(tiflist[keylist[curr_key]])
         completed_pos = self.settings.tiflist[
             self.settings.keylist[self.settings.curr_key]
@@ -799,7 +796,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.live_view_image_checkbox.stateChanged.disconnect(
                 self.live_view_image_checkbox_changed
             )
-            self.live_view_image_checkbox.setCheckState(False)
+            self.live_view_image_checkbox.setChecked(False)
             self.live_view_image_checkbox.stateChanged.connect(
                 self.live_view_image_checkbox_changed
             )
@@ -1006,10 +1003,10 @@ class MainImageView(pg.GraphicsLayoutWidget):
         # Range: x, y min and max
         # HistogramRange: visible axis range for z
         self.tth_map = tf.imread(
-            glob.glob(self.settings.directory + "\\maps\\*_2thetamap.tif")[0]
+            glob.glob(os.path.join(self.settings.directory,"maps")+os.sep+"*_2thetamap.tif")[0]
         )
         self.azim_map = tf.imread(
-            glob.glob(self.settings.directory + "\\maps\\*_azmmap.tif")[0]
+            glob.glob(os.path.join(self.settings.directory,"maps")+os.sep+"*_azmmap.tif")[0]
         )
         self.predef_mask_data.set_color(self.settings.colors["predef_mask"].color)
         self.nonpositive_mask_data.set_color(
@@ -1025,12 +1022,10 @@ class MainImageView(pg.GraphicsLayoutWidget):
     def update_image_data(self, xy_reset=False, z_reset=False):
         # global tiflist, keylist, curr_key, curr_pos
         self.image_data = tf.imread(
-            self.settings.directory
-            + "\\"
-            + self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
-                self.settings.curr_pos
-            ]
-            + ".tif"
+            os.path.join(
+                self.settings.directory,
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + ".tif"
+            )
         )
         if z_reset:
             maxval = np.percentile(self.image_data, 99.9)
@@ -1054,17 +1049,14 @@ class MainImageView(pg.GraphicsLayoutWidget):
 
     def update_masks_data(self):
         # global tiflist, keylist, curr_key, curr_pos
-        for mask, vals in self.masks.items():
-            # print(tiflist[keylist[curr_key]][curr_pos])
-            file_name = (
-                self.settings.directory
-                + "\\masks\\"
-                + self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
-                    self.settings.curr_pos
-                ]
-                + vals[1]
+        for mask,vals in self.masks.items():
+            #print(tiflist[keylist[curr_key]][curr_pos])
+            file_name = os.path.join(
+                self.settings.directory,
+                "masks",
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + vals[1]
             )
-            # if os.path.exists(file_name):
+            #if os.path.exists(file_name):
             #    vals[0][:,:,3] = tf.imread(file_name)
             # else:
             #    vals[0][:,:,3] = 0
@@ -1278,22 +1270,20 @@ class IntegralView(pg.GraphicsLayoutWidget):
     def update_integral_data(self):
         # print("Integrals: updating data")
         # global tiflist, keylist, curr_key, curr_pos
-        integral_infile_piece = (
-            self.settings.directory
-            + "\\integrals\\"
-            + self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
-                self.settings.curr_pos
-            ]
+        integral_infile_piece = os.path.join(
+            self.settings.directory,
+            "integrals",
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
         )
         integrals_dict = {
             "_base.xye": self.integral_data,
             "_closed.xye": self.masked_integral_data,
             "_closedspotsmasked.xye": self.spotmasked_integral_data,
             "_closedarcsmasked.xye": self.texturemasked_integral_data,
-            #   "_closed.xye":self.closed_integral_data,
-            #   "_closedarcsmasked.xye":self.closedarcs_integral_data,
-            #   "_closedspotsmasked.xye":self.closedspots_integral_data,
-            # "_closed_pytorch.xye":self.pytorch_integral_data,
+            # "_closed.xye": self.closed_integral_data,
+            # "_closedarcsmasked.xye": self.closedarcs_integral_data,
+            # "_closedspotsmasked.xye": self.closedspots_integral_data,
+            # "_closed_pytorch.xye": self.pytorch_integral_data,
         }
         for ext, vals in integrals_dict.items():
             # print("Integrals: loading data for {0}".format(ext))
@@ -1627,15 +1617,12 @@ class StatsView(pg.GraphicsLayoutWidget):
             )
 
     def update_stats_data(self):
-        stats_infile = (
-            self.settings.directory
-            + "\\stats\\"
-            + self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
-                self.settings.curr_pos
-            ]
-            + "_spots_hist.npy"
+        stats_infile = os.path.join(
+            self.settings.directory,
+            "stats",
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_hist.npy"
         )
-        with open(stats_infile, "rb") as infile:
+        with open(stats_infile, 'rb') as infile:
             self.spots_stats_hist = np.load(infile)
             self.area_bins = np.load(infile)
             self.Q_bins = np.load(infile)
@@ -1705,19 +1692,16 @@ class CSimView(pg.GraphicsLayoutWidget):
         # global keylist, curr_key
         for k, v in self.methods.items():
             # Two files get created, one with 00000 and one without. Try finding the former first; latter only appears if there is only one file.
-            filename0 = (
-                self.settings.directory
-                + "\\stats\\"
-                + self.settings.keylist[self.settings.curr_key]
-                + "00000"
-                + v
+            filename0 = os.path.join(
+                self.settings.directory,
+                "stats",
+                self.settings.keylist[self.settings.curr_key] + "00000" + v
             )
-            filename = (
-                self.settings.directory
-                + "\\stats\\"
-                + self.settings.keylist[self.settings.curr_key][:-1]
-                + v
-            )  # testing shows the - at the end, need to remove
+            filename  = os.path.join(
+                self.settings.directory,
+                "stats",
+                self.settings.keylist[self.settings.curr_key][:-1] + v
+            ) # testing shows the - at the end, need to remove
             if os.path.exists(filename0):
                 self.similarity_line_data[k] = np.loadtxt(filename0, skiprows=2)
             elif os.path.exists(filename):
@@ -1854,17 +1838,20 @@ class ContourView(pg.GraphicsLayoutWidget):
         # global keylist, curr_key
         self.integral_filelist = sorted(
             glob.glob(
-                self.settings.directory
-                + "\\integrals\\"
-                + self.settings.keylist[self.settings.curr_key]
+                os.path.join(
+                    self.settings.directory,
+                    "integrals",
+                    self.settings.keylist[self.settings.curr_key]
+                )
+                + os.sep
                 + "*"
                 + self.integral_extension
             ),
-            key=os.path.getctime,
+            key=os.path.getctime
         )
-        # Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
-        # Test files showing 0.02 seconds from creation time to modification time
-        # print(os.path.getmtime(self.integral_filelist[-1]) - os.path.getctime(self.integral_filelist[-1]))
+        #Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
+        #Test files showing 0.02 seconds from creation time to modification time
+        #print(os.path.getmtime(self.integral_filelist[-1]) - os.path.getctime(self.integral_filelist[-1]))
         if (len(self.integral_filelist) > 0) and (
             time.time() - os.path.getctime(self.integral_filelist[-1]) < 0.5
         ):
@@ -2228,5 +2215,5 @@ def main_GUI():
     sys.exit(app.exec())
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main_GUI()

@@ -1,5 +1,6 @@
-from PySide6 import QtWidgets
-from PySide6.QtCore import Qt, Signal
+import os
+os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"
+from pyqtgraph.Qt import QtGui, QtWidgets, QtCore
 import glob
 import re
 import numpy as np
@@ -28,7 +29,7 @@ class ImageAndMask(QtWidgets.QWidget):
         self.image_ext = QtWidgets.QLineEdit()
         self.maskdir_label = QtWidgets.QLabel("Mask subdir:")
         self.mask_dir = QtWidgets.QLineEdit()
-        self.mask_dir.setText("masks\\")
+        self.mask_dir.setText("masks" + os.sep)
         self.maskext_label = QtWidgets.QLabel("Mask extension:")
         self.mask_ext = QtWidgets.QLineEdit()
 
@@ -36,13 +37,11 @@ class ImageAndMask(QtWidgets.QWidget):
         self.z_options_label = QtWidgets.QLabel("Intensity options:")
         # link to first image
         self.link_to_first_image_checkbox = QtWidgets.QCheckBox(
-            "Link intensity to first image"
+            "Link intensity to top-left image"
         )
         # default to (0,99.9th)
         self.image_scaling_checkbox = QtWidgets.QCheckBox("Detector image")
-        #
-        # self.image_scaling_checkbox.setCheckState(2)
-        self.image_scaling_checkbox.setCheckState(Qt.Checked)
+        self.image_scaling_checkbox.setChecked(True)
         # default to (-10000,10000)
         self.gradient_scaling_checkbox = QtWidgets.QCheckBox("Gradient image")
 
@@ -123,7 +122,7 @@ class ImageAndMask(QtWidgets.QWidget):
 
 
 class FileSelect(QtWidgets.QWidget):
-    file_selected = Signal(str)
+    file_selected = pg.QtCore.Signal(str)
 
     def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None):
         super().__init__()
@@ -237,29 +236,26 @@ class KeyPressWindow(QtWidgets.QMainWindow):
         )
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Right:
+        if event.key() == QtCore.Qt.Key_Right:
             self.forward()
-        elif event.key() == Qt.Key_Left:
+        elif event.key() == QtCore.Qt.Key_Left:
             self.backward()
-        elif event.key() == Qt.Key_Up:
+        elif event.key() == QtCore.Qt.Key_Up:
             self.prevkey()
-        elif event.key() == Qt.Key_Down:
+        elif event.key() == QtCore.Qt.Key_Down:
             self.nextkey()
-        elif event.key() == Qt.Key_Space:
+        elif event.key() == QtCore.Qt.Key_Space:
             self.update_tiflist()
 
     def update_tiflist(self, reset=False):
         print(self.directory)
-        self.fulltiflist = glob.glob(self.directory + "\\*.tif")
+        self.fulltiflist = glob.glob(self.directory + os.sep + "*.tif")
         self.keylist = []
         self.tiflist = {}
         for tif in self.fulltiflist:
-            short = tif.split("\\")[-1]
-            key = short.split(
-                "-"
-            )[
-                0
-            ]  # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
+            short = os.path.split(tif)[1]
+            # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
+            key = short.split("-")[0]
             if key not in self.keylist:
                 self.keylist.append(key)
                 self.tiflist[key] = []
@@ -354,23 +350,21 @@ class KeyPressWindow(QtWidgets.QMainWindow):
     def findImage(self, subdir=".", ext="", except_shape=(2880, 2880)):
         try:
             im = imread(
-                self.directory
-                + "\\"
-                + subdir
-                + "\\"
-                + self.tiflist[self.keylist[self.curr_key]][self.curr_pos]
-                + ext
-                + ".tif"
+                os.path.join(
+                    self.directory,
+                    subdir,
+                    self.tiflist[self.keylist[self.curr_key]][self.curr_pos] + ext + ".tif"
+                )
             )
         except:
             im = np.zeros(except_shape)
         return im
 
-    def addMaskImage(self, ext, image_item, subdir="masks\\", alpha=175):
+    def addMaskImage(self, ext, image_item, subdir="masks" + os.sep, alpha=175):
         im_data = self.findImage(subdir=subdir, ext=ext)
         im_RGBA = np.zeros((im_data.shape[0], im_data.shape[1], 4), dtype=np.uint8)
-        im_RGBA[:, :, 0] = 255
-        im_RGBA[:, :, 3] = im_data * alpha
+        im_RGBA[:,:,0] = 255
+        im_RGBA[:,:,3] = im_data * alpha
         image_item.setImage(im_RGBA)
 
     def forward(self):
@@ -474,7 +468,7 @@ def main_GUI():
     win = KeyPressWindow()
     win.resize(1000, 800)
     win.show()
-    pg.mkQApp().exec_()
+    app.exec()
 
 
 if __name__ == "__main__":
