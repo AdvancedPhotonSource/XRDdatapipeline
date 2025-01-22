@@ -1919,7 +1919,6 @@ class ContourView(pg.GraphicsLayoutWidget):
                     "integrals",
                     self.settings.keylist[self.settings.curr_key]
                 )
-                + os.sep
                 + "*"
                 + self.integral_extension
             ),
