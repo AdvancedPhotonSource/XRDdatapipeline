@@ -243,6 +243,75 @@ class SettingsWindow(QtWidgets.QWidget):
     #         else:
     #             evt.ignore()
 
+class FileSelectWindow(QtWidgets.QWidget):
+
+    file_selected = pg.QtCore.Signal()
+
+    def __init__(self, settings: Settings):
+        super().__init__()
+        self.settings = settings
+
+        self.directory_label = QtWidgets.QLabel("Directory:")
+        self.directory_text = QtWidgets.QLineEdit(self.settings.directory)
+        self.directory_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.imctrl_file_label = QtWidgets.QLabel("Image Control File:")
+        self.imctrl_file_text = QtWidgets.QLineEdit(self.settings.imagecontrol)
+        self.imctrl_file_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.okay_button = QtWidgets.QPushButton("Okay")
+        self.cancel_button = QtWidgets.QPushButton("Cancel")
+
+        self.file_select_layout = QtWidgets.QGridLayout()
+        self.file_select_layout.addWidget(self.directory_label, 0, 0)
+        self.file_select_layout.addWidget(self.directory_text, 0, 1)
+        self.file_select_layout.addWidget(self.directory_browse_button, 0, 2)
+        self.file_select_layout.addWidget(self.imctrl_file_label, 1, 0)
+        self.file_select_layout.addWidget(self.imctrl_file_text, 1, 1)
+        self.file_select_layout.addWidget(self.imctrl_file_browse_button, 1, 2)
+
+        self.button_layout = QtWidgets.QHBoxLayout()
+        self.button_layout.addWidget(self.okay_button)
+        self.button_layout.addWidget(self.cancel_button)
+
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout.addLayout(self.file_select_layout)
+        self.main_layout.addLayout(self.button_layout)
+        self.setLayout(self.main_layout)
+
+        self.directory_browse_button.released.connect(self.browse_dir)
+        self.imctrl_file_browse_button.released.connect(self.browse_imctrl)
+        self.okay_button.released.connect(self.okay_button_pressed)
+        self.cancel_button.released.connect(self.cancel_button_pressed)
+
+    def update_shown_info(self):
+        self.directory_text.setText(self.settings.directory)
+        self.imctrl_file_text.setText(self.settings.imagecontrol)
+    
+    def browse_dir(self):
+        directory_name = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Image Directory")
+        self.directory_text.setText(directory_name)
+
+    def browse_imctrl(self):
+        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Choose Configuration File",
+            self.directory_text.text(),
+            "Imctrl and PONI files (*.imctrl *.poni)"
+        )
+        self.imctrl_file_text.setText(imctrl_file_name[0])
+
+    def apply_changes(self):
+        self.settings.directory = self.directory_text.text()
+        self.settings.imagecontrol = self.imctrl_file_text.text()
+        self.file_selected.emit()
+
+    def okay_button_pressed(self):
+        self.apply_changes()
+        self.close()
+
+    def cancel_button_pressed(self):
+        self.close()
 
 class KeyPressWindow(QtWidgets.QWidget):
     def __init__(self, directory=".", imagecontrol=""):
@@ -265,8 +334,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings = Settings(
             directory, imagecontrol, (2880, 2880), 0, 0, [], {}, 0, 0
         )
+        self.file_select_widget = FileSelectWindow(self.settings)
+        self.file_select_widget.file_selected.connect(self.update_dir)
         self.settings_widget = SettingsWindow(self.settings)
-        self.settings_widget.apply_settings.connect(self.update_dir)
+        self.settings_widget.apply_settings.connect(self.update_settings)
         # self.directory = directory
         # self.update_tiflist()
         self.menubar = pg.QtWidgets.QMenuBar()
@@ -385,18 +456,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings_widget.show()
 
     def choose_dir(self):
-        directory_name = QtWidgets.QFileDialog.getExistingDirectory(
-            None, "Select Image Directory"
-        )
-        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
-            None,
-            "Choose Configuration File",
-            directory_name,
-            "Imctrl and PONI files (*.imctrl *.poni)",
-        )
-        self.settings.directory = directory_name
-        self.settings.imagecontrol = imctrl_file_name[0]
-        self.update_dir()
+        self.file_select_widget.update_shown_info()
+        self.file_select_widget.show()
 
     def update_dir(self):
         self.settings.curr_key = 0
@@ -414,6 +475,21 @@ class KeyPressWindow(QtWidgets.QWidget):
                 filetext = infile.read()
             matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
             self.settings.wavelength = float(matches[0]) * (10**10)
+        self.update_tiflist()
+        self.imageview.update_dir()
+        self.integral_widget.update_dir()
+        self.tabbed_area.update_dir()
+        self.name_label.setText(
+            "<span style='font-size: 12pt'>{0}</span>".format(
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                    self.settings.curr_pos
+                ]
+            )
+        )
+
+    def update_settings(self):
+        self.settings.curr_key = 0
+        self.settings.curr_pos = 0
         self.update_tiflist()
         self.imageview.update_dir()
         self.integral_widget.update_dir()
