@@ -61,6 +61,26 @@ def npatand(x):
 def npatan2d(y, x):
     return 180.0 * np.arctan2(y, x) / np.pi
 
+def sind(x):
+    return npsind(x)
+
+def asind(x):
+    return npasind(x)
+
+def cosd(x):
+    return npcosd(x)
+
+def acosd(x):
+    return npacosd(x)
+
+def tand(x):
+    return nptand(x)
+
+def atand(x):
+    return npatand(x)
+
+def atan2d(y, x):
+    return npatan2d(y, x)
 
 # recreating xye export function
 # TODO: use numpy or the like to write this faster
@@ -1764,6 +1784,7 @@ class CacheCreator(QtCore.QObject):
         self.imgmaskname = imgmaskname
         self.blkSize = blkSize
         self.logging = logging
+        self.stopEarly = False
 
     def run(self):
         cache_time = time.time()
@@ -1777,6 +1798,8 @@ class CacheCreator(QtCore.QObject):
         # cache['Image Controls'] = img.getControls() # save controls & masks contents for quick reload
         # self.cache['image'] = tf.imread(self.filename)
         self.cache["image"] = load_image(self.filename)
+        if self.stopEarly: return
+
         predef_mask = {}
         if (self.imgmaskname is not None) and (self.imgmaskname != ""):
             # img.loadMasks(imgmaskname)
@@ -1795,7 +1818,8 @@ class CacheCreator(QtCore.QObject):
             # flatfield_image = tf.imread(self.flatfield)
             flatfield_image = load_image(self.flatfield)
         self.cache["flatfield"] = flatfield_image
-
+        if self.stopEarly: return
+        
         # imctrlname = imctrlname.split("\\")[-1].split('/')[-1]
         # path1 =  os.path.join(pathmaps,imctrlname)
         # im = Image.fromarray(TA[0])
@@ -1832,32 +1856,37 @@ class CacheCreator(QtCore.QObject):
         # Missing 5: size, samplechangerpos, det2theta, ImageTag, formatName
         # [2880,2880] None 0.0 None GSAS-II known TIF image
         # only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
-
+        if self.stopEarly: return
+        
         # self.cache["intMaskMap"] = MakeUseMask(
-        #     image_dict["Image Controls"], image_dict["Masks"], blkSize=self.blkSize
+        #     image_dict["Image Controls"],image_dict["Masks"], blkSize=self.blkSize
         # )
         # cache['intTAmap'] = img.IntThetaAzMap()
-        self.cache["intTAmap"] = MakeUseTA(image_dict["Image Controls"], self.blkSize)
+        self.cache["intTAmap"] = MakeUseTA(image_dict["Image Controls"],self.blkSize)
+        if self.stopEarly: return
         # cache['FrameMask'] = img.MaskFrameMask() # calc Frame mask & T array to save for Pixel masking
         self.cache["FrameMask"] = MaskFrameMask(image_dict)
+        if self.stopEarly: return
         # cache['maskTmap'] = img.MaskThetaMap()
         self.cache["maskTmap"] = Make2ThetaAzimuthMap(
             image_dict["Image Controls"],
             (0, image_dict["Image Controls"]["size"][0]),
-            (0, image_dict["Image Controls"]["size"][1]),
+            (0, image_dict["Image Controls"]["size"][1])
         )[0]
-        getmaps(self.cache, self.imctrlname, os.path.join(self.directory,"maps"))
+        if self.stopEarly: return
+        getmaps(self.cache, self.imctrlname, os.path.join(self.directory, "maps"))
+        if self.stopEarly: return
         # 2th fairly linear along center; calc 2th - pixelsize conversion
         center = self.cache["Image Controls"]["center"]
         center[0] = center[0] * 1000.0 / self.cache["Image Controls"]["pixelSize"][0]
         center[1] = center[1] * 1000.0 / self.cache["Image Controls"]["pixelSize"][1]
         self.cache["center"] = center
         image_dict["center"] = center
-
         # self.cache['d2th'] = (self.cache['pixelTAmap'][int(center[1]),0] - self.cache['pixelTAmap'][int(center[1]),99])/100
         self.cache["esdMul"] = 3
         numChansAzim = 360
         self.cache["azimband"] = get_azimbands(self.cache["pixelAzmap"], numChansAzim)
+        if self.stopEarly: return
 
         # pytorch integration
         (
@@ -1879,6 +1908,7 @@ class CacheCreator(QtCore.QObject):
         # self.cache['Previous image'] = tf.imread(self.filename)
         # self.cache['First image'] = tf.imread(self.filename)
         self.cache["First image"] = load_image(self.filename)
+        if self.stopEarly: return
 
         # gradient info
         self.cache["gradient"] = gradient_cache(
@@ -2735,6 +2765,7 @@ class main_window(QtWidgets.QWidget):
         self.observer.join()
         # if self.cache_thread.isRunning():
         if not self.has_made_cache:
+            self.cache_worker.stopEarly = True
             self.cache_thread.quit()
             self.cache_thread.finished.connect(self.really_stopped)
             self.cache_thread.finished.connect(self.cache_thread.deleteLater)
