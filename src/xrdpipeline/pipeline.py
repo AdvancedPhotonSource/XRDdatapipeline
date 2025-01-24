@@ -29,7 +29,7 @@ bindist_dir = os.path.join(script_dir, "bindist")
 # Add 'bindist' to the beginning of sys.path
 print(bindist_dir)
 sys.path.insert(0, bindist_dir)
-import polymask as pm
+# import polymask as pm
 
 # insert GSASII into the path so we can import its functions
 # sys.path.insert(0, 'C:/Users/amerritt/AppData/Local/gsas2full/GSASII/bindist') #polymask, fmask
@@ -2734,7 +2734,6 @@ class main_window(QtWidgets.QWidget):
         self.predef_mask_widget.setEnabled(True)
 
     def closeEvent(self, evt):
-        print("At custom close event")
         # if not self.is_running_process:
         #    evt.accept()
         if not self.stop_button.isEnabled():
@@ -2797,4 +2796,4 @@ if __name__ == "__main__":
 
     app = QtWidgets.QApplication([])
     window = main_window(directory=directory, imctrl=imgctrl, imgmask=imgmask)
-    app.exec_()
+    sys.exit(app.exec())

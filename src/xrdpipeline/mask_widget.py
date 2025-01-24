@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import pyqtgraph as pg
 import tifffile as tf
@@ -801,8 +802,6 @@ class MainImage(pg.GraphicsLayoutWidget):
 
 
 if __name__ == "__main__":
-    # QtWidgets.QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QtWidgets.QApplication([])
-    # main_image = MainImage()
     main_window = MainWindow()
-    app.exec_()
+    sys.exit(app.exec())

@@ -1,4 +1,5 @@
 import glob
+import sys
 import os
 import re
 import time
@@ -2221,23 +2222,11 @@ class TabbedArea(QtWidgets.QTabWidget):
     """
 
 
-# https://github.com/pyqtgraph/pyqtgraph/issues/756
-# There is an issue with Qt incorrectly pairing data with axes/background when swapping between or possibly when at certain dpi
-# (This is fixed in Qt6, so can be ignored if using PyQt6 or PySide6)
-# QtWidgets.QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-# QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
-# os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
-# QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-# QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
-# QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)
-app = QtWidgets.QApplication([])
-# app = pg.mkQApp()
-# directory_name = QtWidgets.QFileDialog.getExistingDirectory(None,"Select Image Directory")
-# imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Configuration File",directory_name,"Imctrl and PONI files (*.imctrl *.poni)")
-# larger = KeyPressWindow(directory_name,imctrl_file_name)
-larger = KeyPressWindow()
+def main_GUI():
+    app = QtWidgets.QApplication([])
+    larger = KeyPressWindow()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    # pg.mkQApp().exec_()
-    app.exec_()
+    main_GUI()

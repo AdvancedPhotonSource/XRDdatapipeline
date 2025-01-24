@@ -3,17 +3,10 @@ from PySide6.QtCore import Qt, Signal
 import glob
 import re
 import numpy as np
-import pyqtgraph as pg
 from skimage.io import imread
+import pyqtgraph as pg
 
-# def createImage(suffix,flip=False):
-#     global curr_key, curr_pos, tiflist
-#     im_mask = imread(tiflist[keylist[curr_key]][curr_pos]+"_high{0}.tif".format(suffix))
-#     im_keep = imread(tiflist[keylist[curr_key]][curr_pos]+"_low{0}.tif".format(suffix))
-#     if flip:
-#         return im_keep*1 - im_mask*1 # if keep high rather than low, flip the two
-#     else:
-#         return im_mask*1 - im_keep*1 # multiply bool arrays by int to subtract
+pg.setConfigOptions(imageAxisOrder="row-major")
 
 
 class ImageAndMask(QtWidgets.QWidget):
@@ -476,21 +469,13 @@ class KeyPressWindow(QtWidgets.QMainWindow):
             self.hide_config_button.setText("Hide Config")
 
 
-# Interpret image data as row-major instead of col-major
-pg.setConfigOptions(imageAxisOrder="row-major")
-# https://github.com/pyqtgraph/pyqtgraph/issues/756
-# There is an issue with Qt incorrectly pairing data with axes/background when swapping between or possibly when at certain dpi
-# QtWidgets.QApplication.setAttribute(pg.QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-# QtCore.QCoreApplication.setAttribute(pg.QtCore.Qt.AA_EnableHighDpiScaling, True)
+def main_GUI():
+    app = pg.mkQApp()
+    win = KeyPressWindow()
+    win.resize(1000, 800)
+    win.show()
+    pg.mkQApp().exec_()
 
-app = pg.mkQApp()
-win = KeyPressWindow()
-win.resize(1000, 800)
-
-
-# win.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
-
-win.show()
 
 if __name__ == "__main__":
-    pg.mkQApp().exec_()
+    main_GUI()
