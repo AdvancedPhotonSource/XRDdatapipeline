@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A package for XRD data masking and reduction"
 readme = "README.rst"
 authors = [
-  {name = "Anna Henckel Merritt", email = "amerritt@anl.gov"}
+  {name = "Anna Henckel Merritt", email = "amerritt@anl.gov"},
   {name = "Miaoqi Chu", email = "mqichu@anl.gov"}
 ]
 maintainers = [
@@ -19,7 +19,19 @@ classifiers = [
 ]
 license = {text = "MIT license"}
 dependencies = [
-  "typer"
+  "typer",
+  "numpy",
+  "pyqtgraph",
+  "tifffile",
+  "pandas",
+  "pyside6",
+  "scikit-image",
+  "torch",
+  "pillow",
+  "scipy",
+  "watchdog",
+  "astropy",
+  "matplotlib"
 ]
 
 [project.optional-dependencies]
@@ -40,9 +52,6 @@ package-dir = {"" = "src"}
 [tool.setuptools.package-data]
 "*" = ["*.*"]
 
-
-
-
 # Mypy
 # ----
 
@@ -59,4 +68,3 @@ warn_no_return = true
 module = "tests.*"
 allow_untyped_defs = true
 disable_error_code = "attr-defined"
-
