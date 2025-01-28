@@ -1509,13 +1509,13 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # remove from objects list 
         del self.main_image.objects[index]
 
-    def clear_arc(self,index):
+    def clear_arc(self, index):
         self.main_image.objects[index].clearPoints()
         self.number_of_objects -= 1
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
 
-    def clear_point(self,index):
+    def clear_point(self, index):
         # reduce size of objects list
         self.number_of_objects -= 1
         # remove from table
@@ -1523,12 +1523,17 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # remove from objects list
         del self.main_image.objects[index]
 
-    def clear_line(self,index):
+    def clear_line(self, index):
         self.number_of_objects -= 1
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
 
-    def clear_spot(self,index):
+    def clear_spot(self, index):
+        self.number_of_objects -= 1
+        self.polygons_table.removeRow(index)
+        del self.main_image.objects[index]
+
+    def clear_ring(self, index):
         self.number_of_objects -= 1
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
@@ -1553,6 +1558,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.clear_line(index=selected_row)
         elif label_text == "Spot":
             self.clear_spot(index=selected_row)
+        elif label_text == "Ring":
+            self.clear_ring(index=selected_row)
 
     def update_objects_from_table(self):
        for index in range(len(self.main_image.objects)):
