@@ -53,7 +53,7 @@ def pol_correct(image, polmap):
 # flat-field correction
 def flatfield_correct(image, flatfield):
     image_f = np.array(image)
-    image_f = np.array(image_f / flatfield, dtype=np.int32)
+    image_f = np.array(image_f * flatfield, dtype=np.int32)
     return image_f
 
 
