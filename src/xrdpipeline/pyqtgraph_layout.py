@@ -512,10 +512,12 @@ class KeyPressWindow(QtWidgets.QWidget):
         for tif in fulltiflist: # Probably losing sort here
             #key = tif.split("\\")[-1].split("/")[-1].split("-")[0] # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
             key = os.path.split(tif)[1]
-            key = key[0 : re.search(r"(\d{5})", key).start(0)]
-            if key not in keylist:
-                keylist.append(key)
-                tiflist[key] = []
+            result = re.search(r"(\d{5})", key)
+            if result is not None:
+                key = key[0 : result.start(0)]
+                if key not in keylist:
+                    keylist.append(key)
+                    tiflist[key] = []
             #initialimage = tif[0:re.search(r'(\d+)\D+$', tif).end(1)] # string from the start to the end of the last set of numbers.
             initialimage = os.path.splitext(os.path.split(tif)[1])[0]
             if initialimage not in tiflist[key]:
@@ -611,6 +613,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
         self.updateImages(z_reset=True)
         self.tabbed_area.contour_widget.reset_integral_data()
+        self.tabbed_area.csim_widget.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def nextkey(self):
@@ -620,6 +623,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
         self.updateImages(z_reset=True)
         self.tabbed_area.contour_widget.reset_integral_data()
+        self.tabbed_area.csim_widget.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def mouseMovedImage(self, evt):
@@ -1765,23 +1769,20 @@ class CSimView(pg.GraphicsLayoutWidget):
         self.update_data()
 
     def update_data(self):
-        # global keylist, curr_key
         for k, v in self.methods.items():
-            # Two files get created, one with 00000 and one without. Try finding the former first; latter only appears if there is only one file.
-            filename0 = os.path.join(
+            filename_piece = os.path.join(
                 self.settings.directory,
                 "stats",
-                self.settings.keylist[self.settings.curr_key] + "00000" + v
+                self.settings.keylist[self.settings.curr_key] + "*" + v
             )
-            filename  = os.path.join(
-                self.settings.directory,
-                "stats",
-                self.settings.keylist[self.settings.curr_key][:-1] + v
-            ) # testing shows the - at the end, need to remove
-            if os.path.exists(filename0):
-                self.similarity_line_data[k] = np.loadtxt(filename0, skiprows=2)
-            elif os.path.exists(filename):
-                self.similarity_line_data[k] = np.loadtxt(filename, skiprows=2)
+            # print(f"{filename_piece = }")
+            filenames = glob.glob(
+                filename_piece
+            )
+            # print(f"CSim filenames: {filenames}")
+            filenames.sort()
+            arrays = [np.loadtxt(filename) for filename in filenames]
+            self.similarity_line_data[k] = np.vstack(arrays)
             # [:,0] for comparison to first, [:,1] for comparison to previous
             self.similarity_line[k].setData(self.similarity_line_data[k][:, 0])
 
