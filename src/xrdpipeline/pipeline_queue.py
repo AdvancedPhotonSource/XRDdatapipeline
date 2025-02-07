@@ -810,7 +810,7 @@ class main_window(QtWidgets.QWidget):
     # clear queue button
     # optional "choose existing files to run over" section
     # default: none, shortcut button for all, else choose which files
-    def __init__(self, directory=None, imctrl=None, imgmask=None):
+    def __init__(self, directory=None, imctrl=None, flatfield=None, imgmask=None):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
         # self.directory_loc = QtWidgets.QLabel()
@@ -830,7 +830,9 @@ class main_window(QtWidgets.QWidget):
         # self.predef_mask_text = QtWidgets.QPushButton("Predefined Mask:")
         # self.predef_mask_loc = QtWidgets.QLabel()
         self.flatfield_widget = file_select(
-            "Flat-field file:", startdir=self.directory_widget.file_name.text()
+            "Flat-field file:",
+            default_text=flatfield,
+            startdir=self.directory_widget.file_name.text()
         )
         self.predef_mask_widget = file_select(
             "Predefined Mask:",
@@ -1171,6 +1173,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--directory")
     parser.add_argument("-c", "--imctrl")
+    parser.add_argument("-f", "--flatfield", default=None)
     parser.add_argument("-m", "--imgmask", default=None)
     args = parser.parse_args()
 
@@ -1182,6 +1185,10 @@ if __name__ == "__main__":
         dataLoc, fil
     )  # convenience function for file paths
 
+    if args.flatfield is not None:
+        flatfield = PathWrap(args.flatfield)
+    else:
+        flatfield = None
     if args.imgmask is not None:
         imgmask = PathWrap(args.imgmask)
     else:
@@ -1204,5 +1211,5 @@ if __name__ == "__main__":
         imgctrl = None
 
     app = QtWidgets.QApplication([])
-    window = main_window(directory=directory, imctrl=imgctrl, imgmask=imgmask)
+    window = main_window(directory=directory, imctrl=imgctrl, flatfield=flatfield, imgmask=imgmask)
     sys.exit(app.exec())
