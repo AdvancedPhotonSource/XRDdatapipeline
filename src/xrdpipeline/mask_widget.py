@@ -6,45 +6,19 @@ import pyqtgraph as pg
 import tifffile as tf
 from PIL import Image
 import re
+from GSASII_imports import *
 
 pg.setConfigOptions(imageAxisOrder="row-major")
 
 
-#trig functions using degrees
-#numpy versions
-npsind = lambda x: np.sin(x*np.pi/180.)
-npasind = lambda x: 180.*np.arcsin(x)/np.pi
-npcosd = lambda x: np.cos(x*np.pi/180.)
-npacosd = lambda x: 180.*np.arccos(x)/np.pi
-nptand = lambda x: np.tan(x*np.pi/180.)
-npatand = lambda x: 180.*np.arctan(x)/np.pi
-npatan2d = lambda y,x: 180.*np.arctan2(y,x)/np.pi
-
-def pixel_to_mm(distance,pixel_size):
+def pixel_to_mm(distance, pixel_size):
     scale = pixel_size / 1000
     return distance * scale
 
-def mm_to_pixel(distance,pixel_size):
+def mm_to_pixel(distance, pixel_size):
     scale = pixel_size / 1000
     return distance / scale
 
-#trig functions using degrees
-#numpy versions
-npsind = lambda x: np.sin(x*np.pi/180.)
-npasind = lambda x: 180.*np.arcsin(x)/np.pi
-npcosd = lambda x: np.cos(x*np.pi/180.)
-npacosd = lambda x: 180.*np.arccos(x)/np.pi
-nptand = lambda x: np.tan(x*np.pi/180.)
-npatand = lambda x: 180.*np.arctan(x)/np.pi
-npatan2d = lambda y,x: 180.*np.arctan2(y,x)/np.pi
-
-def pixel_to_mm(distance,pixel_size):
-    scale = pixel_size / 1000
-    return distance * scale
-
-def mm_to_pixel(distance,pixel_size):
-    scale = pixel_size / 1000
-    return distance / scale
 
 def choose_file():
     # just tiff for now
@@ -105,144 +79,6 @@ def getmaps(cache, imctrlname, pathmaps, save=True):		# fast integration using t
         im.save(os.path.splitext(path1)[0] + "_polscalemap.tif")
     return
 
-#G2img; calcs maps, is used in GeneratePixelMask, is used by MakeUseTA for integration blocks
-def Make2ThetaAzimuthMap(data,iLim,jLim): #most expensive part of integration!
-    '''Makes a set of matrices that provide the 2-theta, azimuth and geometric
-    correction values for each pixel in an image taking into account the 
-    detector orientation. Can be used for the entire image or a rectangular 
-    section of an image (determined by iLim and jLim). 
-
-    This is used in two ways. For image integration, the computation is done
-    over blocks of fixed size (typically 128 or 256 pixels) but for pixel mask
-    generation, the two-theta matrix for all pixels is computed. Note that
-    for integration, this routine will be called to generate sections as needed 
-    or may be called by :func:`MakeUseTA`, which creates all sections at 
-    once, so they can be reused multiple times. 
-
-    :param dict data: GSAS-II image data object (describes the image)
-    :param list iLim: boundary along x-pixels
-    :param list jLim: boundary along y-pixels
-    :returns: TA, array[4,nI,nJ]: 2-theta, azimuth, 2 geometric corrections
-    '''
-    pixelSize = data['pixelSize']
-    scalex = pixelSize[0]/1000.
-    scaley = pixelSize[1]/1000.
-    tay,tax = np.mgrid[iLim[0]+0.5:iLim[1]+.5,jLim[0]+.5:jLim[1]+.5]         #bin centers not corners
-    tax = np.asfarray(tax*scalex,dtype=np.float32).flatten()
-    tay = np.asfarray(tay*scaley,dtype=np.float32).flatten()
-    nI = iLim[1]-iLim[0]
-    nJ = jLim[1]-jLim[0]
-    TA = np.empty((4,nI,nJ))
-    if data['det2theta']:
-        TA[:3] = np.array(GetTthAzmG(np.reshape(tax,(nI,nJ)),np.reshape(tay,(nI,nJ)),data))     #includes geom. corr. as dist**2/d0**2 - most expensive step
-    else:
-        TA[:3] = np.array(GetTthAzmG2(np.reshape(tax,(nI,nJ)),np.reshape(tay,(nI,nJ)),data))     #includes geom. corr. as dist**2/d0**2 - most expensive step
-    TA[1] = np.where(TA[1]<0,TA[1]+360,TA[1])
-    TA[3] = Polarization(data['PolaVal'][0],TA[0],TA[1]-90.)[0]
-    return TA           #2-theta, azimuth & geom. corr. arrays
-
-#G2pwd; used in Make2ThetaAzimuthMap
-def Polarization(Pola,Tth,Azm=0.0):
-    """   Calculate angle dependent x-ray polarization correction (not scaled correctly!)
-
-    :param Pola: polarization coefficient e.g 1.0 fully polarized, 0.5 unpolarized
-    :param Azm: azimuthal angle e.g. 0.0 in plane of polarization - can be numpy array
-    :param Tth: 2-theta scattering angle - can be numpy array
-      which (if either) of these is "right"?
-    :return: (pola, dpdPola) - both 2-d arrays
-      * pola = ((1-Pola)*npcosd(Azm)**2+Pola*npsind(Azm)**2)*npcosd(Tth)**2+ \
-        (1-Pola)*npsind(Azm)**2+Pola*npcosd(Azm)**2
-      * dpdPola: derivative needed for least squares
-
-    """
-    cazm = npcosd(Azm)**2
-    sazm = npsind(Azm)**2
-    pola = ((1.0-Pola)*cazm+Pola*sazm)*npcosd(Tth)**2+(1.0-Pola)*sazm+Pola*cazm
-    dpdPola = -npsind(Tth)**2*(sazm-cazm)
-    return pola,dpdPola
-
-#G2img; used in Make2ThetaAzimuthMap
-def GetTthAzmG(x,y,data):
-    '''Give 2-theta, azimuth & geometric corr. values for detector x,y position;
-     calibration info in data - only used in integration for detector 2-theta != 0.
-     checked OK for ellipses & hyperbola
-     This is the slow step in image integration
-     '''     
-    def costth(xyz):
-        u = xyz/np.linalg.norm(xyz,axis=-1)[:,:,np.newaxis]
-        return np.dot(u,np.array([0.,0.,1.]))
-        
-    #zero detector 2-theta: tested with tilted images - perfect integrations
-    dx = x-data['center'][0]
-    dy = y-data['center'][1]
-    tilt = data['tilt']
-    dist = data['distance']/npcosd(tilt)    #sample-beam intersection point
-    T = makeMat(tilt,0)
-    R = makeMat(data['rotation'],2)
-    MN = np.inner(R,np.inner(R,T))
-    dxyz0 = np.inner(np.dstack([dx,dy,np.zeros_like(dx)]),MN)    #correct for 45 deg tilt
-    dxyz0 += np.array([0.,0.,dist])
-    if data['DetDepth']:
-        ctth0 = costth(dxyz0)
-        tth0 = npacosd(ctth0)
-        dzp = peneCorr(tth0,data['DetDepth'],dist)
-        dxyz0[:,:,2] += dzp
-    #non zero detector 2-theta:
-    if data.get('det2theta',0):        
-        tthMat = makeMat(data['det2theta'],1)
-        dxyz = np.inner(dxyz0,tthMat.T)
-    else:
-        dxyz = dxyz0
-    ctth = costth(dxyz)
-    tth = npacosd(ctth)
-    azm = (npatan2d(dxyz[:,:,1],dxyz[:,:,0])+data['azmthOff']+720.)%360.        
-    # G-calculation        
-    x0 = data['distance']*nptand(tilt)
-    x0x = x0*npcosd(data['rotation'])
-    x0y = x0*npsind(data['rotation'])
-    distsq = data['distance']**2
-    G = ((dx-x0x)**2+(dy-x0y)**2+distsq)/distsq       #for geometric correction = 1/cos(2theta)^2 if tilt=0.
-    return tth,azm,G
-
-#G2img; used in Make2ThetaAzimuthMap
-def GetTthAzmG2(x,y,data):
-    '''Give 2-theta, azimuth & geometric corr. values for detector x,y position;
-     calibration info in data - only used in integration for detector 2-theta = 0
-    '''
-    tilt = data['tilt']
-    dist = data['distance']/npcosd(tilt)
-    MN = -np.inner(makeMat(data['rotation'],2),makeMat(tilt,0))
-    dx = x-data['center'][0]
-    dy = y-data['center'][1]
-    dz = np.dot(np.dstack([dx.T,dy.T,np.zeros_like(dx.T)]),MN).T[2]    
-    xyZ = dx**2+dy**2-dz**2    
-    tth0 = npatand(np.sqrt(xyZ)/(dist-dz))
-    dzp = peneCorr(tth0,data['DetDepth'],dist)
-    tth = npatan2d(np.sqrt(xyZ),dist-dz+dzp) 
-    azm = (npatan2d(dy,dx)+data['azmthOff']+720.)%360.
-    
-    distsq = data['distance']**2
-    x0 = data['distance']*nptand(tilt)
-    x0x = x0*npcosd(data['rotation'])
-    x0y = x0*npsind(data['rotation'])
-    G = ((dx-x0x)**2+(dy-x0y)**2+distsq)/distsq       #for geometric correction = 1/cos(2theta)^2 if tilt=0.
-    return tth,azm,G
-
-#G2img; used in GetTthAzmG and GetTthAzmG2, used for Make2ThetaAzimuthMap
-def makeMat(Angle,Axis):
-    '''Make rotation matrix from Angle and Axis
-
-    :param float Angle: in degrees
-    :param int Axis: 0 for rotation about x, 1 for about y, etc.
-    '''
-    cs = npcosd(Angle)
-    ss = npsind(Angle)
-    M = np.array(([1.,0.,0.],[0.,cs,-ss],[0.,ss,cs]),dtype=np.float32)
-    return np.roll(np.roll(M,Axis,axis=0),Axis,axis=1)
-#G2img; used in GetEllipse (GeneratePixelMask), GetTthAzmG, GetTthAzmG2 (Make2ThetaAzimuthMap)
-def peneCorr(tth,dep,dist):
-    'Needs a doc string'
-    return dep*(1.-npcosd(tth))*dist**2/1000.         #best one
 
 def read_imctrl(imctrlname):
     image_controls = {}
@@ -251,33 +87,6 @@ def read_imctrl(imctrlname):
         LoadControls(lines,image_controls)
     return image_controls
 
-#G2fil; updates cache from imctrl file
-def LoadControls(Slines,data):
-    'Read values from a .imctrl (Image Controls) file'
-    cntlList = ['color','wavelength','distance','tilt','invert_x','invert_y','type','Oblique',
-        'fullIntegrate','outChannels','outAzimuths','LRazimuth','IOtth','azmthOff','DetDepth',
-        'calibskip','pixLimit','cutoff','calibdmin','Flat Bkg','varyList','setdist',
-        'PolaVal','SampleAbs','dark image','background image','twoth']
-    save = {}
-    for S in Slines:
-        if S[0] == '#':
-            continue
-        [key,val] = S.strip().split(':',1)
-        if key in ['type','calibrant','binType','SampleShape','color',]:    #strings
-            save[key] = val
-        elif key in ['varyList',]:
-            save[key] = eval(val)   #dictionary
-        elif key in ['rotation']:
-            save[key] = float(val)
-        elif key in ['center',]:
-            if ',' in val:
-                save[key] = eval(val)
-            else:
-                vals = val.strip('[] ').split()
-                save[key] = [float(vals[0]),float(vals[1])] 
-        elif key in cntlList:
-            save[key] = eval(val)
-    data.update(save)
 
 class Point(pg.QtCore.QPoint):
     def __init__(self, image_size, *args, **kwargs):
