@@ -41,7 +41,8 @@ class ColorSettings:
 
 @dataclass
 class Settings:
-    directory: str
+    image_directory: str
+    output_directory: str
     imagecontrol: str
     image_size: tuple
     wavelength: float
@@ -103,9 +104,13 @@ class SettingsWindow(QtWidgets.QWidget):
         self.tabs.addTab(self.base_settings, "Image Controls")
         self.tabs.addTab(self.color_settings, "Colors")
 
-        self.directory_label = QtWidgets.QLabel("Directory:")
-        self.directory_text = QtWidgets.QLineEdit(self.settings.directory)
-        self.directory_browse_button = QtWidgets.QPushButton("Browse...")
+        self.image_directory_label = QtWidgets.QLabel("Image Directory:")
+        self.image_directory_text = QtWidgets.QLineEdit(self.settings.image_directory)
+        self.image_directory_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.output_directory_label = QtWidgets.QLabel("Output Directory:")
+        self.output_directory_text = QtWidgets.QLineEdit(self.settings.output_directory)
+        self.output_directory_browse_button = QtWidgets.QPushButton("Browse...")
 
         self.imctrl_file_label = QtWidgets.QLabel("Image Control File:")
         self.imctrl_file_text = QtWidgets.QLineEdit(self.settings.imagecontrol)
@@ -132,16 +137,19 @@ class SettingsWindow(QtWidgets.QWidget):
         self.default_colors_button.released.connect(self.default_colors_pressed)
 
         self.settings_layout = QtWidgets.QGridLayout()
-        self.settings_layout.addWidget(self.directory_label, 0, 0)
-        self.settings_layout.addWidget(self.directory_text, 0, 1)
-        self.settings_layout.addWidget(self.directory_browse_button, 0, 2)
-        self.settings_layout.addWidget(self.imctrl_file_label, 1, 0)
-        self.settings_layout.addWidget(self.imctrl_file_text, 1, 1)
-        self.settings_layout.addWidget(self.imctrl_file_browse_button, 1, 2)
-        self.settings_layout.addWidget(self.wavelength_label, 2, 0)
-        self.settings_layout.addWidget(self.wavelength_text, 2, 1, 1, 2)
-        self.settings_layout.addWidget(self.outChannels_label, 3, 0)
-        self.settings_layout.addWidget(self.outChannels_text, 3, 1, 1, 2)
+        self.settings_layout.addWidget(self.image_directory_label, 0, 0)
+        self.settings_layout.addWidget(self.image_directory_text, 0, 1)
+        self.settings_layout.addWidget(self.image_directory_browse_button, 0, 2)
+        self.settings_layout.addWidget(self.output_directory_label, 1, 0)
+        self.settings_layout.addWidget(self.output_directory_text, 1, 1)
+        self.settings_layout.addWidget(self.output_directory_browse_button, 1, 2)
+        self.settings_layout.addWidget(self.imctrl_file_label, 2, 0)
+        self.settings_layout.addWidget(self.imctrl_file_text, 2, 1)
+        self.settings_layout.addWidget(self.imctrl_file_browse_button, 2, 2)
+        self.settings_layout.addWidget(self.wavelength_label, 3, 0)
+        self.settings_layout.addWidget(self.wavelength_text, 3, 1, 1, 2)
+        self.settings_layout.addWidget(self.outChannels_label, 4, 0)
+        self.settings_layout.addWidget(self.outChannels_text, 4, 1, 1, 2)
 
         self.settings_layout.setColumnStretch(0, 2)
         self.settings_layout.setColumnStretch(1, 5)
@@ -161,29 +169,37 @@ class SettingsWindow(QtWidgets.QWidget):
         self.main_layout.addLayout(self.button_layout)
         self.setLayout(self.main_layout)
 
-        self.directory_browse_button.released.connect(self.browse_dir)
+        self.image_directory_browse_button.released.connect(self.browse_image_dir)
+        self.output_directory_browse_button.released.connect(self.browse_output_dir)
         self.imctrl_file_browse_button.released.connect(self.browse_imctrl)
         self.apply_button.released.connect(self.apply_button_pressed)
         self.okay_button.released.connect(self.okay_button_pressed)
         self.cancel_button.released.connect(self.cancel_button_pressed)
 
     def update_shown_info(self):
-        self.directory_text.setText(self.settings.directory)
+        self.image_directory_text.setText(self.settings.image_directory)
+        self.output_directory_text.setText(self.settings.output_directory)
         self.imctrl_file_text.setText(self.settings.imagecontrol)
         self.wavelength_text.setText(str(self.settings.wavelength))
         self.outChannels_text.setText(str(self.settings.outChannels))
 
-    def browse_dir(self):
-        directory_name = QtWidgets.QFileDialog.getExistingDirectory(
+    def browse_image_dir(self):
+        image_directory_name = QtWidgets.QFileDialog.getExistingDirectory(
             None, "Select Image Directory"
         )
-        self.directory_text.setText(directory_name)
+        self.image_directory_text.setText(image_directory_name)
+
+    def browse_output_dir(self):
+        output_directory_name = QtWidgets.QFileDialog.getExistingDirectory(
+            None, "Select Output Directory"
+        )
+        self.output_directory_text.setText(output_directory_name)
 
     def browse_imctrl(self):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Choose Configuration File",
-            self.directory_text.text(),
+            self.image_directory_text.text(),
             "Imctrl and PONI files (*.imctrl *.poni)",
         )
         self.imctrl_file_text.setText(imctrl_file_name[0])
@@ -208,7 +224,8 @@ class SettingsWindow(QtWidgets.QWidget):
             self.color_widgets[name].color_text.setText(coloritem.default_color)
 
     def apply_changes(self):
-        self.settings.directory = self.directory_text.text()
+        self.settings.image_directory = self.image_directory_text.text()
+        self.settings.output_directory = self.output_directory_text.text()
         self.settings.imagecontrol = self.imctrl_file_text.text()
         self.settings.wavelength = float(self.wavelength_text.text())
         self.settings.outChannels = int(self.outChannels_text.text())
@@ -251,9 +268,13 @@ class FileSelectWindow(QtWidgets.QWidget):
         super().__init__()
         self.settings = settings
 
-        self.directory_label = QtWidgets.QLabel("Directory:")
-        self.directory_text = QtWidgets.QLineEdit(self.settings.directory)
-        self.directory_browse_button = QtWidgets.QPushButton("Browse...")
+        self.image_directory_label = QtWidgets.QLabel("Image Directory:")
+        self.image_directory_text = QtWidgets.QLineEdit(self.settings.image_directory)
+        self.image_directory_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.output_directory_label = QtWidgets.QLabel("Output Directory:")
+        self.output_directory_text = QtWidgets.QLineEdit(self.settings.output_directory)
+        self.output_directory_browse_button = QtWidgets.QPushButton("Browse...")
 
         self.imctrl_file_label = QtWidgets.QLabel("Image Control File:")
         self.imctrl_file_text = QtWidgets.QLineEdit(self.settings.imagecontrol)
@@ -263,12 +284,15 @@ class FileSelectWindow(QtWidgets.QWidget):
         self.cancel_button = QtWidgets.QPushButton("Cancel")
 
         self.file_select_layout = QtWidgets.QGridLayout()
-        self.file_select_layout.addWidget(self.directory_label, 0, 0)
-        self.file_select_layout.addWidget(self.directory_text, 0, 1)
-        self.file_select_layout.addWidget(self.directory_browse_button, 0, 2)
-        self.file_select_layout.addWidget(self.imctrl_file_label, 1, 0)
-        self.file_select_layout.addWidget(self.imctrl_file_text, 1, 1)
-        self.file_select_layout.addWidget(self.imctrl_file_browse_button, 1, 2)
+        self.file_select_layout.addWidget(self.image_directory_label, 0, 0)
+        self.file_select_layout.addWidget(self.image_directory_text, 0, 1)
+        self.file_select_layout.addWidget(self.image_directory_browse_button, 0, 2)
+        self.file_select_layout.addWidget(self.output_directory_label, 1, 0)
+        self.file_select_layout.addWidget(self.output_directory_text, 1, 1)
+        self.file_select_layout.addWidget(self.output_directory_browse_button, 1, 2)
+        self.file_select_layout.addWidget(self.imctrl_file_label, 2, 0)
+        self.file_select_layout.addWidget(self.imctrl_file_text, 2, 1)
+        self.file_select_layout.addWidget(self.imctrl_file_browse_button, 2, 2)
 
         self.button_layout = QtWidgets.QHBoxLayout()
         self.button_layout.addWidget(self.okay_button)
@@ -279,30 +303,37 @@ class FileSelectWindow(QtWidgets.QWidget):
         self.main_layout.addLayout(self.button_layout)
         self.setLayout(self.main_layout)
 
-        self.directory_browse_button.released.connect(self.browse_dir)
+        self.image_directory_browse_button.released.connect(self.browse_image_dir)
+        self.output_directory_browse_button.released.connect(self.browse_output_dir)
         self.imctrl_file_browse_button.released.connect(self.browse_imctrl)
         self.okay_button.released.connect(self.okay_button_pressed)
         self.cancel_button.released.connect(self.cancel_button_pressed)
 
     def update_shown_info(self):
-        self.directory_text.setText(self.settings.directory)
+        self.image_directory_text.setText(self.settings.image_directory)
+        self.output_directory_text.setText(self.settings.output_directory)
         self.imctrl_file_text.setText(self.settings.imagecontrol)
-    
-    def browse_dir(self):
-        directory_name = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Image Directory")
-        self.directory_text.setText(directory_name)
+
+    def browse_image_dir(self):
+        image_directory_name = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Image Directory")
+        self.image_directory_text.setText(image_directory_name)
+
+    def browse_output_dir(self):
+        output_directory_name = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Image Directory")
+        self.output_directory_text.setText(output_directory_name)
 
     def browse_imctrl(self):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Choose Configuration File",
-            self.directory_text.text(),
+            self.image_directory_text.text(),
             "Imctrl and PONI files (*.imctrl *.poni)"
         )
         self.imctrl_file_text.setText(imctrl_file_name[0])
 
     def apply_changes(self):
-        self.settings.directory = self.directory_text.text()
+        self.settings.image_directory = self.image_directory_text.text()
+        self.settings.output_directory = self.output_directory_text.text()
         self.settings.imagecontrol = self.imctrl_file_text.text()
         self.file_selected.emit()
 
@@ -314,7 +345,7 @@ class FileSelectWindow(QtWidgets.QWidget):
         self.close()
 
 class KeyPressWindow(QtWidgets.QWidget):
-    def __init__(self, directory=".", imagecontrol=""):
+    def __init__(self, image_directory=".", output_directory = ".", imagecontrol=""):
         super().__init__()
         # global tiflist, keylist, curr_key, curr_pos
         # self.curr_key = 0
@@ -332,7 +363,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         #     # "curr_pos": self.curr_pos
         # }
         self.settings = Settings(
-            directory, imagecontrol, (2880, 2880), 0, 0, [], {}, 0, 0
+            image_directory, output_directory, imagecontrol, (2880, 2880), 0, 0, [], {}, 0, 0
         )
         self.file_select_widget = FileSelectWindow(self.settings)
         self.file_select_widget.file_selected.connect(self.update_dir)
@@ -505,7 +536,7 @@ class KeyPressWindow(QtWidgets.QWidget):
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos
         fulltiflist = sorted(
-            glob.glob(self.settings.directory + "/*.tif"), key=os.path.getctime
+            glob.glob(self.settings.image_directory + "/*.tif"), key=os.path.getctime
         )
         keylist = []
         tiflist = {}
@@ -527,7 +558,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         # get size of first image, if it exists
         self.settings.image_size = self.get_image_size(
             os.path.join(
-                self.settings.directory,
+                self.settings.image_directory,
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]+".tif"
             )
         )
@@ -1083,10 +1114,10 @@ class MainImageView(pg.GraphicsLayoutWidget):
         # Range: x, y min and max
         # HistogramRange: visible axis range for z
         self.tth_map = tf.imread(
-            glob.glob(os.path.join(self.settings.directory,"maps")+os.sep+"*_2thetamap.tif")[0]
+            glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_2thetamap.tif")[0]
         )
         self.azim_map = tf.imread(
-            glob.glob(os.path.join(self.settings.directory,"maps")+os.sep+"*_azmmap.tif")[0]
+            glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_azmmap.tif")[0]
         )
         self.predef_mask_data.set_color(self.settings.colors["predef_mask"].color)
         self.nonpositive_mask_data.set_color(
@@ -1103,7 +1134,7 @@ class MainImageView(pg.GraphicsLayoutWidget):
         # global tiflist, keylist, curr_key, curr_pos
         self.image_data = tf.imread(
             os.path.join(
-                self.settings.directory,
+                self.settings.image_directory,
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + ".tif"
             )
         )
@@ -1132,7 +1163,7 @@ class MainImageView(pg.GraphicsLayoutWidget):
         for mask,vals in self.masks.items():
             #print(tiflist[keylist[curr_key]][curr_pos])
             file_name = os.path.join(
-                self.settings.directory,
+                self.settings.output_directory,
                 "masks",
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + vals[1]
             )
@@ -1351,7 +1382,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
         # print("Integrals: updating data")
         # global tiflist, keylist, curr_key, curr_pos
         integral_infile_piece = os.path.join(
-            self.settings.directory,
+            self.settings.output_directory,
             "integrals",
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
         )
@@ -1698,7 +1729,7 @@ class StatsView(pg.GraphicsLayoutWidget):
 
     def update_stats_data(self):
         stats_infile = os.path.join(
-            self.settings.directory,
+            self.settings.output_directory,
             "stats",
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_hist.npy"
         )
@@ -1771,7 +1802,7 @@ class CSimView(pg.GraphicsLayoutWidget):
     def update_data(self):
         for k, v in self.methods.items():
             filename_piece = os.path.join(
-                self.settings.directory,
+                self.settings.output_directory,
                 "stats",
                 self.settings.keylist[self.settings.curr_key] + "*" + v
             )
@@ -1916,7 +1947,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.integral_filelist = sorted(
             glob.glob(
                 os.path.join(
-                    self.settings.directory,
+                    self.settings.output_directory,
                     "integrals",
                     self.settings.keylist[self.settings.curr_key]
                 )

@@ -88,6 +88,23 @@ def read_imctrl(imctrlname):
     return image_controls
 
 
+def get_save_file_location(ext):
+    location = QtWidgets.QFileDialog.getSaveFileName(
+        None,
+        "Save as...",
+        ".",
+        ext,
+    )
+    start, typed_end = os.path.splitext(location[0])
+    if start == "":
+        return None
+    if (typed_end != "") and typed_end != ext:
+        print("Typed extension does not match required file type.")
+    filename = start + ext
+    print(f"Saving {filename}")
+    return filename
+
+
 class Point(pg.QtCore.QPoint):
     def __init__(self, image_size, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1110,120 +1127,123 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.preview_mask_button.setText("Preview Mask")
 
     def save_mask(self):
-        tf.imwrite("predef_mask.tif", self.predef_mask)
+        location = get_save_file_location(".tif")
+        if location is not None:
+            tf.imwrite(location, self.predef_mask)
 
     def save_immask(self):
-        # GSASII outputs/expects an explicit return to the first point
-        polygon_points_list = []
-        frame_points_list = []
-        arcs_list = []
-        xlines = []
-        ylines = []
-        points = []
-        rings_list = []
-        for i in self.main_image.objects:
-            if type(i) == Polygon:
-                poly_points = i.saveState()["points"]
-                # print(poly_points)
-                poly_points = [
-                    [
-                        pixel_to_mm(x, self.cache["pixelSize"][0]),
-                        pixel_to_mm(y,self.cache["pixelSize"][1])
-                    ] for x,y in poly_points
-                ]
-                # print(poly_points)
-                poly_points.append(poly_points[0])
-                if i.isFrame:
-                    frame_points_list = poly_points
-                else:
-                    polygon_points_list.append(poly_points)
-            elif type(i) == Arc:
-                # arcs_list.append(i.table_item.text())
-                # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
-                arcs_list.append([
-                    i.tth_center,
-                    [i.startazim,i.endazim],
-                    i.tthwidth
-                ])
-            elif type(i) == Line:
-                if i.orientation == "horizontal":
-                    xlines.append(int(i.table_item.text()))
-                else:
-                    ylines.append(int(i.table_item.text()))
-            elif type(i) == Spot:
-                center0_mm = pixel_to_mm(
-                    i.center[1],
-                    self.cache["pixelSize"][0]
-                )
-                center1_mm = pixel_to_mm(
-                    i.center[0],
-                    self.cache["pixelSize"][1]
-                )
-                if self.imagescale_is_square:
-                    diameter_mm = pixel_to_mm(
-                        i.radius * 2,
+        outfilename = get_save_file_location(".immask")
+        if outfilename is not None:
+            # GSASII outputs/expects an explicit return to the first point
+            polygon_points_list = []
+            frame_points_list = []
+            arcs_list = []
+            xlines = []
+            ylines = []
+            points = []
+            rings_list = []
+            for i in self.main_image.objects:
+                if type(i) == Polygon:
+                    poly_points = i.saveState()["points"]
+                    # print(poly_points)
+                    poly_points = [
+                        [
+                            pixel_to_mm(x, self.cache["pixelSize"][0]),
+                            pixel_to_mm(y,self.cache["pixelSize"][1])
+                        ] for x,y in poly_points
+                    ]
+                    # print(poly_points)
+                    poly_points.append(poly_points[0])
+                    if i.isFrame:
+                        frame_points_list = poly_points
+                    else:
+                        polygon_points_list.append(poly_points)
+                elif type(i) == Arc:
+                    # arcs_list.append(i.table_item.text())
+                    # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
+                    arcs_list.append([
+                        i.tth_center,
+                        [i.startazim,i.endazim],
+                        i.tthwidth
+                    ])
+                elif type(i) == Line:
+                    if i.orientation == "horizontal":
+                        xlines.append(int(i.table_item.text()))
+                    else:
+                        ylines.append(int(i.table_item.text()))
+                elif type(i) == Spot:
+                    center0_mm = pixel_to_mm(
+                        i.center[1],
                         self.cache["pixelSize"][0]
                     )
-                else:
-                    print("Warning: Radius may not align with GSASII as image is not square.")
-                    diameter_mm = pixel_to_mm(
-                        i.radius * 2,
-                        np.sqrt(
-                            self.cache["pixelSize"][0] ** 2
-                            + self.cache["pixelSize"][1] ** 2
-                        )
+                    center1_mm = pixel_to_mm(
+                        i.center[0],
+                        self.cache["pixelSize"][1]
                     )
-                points.append([center0_mm, center1_mm, diameter_mm])
-            elif type(i) == Point:
-                x_mm = pixel_to_mm(
-                    i.x(),
-                    self.cache["pixelSize"][0]
-                )
-                y_mm = pixel_to_mm(
-                    i.y(),
-                    self.cache["pixelSize"][1]
-                )
-                if self.imagescale_is_square:
-                    d_mm = pixel_to_mm(
-                        1,
+                    if self.imagescale_is_square:
+                        diameter_mm = pixel_to_mm(
+                            i.radius * 2,
+                            self.cache["pixelSize"][0]
+                        )
+                    else:
+                        print("Warning: Radius may not align with GSASII as image is not square.")
+                        diameter_mm = pixel_to_mm(
+                            i.radius * 2,
+                            np.sqrt(
+                                self.cache["pixelSize"][0] ** 2
+                                + self.cache["pixelSize"][1] ** 2
+                            )
+                        )
+                    points.append([center0_mm, center1_mm, diameter_mm])
+                elif type(i) == Point:
+                    x_mm = pixel_to_mm(
+                        i.x(),
                         self.cache["pixelSize"][0]
                     )
-                else:
-                    d_mm = pixel_to_mm(
-                        1,
-                        np.sqrt(
-                            self.cache["pixelSize"][0] ** 2
-                            + self.cache["pixelSize"][1] ** 2
-                        )
+                    y_mm = pixel_to_mm(
+                        i.y(),
+                        self.cache["pixelSize"][1]
                     )
-                points.append([x_mm, y_mm, d_mm])
-            elif type(i) == Ring:
-                rings_list.append([i.center_tth, i.tth_width])
+                    if self.imagescale_is_square:
+                        d_mm = pixel_to_mm(
+                            1,
+                            self.cache["pixelSize"][0]
+                        )
+                    else:
+                        d_mm = pixel_to_mm(
+                            1,
+                            np.sqrt(
+                                self.cache["pixelSize"][0] ** 2
+                                + self.cache["pixelSize"][1] ** 2
+                            )
+                        )
+                    points.append([x_mm, y_mm, d_mm])
+                elif type(i) == Ring:
+                    rings_list.append([i.center_tth, i.tth_width])
 
-        # TODO: choice of outfile location
-        outfilename = os.path.join(".", "mask.immask")
-        with open(outfilename,'w') as outfile:
-            outfile.write("Points:{points}\n".format(points=points))
-            outfile.write("Rings:{rings}\n".format(rings=rings_list))
-            outfile.write("Arcs:{arcs}\n".format(arcs=arcs_list))
-            # print(points_list)
-            outfile.write(
-                "Polygons:{polys}\n".format(polys=polygon_points_list)
-                .replace('(','[').replace(')',']')
-            )
-            outfile.write("Xlines:{xlines}\n".format(xlines=xlines))
-            outfile.write("Ylines:{ylines}\n".format(ylines=ylines))
-            outfile.write(
-                "Frames:{frames}\n".format(frames=frame_points_list)
-                .replace('(','[').replace(')',']')
-            )
-            # outfile.write("Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(image_min=np.min(self.main_image.image_data),image_max=np.max(self.main_image.image_data)))
-            outfile.write(
-                "Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(
-                    image_min=self.min_intensity_threshold.value(),
-                    image_max=self.max_intensity_threshold.value(),
+            # outfilename = os.path.join(".", "mask.immask")
+            with open(outfilename,'w') as outfile:
+                outfile.write("Points:{points}\n".format(points=points))
+                outfile.write("Rings:{rings}\n".format(rings=rings_list))
+                outfile.write("Arcs:{arcs}\n".format(arcs=arcs_list))
+                # print(points_list)
+                outfile.write(
+                    "Polygons:{polys}\n".format(polys=polygon_points_list)
+                    .replace('(','[').replace(')',']')
                 )
-            )
+                outfile.write("Xlines:{xlines}\n".format(xlines=xlines))
+                outfile.write("Ylines:{ylines}\n".format(ylines=ylines))
+                outfile.write(
+                    "Frames:{frames}\n".format(frames=frame_points_list)
+                    .replace('(','[').replace(')',']')
+                )
+                # outfile.write("Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(image_min=np.min(self.main_image.image_data),image_max=np.max(self.main_image.image_data)))
+                outfile.write(
+                    "Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(
+                        image_min=self.min_intensity_threshold.value(),
+                        image_max=self.max_intensity_threshold.value(),
+                    )
+                )
 
     def load_immask(self):
         print("loading")

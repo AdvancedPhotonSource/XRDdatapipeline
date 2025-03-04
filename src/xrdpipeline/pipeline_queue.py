@@ -27,7 +27,7 @@ class image_monitor(RegexMatchingEventHandler):
         #'_ext' not on base images
         # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif.metadata$"
         # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif$"
-        reg_image = r"(?P<directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+        reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
         # reg for integral data files
 
         ###
@@ -41,7 +41,7 @@ class image_monitor(RegexMatchingEventHandler):
         # print(results[0].group(0,1,2,3,4))
         print(
             "Directory: {0}, Name: {1}, Number: {2}, Extension: {3}".format(
-                results[0].group("directory"),
+                results[0].group("input_directory"),
                 results[0].group("name"),
                 results[0].group("number"),
                 results[0].group("ext"),
@@ -110,7 +110,8 @@ class CacheCreator(QtCore.QObject):
     def __init__(
         self,
         cache,
-        directory,
+        input_directory,
+        output_directory,
         filename,
         imctrlname,
         flatfield,
@@ -120,7 +121,8 @@ class CacheCreator(QtCore.QObject):
     ):
         super().__init__()
         self.cache = cache
-        self.directory = directory
+        self.input_directory = input_directory
+        self.output_directory = output_directory
         self.filename = filename
         self.imctrlname = imctrlname
         self.flatfield = flatfield
@@ -170,7 +172,7 @@ class CacheCreator(QtCore.QObject):
         imsave = Image.fromarray(predef_mask["image"])
         imsave.save(
             os.path.join(
-                self.directory,
+                self.output_directory,
                 "maps",
                 os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_predef.tif"
             )
@@ -178,7 +180,7 @@ class CacheCreator(QtCore.QObject):
         imsave = Image.fromarray(flatfield_image)
         imsave.save(
             os.path.join(
-                self.directory,
+                self.output_directory,
                 "maps",
                 os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"
             )
@@ -217,7 +219,7 @@ class CacheCreator(QtCore.QObject):
             (0, image_dict["Image Controls"]["size"][1])
         )[0]
         if self.stopEarly: return
-        getmaps(self.cache, self.imctrlname, os.path.join(self.directory, "maps"))
+        getmaps(self.cache, self.imctrlname, os.path.join(self.output_directory, "maps"))
         if self.stopEarly: return
         # 2th fairly linear along center; calc 2th - pixelsize conversion
         center = self.cache["Image Controls"]["center"]
@@ -276,7 +278,8 @@ class SingleIterator(QtCore.QObject):
         filename,
         imctrlname,
         imgmaskname,
-        directory,
+        input_directory,
+        output_directory,
         name,
         number,
         ext,
@@ -288,7 +291,8 @@ class SingleIterator(QtCore.QObject):
         self.filename = filename
         self.imctrlname = imctrlname
         self.imgmaskname = imgmaskname
-        self.directory = directory
+        self.input_directory = input_directory
+        self.output_directory = output_directory
         self.name = name
         self.number = number
         self.ext = ext
@@ -296,7 +300,7 @@ class SingleIterator(QtCore.QObject):
         self.logging = logging
 
     def run(self):
-        run_iteration(self.filename, self.directory, self.name, self.number, self.cache, self.ext)
+        run_iteration(self.filename, self.input_directory, self.output_directory, self.name, self.number, self.cache, self.ext)
         self.finished.emit()
 
     def run_bak(self):
@@ -810,13 +814,18 @@ class main_window(QtWidgets.QWidget):
     # clear queue button
     # optional "choose existing files to run over" section
     # default: none, shortcut button for all, else choose which files
-    def __init__(self, directory=None, imctrl=None, flatfield=None, imgmask=None):
+    def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
         # self.directory_loc = QtWidgets.QLabel()
-        self.directory_widget = file_select(
-            "Directory:",
-            default_text=directory,
+        self.input_directory_widget = file_select(
+            "Input Directory:",
+            default_text=input_directory,
+            isdir=True,
+        )
+        self.output_directory_widget = file_select(
+            "Output Directory:",
+            default_text=output_directory,
             isdir=True,
         )
         # self.config_text = QtWidgets.QPushButton("Config file:")
@@ -824,7 +833,7 @@ class main_window(QtWidgets.QWidget):
         self.config_widget = file_select(
             "Config file:",
             default_text=imctrl,
-            startdir=self.directory_widget.file_name.text(),
+            startdir=self.input_directory_widget.file_name.text(),
             ext="Imctrl and PONI files (*.imctrl *.poni)",
         )
         # self.predef_mask_text = QtWidgets.QPushButton("Predefined Mask:")
@@ -832,12 +841,12 @@ class main_window(QtWidgets.QWidget):
         self.flatfield_widget = file_select(
             "Flat-field file:",
             default_text=flatfield,
-            startdir=self.directory_widget.file_name.text()
+            startdir=self.input_directory_widget.file_name.text()
         )
         self.predef_mask_widget = file_select(
             "Predefined Mask:",
             default_text=imgmask,
-            startdir=self.directory_widget.file_name.text(),
+            startdir=self.input_directory_widget.file_name.text(),
         )
         self.start_button = QtWidgets.QPushButton("Start")
         self.start_button.released.connect(self.start_button_pressed)
@@ -883,15 +892,16 @@ class main_window(QtWidgets.QWidget):
         # self.is_running_process = False
 
         self.window_layout = QtWidgets.QGridLayout()
-        self.window_layout.addWidget(self.directory_widget, 0, 0, 1, 3)
-        self.window_layout.addWidget(self.config_widget, 1, 0, 1, 3)
-        self.window_layout.addWidget(self.flatfield_widget, 2, 0, 1, 3)
-        self.window_layout.addWidget(self.predef_mask_widget, 3, 0, 1, 3)
-        self.window_layout.addWidget(self.start_button, 4, 0)
-        self.window_layout.addWidget(self.clear_queue_button, 4, 1)
-        self.window_layout.addWidget(self.stop_button, 4, 2)
-        self.window_layout.addWidget(self.process_existing_images_checkbox, 5, 0)
-        self.window_layout.addWidget(self.queue_length_info, 6, 0)
+        self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
+        self.window_layout.addWidget(self.output_directory_widget, 1, 0, 1, 3)
+        self.window_layout.addWidget(self.config_widget, 2, 0, 1, 3)
+        self.window_layout.addWidget(self.flatfield_widget, 3, 0, 1, 3)
+        self.window_layout.addWidget(self.predef_mask_widget, 4, 0, 1, 3)
+        self.window_layout.addWidget(self.start_button, 5, 0)
+        self.window_layout.addWidget(self.clear_queue_button, 5, 1)
+        self.window_layout.addWidget(self.stop_button, 5, 2)
+        self.window_layout.addWidget(self.process_existing_images_checkbox, 6, 0)
+        self.window_layout.addWidget(self.queue_length_info, 7, 0)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
 
@@ -933,7 +943,8 @@ class main_window(QtWidgets.QWidget):
                             filename,
                             self.imgctrl,
                             self.imgmask,
-                            self.directory,
+                            self.input_directory,
+                            self.output_directory,
                             name,
                             number,
                             ext,
@@ -965,7 +976,8 @@ class main_window(QtWidgets.QWidget):
                         print(filename)
                         self.cache_worker = CacheCreator(
                             self.cache,
-                            self.directory,
+                            self.input_directory,
+                            self.output_directory,
                             filename,
                             self.imgctrl,
                             self.flatfield,
@@ -992,7 +1004,8 @@ class main_window(QtWidgets.QWidget):
             self.timer.stop()
 
     def start_processing(self):
-        self.directory = self.directory_widget.file_name.text()
+        self.input_directory = self.input_directory_widget.file_name.text()
+        self.output_directory = self.output_directory_widget.file_name.text()
         self.imgctrl = self.config_widget.file_name.text()
         self.imgmask = self.predef_mask_widget.file_name.text()
         self.flatfield = self.flatfield_widget.file_name.text()
@@ -1003,17 +1016,17 @@ class main_window(QtWidgets.QWidget):
         # create subdirectories if needed
         newdirs = ["maps", "masks", "integrals", "stats", "grads"]
         for newdir in newdirs:
-            path = os.path.join(self.directory, newdir)  # store maps with the images
+            path = os.path.join(self.output_directory, newdir)  # store maps with the images
             if not os.path.exists(path):
                 os.mkdir(path)
 
         # Grab existing file names and add them to the queue if option checked
         if self.process_existing_images_checkbox.isChecked():
             # existing_files = glob.glob(self.directory+"/*.metadata")
-            existing_files = glob.glob(self.directory + "/*.tif")
+            existing_files = glob.glob(self.input_directory + "/*.tif")
             # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif.metadata$"
             # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif$"
-            reg_image = r"(?P<directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+            reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
             # number -> actual int
             # number_int = results[0].group("number").remove("-").remove("_")
             # number_int = int(number_int)
@@ -1042,7 +1055,7 @@ class main_window(QtWidgets.QWidget):
         print("Starting queue")
 
         self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.directory, recursive=False)
+        self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
         self.observer.start()
 
         # main function to cycle, calls iteration while there are new images to process
@@ -1069,13 +1082,13 @@ class main_window(QtWidgets.QWidget):
         self.keep_running = True
         self.timer.start(100)
 
-    def update_dir(self, directory):
+    def update_dir(self, input_directory):
         self.pause()
         self.clear_queue()
-        self.directory = directory
+        self.input_directory = input_directory
         # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
         self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.directory, recursive=False)
+        self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
         self.observer.start()
         # self.resume()
 
@@ -1084,7 +1097,8 @@ class main_window(QtWidgets.QWidget):
             self.start_processing()
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
-            self.directory_widget.setEnabled(False)
+            self.input_directory_widget.setEnabled(False)
+            self.output_directory_widget.setEnabled(False)
             self.config_widget.setEnabled(False)
             self.flatfield_widget.setEnabled(False)
             self.predef_mask_widget.setEnabled(False)
@@ -1128,7 +1142,8 @@ class main_window(QtWidgets.QWidget):
             self.start_button.setEnabled(True)
             self.clear_queue_button.setEnabled(True)
             self.stop_button.setText("Stop")
-            self.directory_widget.setEnabled(True)
+            self.input_directory_widget.setEnabled(True)
+            self.output_directory_widget.setEnabled(True)
             self.config_widget.setEnabled(True)
             self.flatfield_widget.setEnabled(True)
             self.predef_mask_widget.setEnabled(True)
@@ -1139,7 +1154,8 @@ class main_window(QtWidgets.QWidget):
         self.start_button.setEnabled(True)
         self.clear_queue_button.setEnabled(True)
         self.stop_button.setText("Stop")
-        self.directory_widget.setEnabled(True)
+        self.input_directory_widget.setEnabled(True)
+        self.output_directory_widget.setEnabled(True)
         self.config_widget.setEnabled(True)
         self.flatfield_widget.setEnabled(True)
         self.predef_mask_widget.setEnabled(True)
@@ -1171,7 +1187,8 @@ class main_window(QtWidgets.QWidget):
 # Following https://gsas-ii.readthedocs.io/en/latest/GSASIIscriptable.html 16.7.9. Optimized Image Integration
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--directory")
+    parser.add_argument("-i", "--input_directory")
+    parser.add_argument("-o", "--output_directory")
     parser.add_argument("-c", "--imctrl")
     parser.add_argument("-f", "--flatfield", default=None)
     parser.add_argument("-m", "--imgmask", default=None)
@@ -1193,15 +1210,19 @@ if __name__ == "__main__":
         imgmask = PathWrap(args.imgmask)
     else:
         imgmask = None
-    if args.directory:
-        directory = PathWrap(args.directory)
+    if args.input_directory:
+        input_directory = PathWrap(args.input_directory)
     else:
-        directory = None
+        input_directory = None
+    if args.output_directory:
+        output_directory = PathWrap(args.output_directory)
+    else:
+        output_directory = None
     if args.imctrl:
         if os.path.exists(PathWrap(args.imctrl)):
             imgctrl = PathWrap(args.imctrl)
-        elif os.path.exists(os.path.join(directory, args.imctrl)):
-            imgctrl = os.path.join(directory, args.imctrl)
+        elif os.path.exists(os.path.join(input_directory, args.imctrl)):
+            imgctrl = os.path.join(input_directory, args.imctrl)
         else:
             print(
                 "Image control file not found in this directory or in specified directory."
@@ -1211,5 +1232,5 @@ if __name__ == "__main__":
         imgctrl = None
 
     app = QtWidgets.QApplication([])
-    window = main_window(directory=directory, imctrl=imgctrl, flatfield=flatfield, imgmask=imgmask)
+    window = main_window(input_directory=input_directory, output_directory=output_directory, imctrl=imgctrl, flatfield=flatfield, imgmask=imgmask)
     sys.exit(app.exec())

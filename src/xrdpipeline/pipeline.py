@@ -716,7 +716,7 @@ def current_splitting_method(
     return to_return
 
 
-def run_cache(filename, directory, imctrlname, blkSize, imgmaskname=None, flatfield=None, ):
+def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, imgmaskname=None, flatfield=None, ):
     """
     Creates and returns the initial cache.
 
@@ -725,8 +725,11 @@ def run_cache(filename, directory, imctrlname, blkSize, imgmaskname=None, flatfi
     filename: str
         Name of the image file to run over
 
-    directory: str
+    input_directory: str
         Path to the directory the image files sit in
+
+    output_directory: st
+        Path to the directory to place output files such as integrals
     
     imctrlname: str
         Name of the image control file
@@ -776,7 +779,7 @@ def run_cache(filename, directory, imctrlname, blkSize, imgmaskname=None, flatfi
     imsave = Image.fromarray(predef_mask["image"])
     imsave.save(
         os.path.join(
-            directory,
+            output_directory,
             "maps",
             os.path.splitext(os.path.split(imctrlname)[1])[0] + "_predef.tif"
         )
@@ -784,7 +787,7 @@ def run_cache(filename, directory, imctrlname, blkSize, imgmaskname=None, flatfi
     imsave = Image.fromarray(flatfield_image)
     imsave.save(
         os.path.join(
-            directory,
+            output_directory,
             "maps",
             os.path.splitext(os.path.split(imctrlname)[1])[0] + "_flatfield.tif"
         )
@@ -819,7 +822,7 @@ def run_cache(filename, directory, imctrlname, blkSize, imgmaskname=None, flatfi
         (0, image_dict["Image Controls"]["size"][0]),
         (0, image_dict["Image Controls"]["size"][1])
     )[0]
-    getmaps(cache, imctrlname, os.path.join(directory, "maps"))
+    getmaps(cache, imctrlname, os.path.join(output_directory, "maps"))
     # 2th fairly linear along center; calc 2th - pixelsize conversion
     center = cache["Image Controls"]["center"]
     center[0] = center[0] * 1000.0 / cache["Image Controls"]["pixelSize"][0]
@@ -861,7 +864,7 @@ def run_cache(filename, directory, imctrlname, blkSize, imgmaskname=None, flatfi
 
     return cache
 
-def run_iteration(filename, directory, name, number, cache, ext, closing_method = "binary_closing", return_steps = False):
+def run_iteration(filename, input_directory, output_directory, name, number, cache, ext, closing_method = "binary_closing", return_steps = False):
     """
     Runs over each file, outputting masks and integral files.
 
@@ -870,8 +873,11 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
     filename: str
         Name of the file to run over
 
-    directory: str
+    input_directory: str
         Path to the directory the images are located
+
+    output_directory: str
+        Path to the directory to place output files such as integrals
 
     name: str
 
@@ -903,7 +909,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
     imsave = Image.fromarray(nonpositive_mask)
     imsave.save(
         os.path.join(
-            directory,
+            output_directory,
             "masks",
             name + "-" + number + "_nonpositive.tif"
         )
@@ -928,7 +934,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
     imsave = Image.fromarray(outlier_mask)
     imsave.save(
         os.path.join(
-            directory,
+            output_directory,
             "masks",
             name + "-" + number + "_om.tif"
         )
@@ -941,7 +947,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(closed_mask)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_closedmask.tif"
             )
@@ -952,7 +958,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(closed_mask)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_closedmask.tif"
             )
@@ -987,7 +993,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(split_spots)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_spots.tif"
             )
@@ -995,7 +1001,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(split_arcs)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_arcs.tif"
             )
@@ -1003,7 +1009,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(base_arc)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_qwidth_arc.tif"
             )
@@ -1011,7 +1017,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(qgrad_arc)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_qgrad_arc.tif"
             )
@@ -1019,7 +1025,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(azim_grad_2)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "grads",
                 name + "-" + number + "_azim_grad_2.tif"
             )
@@ -1027,7 +1033,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(radial_grad_2)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "grads",
                 name + "-" + number + "_radial_grad_2.tif"
             )
@@ -1051,7 +1057,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(split_spots)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_spots.tif"
             )
@@ -1059,7 +1065,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         imsave = Image.fromarray(split_arcs)
         imsave.save(
             os.path.join(
-                directory,
+                output_directory,
                 "masks",
                 name + "-" + number + "_arcs.tif"
             )
@@ -1106,7 +1112,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
     )
     # save integrals
     integral_file_base = os.path.join(
-        directory,
+        output_directory,
         "integrals",
         name + "-" + number
     )
@@ -1136,7 +1142,7 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
     )
     
     # stats
-    stats_prefix = os.path.join(directory, "stats", name)
+    stats_prefix = os.path.join(output_directory, "stats", name)
     # spots stats
     spots_table.to_csv(stats_prefix + "-" + number + "_spots_stats.csv")
     # ~ 950 KB for table
@@ -1165,9 +1171,10 @@ def run_iteration(filename, directory, name, number, cache, ext, closing_method 
         prev_number = f"{number_int_prev:05}"
     try:
         previous_image = ski.io.imread(
-            os.path.join(directory, name + "-" + prev_number + ext)
+            os.path.join(input_directory, name + "-" + prev_number + ext)
         ).astype(np.float32)
     except:
+        print("Cannot find previous image for cosine similarity; using current instead.")
         previous_image = image_dict["image"].astype(np.float32)
     csim_f = 1 - spatial.distance.cosine(
         np.array(image_dict["image"], dtype=np.float32).ravel(),
