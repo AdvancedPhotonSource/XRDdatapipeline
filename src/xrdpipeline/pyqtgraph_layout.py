@@ -536,7 +536,7 @@ class KeyPressWindow(QtWidgets.QWidget):
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos
         fulltiflist = sorted(
-            glob.glob(self.settings.image_directory + "/*.tif"), key=os.path.getctime
+            glob.glob(self.settings.image_directory + "/*.tif"), key = lambda x: (len(x), x)
         )
         keylist = []
         tiflist = {}
@@ -1695,6 +1695,8 @@ class StatsView(pg.GraphicsLayoutWidget):
             fillLevel=0, brush=(0, 255, 0, 80)
         )
         self.spots_histogram_area_Q = pg.ImageItem()
+        self.spots_area_contour = pg.ImageItem()
+        self.spots_Q_contour = pg.ImageItem()
 
         self.stats_view.addItem(self.spots_histogram_area_curve)
         # self.stats_view.addItem(self.spots_histogram_Q_curve)
@@ -1708,6 +1710,8 @@ class StatsView(pg.GraphicsLayoutWidget):
             "Spot Area": self.spots_histogram_area_curve,
             "Spot Q Position": self.spots_histogram_Q_curve,
             "Area vs Q": self.spots_histogram_area_Q,
+            "Spot Area vs Time": self.spots_area_contour,
+            "Spot Q Position vs Time": self.spots_Q_contour,
         }
         self.histogram_types = list(self.histogram_type_dict.keys())
         print(self.histogram_types)
@@ -1746,6 +1750,17 @@ class StatsView(pg.GraphicsLayoutWidget):
             self.Q_bins, self.spots_histogram_Q, stepMode="center"
         )
         self.spots_histogram_area_Q.setImage(self.spots_stats_hist)
+
+    def update_contour_data(self):
+        stats_infiles = glob.glob(
+            os.path.join(
+                self.settings.output_directory,
+                "stats",
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
+                ) + "*_spots_hist.npy",
+            key = lambda x: (len(x), x)
+        )
+        print(stats_infiles)
 
     # def update_stats_data(self):
     #     global tiflist, keylist, curr_key, curr_pos
@@ -1811,7 +1826,7 @@ class CSimView(pg.GraphicsLayoutWidget):
                 filename_piece
             )
             # print(f"CSim filenames: {filenames}")
-            filenames.sort()
+            filenames.sort(key = lambda x: (len(x), x))
             arrays = [np.loadtxt(filename) for filename in filenames]
             self.similarity_line_data[k] = np.vstack(arrays)
             # [:,0] for comparison to first, [:,1] for comparison to previous
@@ -1954,7 +1969,7 @@ class ContourView(pg.GraphicsLayoutWidget):
                 + "*"
                 + self.integral_extension
             ),
-            key=os.path.getctime
+            key = lambda x: (len(x), x)
         )
         #Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
         #Test files showing 0.02 seconds from creation time to modification time
