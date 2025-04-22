@@ -18,7 +18,7 @@ from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
 from GSASII_imports import *
-from pipeline import getmaps, get_azimbands, prepare_qmaps, gradient_cache, run_iteration
+from pipeline import getmaps, get_azimbands, prepare_qmaps, gradient_cache, run_iteration, get_Qbands
 
 class image_monitor(RegexMatchingEventHandler):
     def __init__(self, queue):
@@ -116,7 +116,9 @@ class CacheCreator(QtCore.QObject):
         imctrlname,
         flatfield,
         imgmaskname,
+        bad_pixels,
         blkSize,
+        esdMul = 3.0,
         logging=False,
     ):
         super().__init__()
@@ -127,8 +129,10 @@ class CacheCreator(QtCore.QObject):
         self.imctrlname = imctrlname
         self.flatfield = flatfield
         self.imgmaskname = imgmaskname
+        self.bad_pixels = bad_pixels
         self.blkSize = blkSize
         self.logging = logging
+        self.esdMul = esdMul
         self.stopEarly = False
 
     def run(self):
@@ -156,6 +160,13 @@ class CacheCreator(QtCore.QObject):
                 predef_mask = read_image(self.imgmaskname)
         else:
             predef_mask["image"] = np.zeros_like(image_dict["image"], dtype=bool)
+        if (self.bad_pixels is not None) and (self.bad_pixels != ""):
+            suffix = self.bad_pixels.split(".")[1]
+            if suffix == "tif":
+                bad_pixel_mask = read_image(self.bad_pixels)
+                predef_mask |= bad_pixel_mask
+            else:
+                print("Unsupported bad pixel mask image type. Skipping file read. Any zero-intensity pixels will automatically be masked.")
         self.cache["predef_mask"] = predef_mask
 
         flatfield_image = np.ones_like(self.cache["image"])
@@ -228,10 +239,24 @@ class CacheCreator(QtCore.QObject):
         self.cache["center"] = center
         image_dict["center"] = center
         # self.cache['d2th'] = (self.cache['pixelTAmap'][int(center[1]),0] - self.cache['pixelTAmap'][int(center[1]),99])/100
-        self.cache["esdMul"] = 3
+        self.cache["esdMul"] = self.esdMul
+        image_dict["Masks"]["SpotMask"]["esdMul"] = self.esdMul
         numChansAzim = 360
         self.cache["azimband"] = get_azimbands(self.cache["pixelAzmap"], numChansAzim)
         if self.stopEarly: return
+
+        # numChans
+        LUtth = np.array(self.cache["Image Controls"]["IOtth"])
+        wave = self.cache["Image Controls"]["wavelength"]
+        dsp0 = wave / (2.0 * sind(LUtth[0] / 2.0))
+        dsp1 = wave / (2.0 * sind(LUtth[1] / 2.0))
+        x0 = GetDetectorXY2(dsp0, 0.0, self.cache["Image Controls"])[0]
+        x1 = GetDetectorXY2(dsp1, 0.0, self.cache["Image Controls"])[0]
+        if not np.any(x0) or not np.any(x1):
+            raise Exception
+        numChans = int(1000 * (x1 - x0) / self.cache["Image Controls"]["pixelSize"][0]) // 2
+        self.cache["numChans"] = numChans
+        self.cache["Qbins"], self.cache["QbinEdges"] = get_Qbands(self.cache["pixelQmap"], LUtth, wave, numChans)
 
         # pytorch integration
         (
@@ -300,7 +325,7 @@ class SingleIterator(QtCore.QObject):
         self.logging = logging
 
     def run(self):
-        run_iteration(self.filename, self.input_directory, self.output_directory, self.name, self.number, self.cache, self.ext)
+        run_iteration(self.filename, self.input_directory, self.output_directory, self.name, self.number, self.cache, self.ext, return_steps = False)
         self.finished.emit()
 
     def run_bak(self):
@@ -806,6 +831,45 @@ class SingleIterator(QtCore.QObject):
         self.finished.emit()
 
 
+class AdvancedSettings(QtWidgets.QWidget):
+    apply_settings = QtCore.Signal()
+
+    def __init__(self, settings):
+        super().__init__()
+        self.settings = settings
+
+        # self.override_config_label = QtWidgets.QLabel("Override Config Values: ")
+        self.override_label = QtWidgets.QLabel("Override configuration file values by checking the box and setting the value.")
+
+        self.sigma_override = QtWidgets.QCheckBox("Multiple of Median Absolute Deviation for Outlier Masking:")
+        self.sigma = QtWidgets.QDoubleSpinBox()
+        self.sigma_default = 3
+        self.sigma.setValue(self.sigma_default)
+        self.sigma.setMinimum(0)
+        self.sigma.setMaximum(10)
+        self.sigma.setSingleStep(0.1)
+        # self.sigma_label.setDisabled(True)
+        # self.sigma.setDisabled(True)
+
+        self.defaults_button = QtWidgets.QPushButton("Restore Defaults")
+        self.defaults_button.released.connect(self.restore_defaults)
+
+        # self.outlier_masking_bin_size_label = QtWidgets.QLabel("Outlier Masking Bin Size:")
+        # self.outlier_masking_bin_size = QtWidgets.QSpinBox()
+        
+
+        self.settings_layout = QtWidgets.QGridLayout()
+        self.settings_layout.addWidget(self.override_label, 0, 0, 1, 2)
+        self.settings_layout.addWidget(self.sigma_override, 1, 0)
+        self.settings_layout.addWidget(self.sigma, 1, 1)
+        self.settings_layout.addWidget(self.defaults_button, 2, 0)
+
+        self.setLayout(self.settings_layout)
+
+    def restore_defaults(self):
+        self.sigma.setValue(self.sigma_default)
+
+
 class main_window(QtWidgets.QWidget):
     # text box/file browser directory location
     # ditto config file
@@ -814,7 +878,7 @@ class main_window(QtWidgets.QWidget):
     # clear queue button
     # optional "choose existing files to run over" section
     # default: none, shortcut button for all, else choose which files
-    def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None):
+    def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None, bad_pixels=None):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
         # self.directory_loc = QtWidgets.QLabel()
@@ -844,10 +908,17 @@ class main_window(QtWidgets.QWidget):
             startdir=self.input_directory_widget.file_name.text()
         )
         self.predef_mask_widget = file_select(
-            "Predefined Mask:",
+            "Experimental Mask:",
             default_text=imgmask,
             startdir=self.input_directory_widget.file_name.text(),
         )
+        self.bad_pixel_mask_widget = file_select(
+            "Bad Pixel Mask:",
+            default_text=bad_pixels,
+            startdir=self.input_directory_widget.file_name.text(),
+        )
+        self.advanced_settings_button = QtWidgets.QPushButton("Advanced Settings")
+        self.advanced_settings_button.released.connect(self.advanced_settings_button_pressed)
         self.start_button = QtWidgets.QPushButton("Start")
         self.start_button.released.connect(self.start_button_pressed)
         self.clear_queue_button = QtWidgets.QPushButton("Clear Queue")
@@ -862,6 +933,9 @@ class main_window(QtWidgets.QWidget):
         )
         self.regex_label = QtWidgets.QLabel("Regex for existing images:")
         self.existing_images_regex = QtWidgets.QTextEdit()
+
+        self.settings = {}
+        self.settings_widget = AdvancedSettings(settings=self.settings)
 
         # self.time_checkpoints = ["Start","Image loaded","Cache","Zero mask","Polar-correct","Outlier mask","Closing mask","Split first mask","Split second mask","All integrations","Save integrals","Delete project"]
         # self.time_checkpoints = ["Start", "Cache", "Zero mask", "Outlier mask", "Closing mask", "Splitting mask", "Integrations", "Save integrals", "CSim", "NMI", "SSim"]
@@ -897,11 +971,13 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.config_widget, 2, 0, 1, 3)
         self.window_layout.addWidget(self.flatfield_widget, 3, 0, 1, 3)
         self.window_layout.addWidget(self.predef_mask_widget, 4, 0, 1, 3)
-        self.window_layout.addWidget(self.start_button, 5, 0)
-        self.window_layout.addWidget(self.clear_queue_button, 5, 1)
-        self.window_layout.addWidget(self.stop_button, 5, 2)
-        self.window_layout.addWidget(self.process_existing_images_checkbox, 6, 0)
-        self.window_layout.addWidget(self.queue_length_info, 7, 0)
+        self.window_layout.addWidget(self.bad_pixel_mask_widget, 5, 0, 1, 3)
+        self.window_layout.addWidget(self.advanced_settings_button, 7, 0)
+        self.window_layout.addWidget(self.start_button, 6, 0)
+        self.window_layout.addWidget(self.clear_queue_button, 6, 1)
+        self.window_layout.addWidget(self.stop_button, 6, 2)
+        self.window_layout.addWidget(self.process_existing_images_checkbox, 8, 0)
+        self.window_layout.addWidget(self.queue_length_info, 9, 0)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
 
@@ -974,6 +1050,9 @@ class main_window(QtWidgets.QWidget):
                         self.cache_thread = QtCore.QThread()
                         filename = self.queue[0][0]
                         print(filename)
+                        esdMul = self.settings_widget.sigma_default
+                        if self.settings_widget.sigma_override.isChecked():
+                            esdMul = self.settings_widget.sigma.value()
                         self.cache_worker = CacheCreator(
                             self.cache,
                             self.input_directory,
@@ -982,7 +1061,9 @@ class main_window(QtWidgets.QWidget):
                             self.imgctrl,
                             self.flatfield,
                             self.imgmask,
+                            self.bad_pixels,
                             self.blkSize,
+                            esdMul = esdMul
                         )
                         self.cache_worker.moveToThread(self.cache_thread)
                         self.cache_thread.started.connect(self.cache_worker.run)
@@ -1009,6 +1090,7 @@ class main_window(QtWidgets.QWidget):
         self.imgctrl = self.config_widget.file_name.text()
         self.imgmask = self.predef_mask_widget.file_name.text()
         self.flatfield = self.flatfield_widget.file_name.text()
+        self.bad_pixels = self.bad_pixel_mask_widget.file_name.text()
         self.cache = {}
         self.has_made_cache = False
         # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
@@ -1092,6 +1174,9 @@ class main_window(QtWidgets.QWidget):
         self.observer.start()
         # self.resume()
 
+    def advanced_settings_button_pressed(self):
+        self.settings_widget.show()
+
     def start_button_pressed(self):
         if self.start_button.text() == "Start":
             self.start_processing()
@@ -1102,6 +1187,7 @@ class main_window(QtWidgets.QWidget):
             self.config_widget.setEnabled(False)
             self.flatfield_widget.setEnabled(False)
             self.predef_mask_widget.setEnabled(False)
+            self.bad_pixel_mask_widget.setEnabled(False)
         elif self.start_button.text() == "Pause":
             self.pause()
             self.start_button.setText("Resume")
@@ -1117,6 +1203,7 @@ class main_window(QtWidgets.QWidget):
         print("Stopping and clearing queue")
         self.stop_button.setText("Stopping...")
         # disable all
+        self.advanced_settings_button.setEnabled(False)
         self.start_button.setEnabled(False)
         self.clear_queue_button.setEnabled(False)
         self.stop_button.setEnabled(False)
@@ -1138,6 +1225,7 @@ class main_window(QtWidgets.QWidget):
             self.iteration_thread.finished.connect(self.iteration_thread.deleteLater)
         else:
             # self.is_running_process = False
+            self.advanced_settings_button.setEnabled(True)
             self.start_button.setText("Start")
             self.start_button.setEnabled(True)
             self.clear_queue_button.setEnabled(True)
@@ -1147,9 +1235,11 @@ class main_window(QtWidgets.QWidget):
             self.config_widget.setEnabled(True)
             self.flatfield_widget.setEnabled(True)
             self.predef_mask_widget.setEnabled(True)
+            self.bad_pixel_mask_widget.setEnabled(True)
 
     def really_stopped(self):
         # self.is_running_process = False
+        self.advanced_settings_button.setEnabled(True)
         self.start_button.setText("Start")
         self.start_button.setEnabled(True)
         self.clear_queue_button.setEnabled(True)
@@ -1159,6 +1249,7 @@ class main_window(QtWidgets.QWidget):
         self.config_widget.setEnabled(True)
         self.flatfield_widget.setEnabled(True)
         self.predef_mask_widget.setEnabled(True)
+        self.bad_pixel_mask_widget.setEnabled(True)
 
     def closeEvent(self, evt):
         # if not self.is_running_process:
@@ -1192,6 +1283,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--imctrl")
     parser.add_argument("-f", "--flatfield", default=None)
     parser.add_argument("-m", "--imgmask", default=None)
+    parser.add_argument("-b", "--bad_pixels", default=None)
     args = parser.parse_args()
 
     # Pass in location and names of files
@@ -1210,6 +1302,10 @@ if __name__ == "__main__":
         imgmask = PathWrap(args.imgmask)
     else:
         imgmask = None
+    if args.bad_pixels is not None:
+        bad_pixels = PathWrap(args.bad_pixels)
+    else:
+        bad_pixels = None
     if args.input_directory:
         input_directory = PathWrap(args.input_directory)
     else:
@@ -1232,5 +1328,5 @@ if __name__ == "__main__":
         imgctrl = None
 
     app = QtWidgets.QApplication([])
-    window = main_window(input_directory=input_directory, output_directory=output_directory, imctrl=imgctrl, flatfield=flatfield, imgmask=imgmask)
+    window = main_window(input_directory=input_directory, output_directory=output_directory, imctrl=imgctrl, flatfield=flatfield, imgmask=imgmask, bad_pixels=bad_pixels)
     sys.exit(app.exec())
