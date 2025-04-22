@@ -49,6 +49,7 @@ class Settings:
     outChannels: int
     keylist: list
     tiflist: dict
+    curr_num: str
     curr_key: int = 0
     curr_pos: int = 0
     # colors: ColorsList = ColorsList()
@@ -380,13 +381,14 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settingsmenu = self.menubar.addMenu("&Settings")
         self.settingsmenu.addAction("Open Settings...", self.show_settings)
         self.imageview = MainImageView(self.settings, parent=self)
+        self.csimview = CSimView(self, self.settings)
         self.integral_widget = IntegralView(self, self.settings)
         self.tabbed_area = TabbedArea(self, self.settings)
 
         # Show name of image
         # self.name_label = QtWidgets.QLabel("<span style='font-size: 12pt'>{0}</span>".format(tiflist[keylist[curr_key]][curr_pos]))
-        self.name_label = QtWidgets.QLabel()
-        self.name_label.setMinimumSize(500, 50)
+        # self.name_label = QtWidgets.QLabel()
+        # self.name_label.setMinimumSize(500, 50)
 
         # Placing the mouseMoved() event here so it can more easily be passed to the integral widget
         self.cursor_label = QtWidgets.QLabel(
@@ -394,6 +396,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             % (0, 0, 0, 0, 0, 0)
         )
         self.cursor_label.setMinimumSize(500, 50)
+        # self.cursor_label.setStyleSheet("background-color: black") # still leaves a small break
         self.integral_cursor_label = pg.TextItem(text="tth= \nq= \nd= ", anchor=(0, 1))
         self.integral_widget.integral_view.addItem(
             self.integral_cursor_label, ignoreBounds=True
@@ -439,18 +442,19 @@ class KeyPressWindow(QtWidgets.QWidget):
         # addWidget(widget,row,col,row_length,col_length)
         self.layout.addWidget(self.menubar, 0, 0, 1, 11)
         self.layout.addWidget(self.imageview, 1, 0, 7, 5)
-        self.layout.addWidget(self.name_label, 8, 0, 1, 4)
+        # self.layout.addWidget(self.name_label, 8, 0, 1, 4)
         self.layout.addWidget(self.live_view_image_checkbox, 8, 4)
-        self.layout.addWidget(self.cursor_label, 9, 0, 1, 4)
-        self.layout.addWidget(self.imageview.predef_mask_box, 10, 0)
-        self.layout.addWidget(self.imageview.mask_box, 10, 1)
-        self.layout.addWidget(self.imageview.spot_mask_box, 10, 2)
-        self.layout.addWidget(self.imageview.arcs_mask_box, 10, 3)
-        self.layout.addWidget(self.circleCheckbox, 12, 0)
-        self.layout.addWidget(self.imageview.mask_opacity_label, 12, 1)
-        self.layout.addWidget(self.imageview.mask_opacity_box, 12, 2)
+        self.layout.addWidget(self.cursor_label, 8, 0, 1, 4)
+        self.layout.addWidget(self.imageview.predef_mask_box, 9, 0)
+        self.layout.addWidget(self.imageview.mask_box, 9, 1)
+        self.layout.addWidget(self.imageview.spot_mask_box, 9, 2)
+        self.layout.addWidget(self.imageview.arcs_mask_box, 9, 3)
+        self.layout.addWidget(self.circleCheckbox, 10, 0)
+        self.layout.addWidget(self.imageview.mask_opacity_label, 10, 1)
+        self.layout.addWidget(self.imageview.mask_opacity_box, 10, 2)
+        self.layout.addWidget(self.csimview, 11, 0, 3, 5)
         # blank space to help ameliorate formatting... should set sizes for other widgets
-        self.layout.addWidget(QtWidgets.QWidget(), 13, 0)
+        # self.layout.addWidget(QtWidgets.QWidget(), 13, 0)
 
         self.layout.addWidget(self.integral_widget, 1, 5, 2, 6)
         self.layout.addWidget(self.integral_widget.base_integral_checkbox, 3, 5)
@@ -507,10 +511,13 @@ class KeyPressWindow(QtWidgets.QWidget):
             matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
             self.settings.wavelength = float(matches[0]) * (10**10)
         self.update_tiflist()
+        self.update_num()
         self.imageview.update_dir()
+        self.csimview.update_dir()
         self.integral_widget.update_dir()
         self.tabbed_area.update_dir()
-        self.name_label.setText(
+        # self.name_label.setText(
+        self.imageview.view.setTitle(
             "<span style='font-size: 12pt'>{0}</span>".format(
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
                     self.settings.curr_pos
@@ -525,13 +532,17 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.imageview.update_dir()
         self.integral_widget.update_dir()
         self.tabbed_area.update_dir()
-        self.name_label.setText(
+        # self.name_label.setText(
+        self.imageview.view.setTitle(
             "<span style='font-size: 12pt'>{0}</span>".format(
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
                     self.settings.curr_pos
                 ]
             )
         )
+        matchstring = rf".*{re.escape(self.settings.curr_key)}(?P<number>\d{5}|\d{5}[_\-]\d{5})\..*"
+        matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
+        self.settings.curr_num = matches.group("number")
 
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos
@@ -588,7 +599,8 @@ class KeyPressWindow(QtWidgets.QWidget):
 
     def updateImages(self, z_reset=False):
         # global curr_pos
-        self.name_label.setText(
+        # self.name_label.setText(
+        self.imageview.view.setTitle(
             "<span style='font-size: 12pt'>{0}</span>".format(
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
                     self.settings.curr_pos
@@ -600,6 +612,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.integral_widget.update_integral_data()
         self.tabbed_area.contour_widget.horiz_line.setValue(self.settings.curr_pos)
         self.tabbed_area.stats_widget.update_stats_data()
+        self.tabbed_area.spottiness_widget.update_data()
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Right:
@@ -619,12 +632,18 @@ class KeyPressWindow(QtWidgets.QWidget):
         # else:
         #    print("Only Left, Right, Up, Down and Space keys are functional!")
 
+    def update_num(self):
+        matchstring = rf".*{re.escape(self.settings.keylist[self.settings.curr_key])}" + r"(?P<number>\d{5}[_\-]\d{5}|\d{5})"
+        matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
+        self.settings.curr_num = matches.group("number")
+
     def forward(self):
         # global tiflist, keylist, curr_key, curr_pos
         self.settings.curr_pos += 1
         self.settings.curr_pos = self.settings.curr_pos % len(
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
         )
+        self.update_num()
         self.updateImages()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
@@ -634,6 +653,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_pos = self.settings.curr_pos % len(
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
         )
+        self.update_num()
         self.updateImages()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
@@ -642,9 +662,11 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_pos = 0
         self.settings.curr_key -= 1
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
+        self.update_num()
         self.updateImages(z_reset=True)
         self.tabbed_area.contour_widget.reset_integral_data()
-        self.tabbed_area.csim_widget.update_data()
+        # self.tabbed_area.csim_widget.update_data()
+        self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def nextkey(self):
@@ -652,9 +674,11 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_pos = 0
         self.settings.curr_key += 1
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
+        self.update_num()
         self.updateImages(z_reset=True)
         self.tabbed_area.contour_widget.reset_integral_data()
-        self.tabbed_area.csim_widget.update_data()
+        # self.tabbed_area.csim_widget.update_data()
+        self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def mouseMovedImage(self, evt):
@@ -697,6 +721,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                     elif self.x_axis_choice.currentIndex() == 1:
                         Q = tth_to_q(tth, self.settings.wavelength)
                         self.integral_widget.vLine.setPos(Q)
+                        self.tabbed_area.spottiness_widget.vLine.setPos(Q)
                         integral_point.setX(Q)
                         self.integral_cursor_label.setPos(integral_point)
                 if self.circleCheckbox.isChecked():
@@ -728,6 +753,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 elif self.x_axis_choice.currentIndex() == 1:
                     Q = mousePoint.x()
                     self.integral_widget.vLine.setPos(Q)
+                    self.tabbed_area.spottiness_widget.vLine.setPos(Q)
                     tth = q_to_tth(Q, self.settings.wavelength)
                 d = tth_to_d(tth, self.settings.wavelength)
                 self.integral_cursor_label.setText(
@@ -1714,7 +1740,7 @@ class StatsView(pg.GraphicsLayoutWidget):
             "Spot Q Position vs Time": self.spots_Q_contour,
         }
         self.histogram_types = list(self.histogram_type_dict.keys())
-        print(self.histogram_types)
+        # print(self.histogram_types)
         self.histogram_type_select.addItems(self.histogram_types)
         self.histogram_type_select.setCurrentIndex(0)
         self.histogram_type_select.currentIndexChanged.connect(
@@ -1792,8 +1818,6 @@ class CSimView(pg.GraphicsLayoutWidget):
         self.min = 0
         self.max = 100
         self.spacing = 1
-        # self.methods = ["Cosine Similarity", "Normalized Mutual Information", "Structural Similarity"]
-        # self.methods_ext = ["_csim.csv", "_nmi.csv", "_ssim.csv"]
         self.methods = {
             "Cosine Similarity": "_csim.txt",
             # "Normalized Mutual Information": "_nmi.txt",
@@ -2207,6 +2231,66 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.tth_line.setPen(0, 0, 0, 0)
 
 
+class SpottinessView(pg.GraphicsLayoutWidget):
+    def __init__(self, parent, settings: Settings):
+        super().__init__(parent)
+        self.setBackground("w")
+        self.setMinimumHeight(150)
+        self.settings = settings
+        self.view = self.addPlot(title="")
+        # self.min = 0
+        # self.max = 100
+        # self.spacing = 1
+        self.methods = {
+            "Percentage": 0,
+            # "Unique Spots": 1,
+            "Spot Maxima": 1,
+        }
+        self.line = {}
+        self.line_data = {}
+        self.legend = self.view.addLegend(offset=(-1,1))
+        for k,v in self.methods.items():
+            self.line[k] = self.view.plot()
+            self.line_data[k] = []
+            self.legend.addItem(self.line[k], k)
+        self.line["Percentage"].setPen("r")
+        # self.line["Unique Spots"].setPen("g")
+        self.line["Spot Maxima"].setPen("b")
+
+        self.vLine = pg.InfiniteLine(angle=90, movable=False)
+        self.view.addItem(self.vLine, ignoreBounds=True)
+    
+    def update_dir(self):
+        self.update_data()
+    
+    def update_data(self):
+        filename = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spottiness.npy"
+        )
+        with open(filename, 'rb') as infile:
+            self.line_data["Percentage"] = np.load(infile) * 100
+            _ = np.load(infile)
+            _ = np.load(infile)
+            self.line_data["Spot Maxima"] = np.load(infile)
+            self.bins = np.load(infile)
+        # print(f"bins len: {len(self.bins)}")
+        # print(f"{np.min(self.bins)}, {np.max(self.bins)}")
+        dQ = (np.max(self.bins) - np.min(self.bins))/len(self.bins)
+        # print(f"{dQ = }")
+        start = np.min(self.bins)/dQ
+        # print(f"{start = }")
+        newbins = np.arange(0, 1010*dQ, dQ)
+        # for k, v in self.methods.items():
+        #     print(f"{k} len: {len(self.line_data[k])}")
+        # for k, v in self.methods.items():
+        #     self.line[k].setData(self.line_data[k])
+        self.line["Percentage"].setData(newbins[1:], self.line_data["Percentage"][1:])
+        # self.line["Unique Spots"].setData(newbins[1:], self.line_data["Unique Spots"][1:])
+        self.line["Spot Maxima"].setData(newbins[1:], self.line_data["Spot Maxima"][1:])
+
+
 class TabbedArea(QtWidgets.QTabWidget):
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
@@ -2214,15 +2298,18 @@ class TabbedArea(QtWidgets.QTabWidget):
 
         self.stats_page = QtWidgets.QWidget()
         self.contour_page = QtWidgets.QWidget()
-        self.csim_page = QtWidgets.QWidget()
+        # self.csim_page = QtWidgets.QWidget()
+        self.spottiness_page = QtWidgets.QWidget()
 
         self.stats_widget = StatsView(self.stats_page, self.settings)
         self.contour_widget = ContourView(self.contour_page, self.settings)
-        self.csim_widget = CSimView(self.csim_page, self.settings)
+        # self.csim_widget = CSimView(self.csim_page, self.settings)
+        self.spottiness_widget = SpottinessView(self.spottiness_page, self.settings)
 
         self.stats_layout = QtWidgets.QGridLayout()
         self.contour_layout = QtWidgets.QGridLayout()
-        self.csim_layout = QtWidgets.QGridLayout()
+        # self.csim_layout = QtWidgets.QGridLayout()
+        self.spottiness_layout = QtWidgets.QGridLayout()
 
         # self.skew_checkbox = QtWidgets.QCheckBox("Skew")
         # self.kurtosis_checkbox = QtWidgets.QCheckBox("Kurtosis")
@@ -2280,17 +2367,22 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.contour_layout.addWidget(self.contour_widget.integral_step, 7, 5)
         self.contour_page.setLayout(self.contour_layout)
 
-        self.csim_layout.addWidget(self.csim_widget)
-        self.csim_page.setLayout(self.csim_layout)
+        # self.csim_layout.addWidget(self.csim_widget)
+        # self.csim_page.setLayout(self.csim_layout)
+
+        self.spottiness_layout.addWidget(self.spottiness_widget)
+        self.spottiness_page.setLayout(self.spottiness_layout)
 
         self.addTab(self.contour_page, "Contour")
         self.addTab(self.stats_page, "Stats")
-        self.addTab(self.csim_page, "Similarity")
+        # self.addTab(self.csim_page, "Similarity")
+        self.addTab(self.spottiness_page, "Spottiness")
 
     def update_dir(self):
         self.contour_widget.update_dir()
         self.stats_widget.update_dir()
-        self.csim_widget.update_dir()
+        # self.csim_widget.update_dir()
+        self.spottiness_widget.update_dir()
 
     """
     def skewCheckboxChanged(self,evt):

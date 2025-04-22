@@ -92,6 +92,19 @@ def get_Qmap(Tmap, wavelength):
     return 4 * np.pi * np.sin(Tmap / 2 * np.pi / 180) / wavelength
 
 
+def tth_to_q(tth, wavelength):
+    return 4 * np.pi * np.sin(tth / 2 * np.pi / 180) / wavelength
+
+
+def get_Qbands(Qmap, LUtth, wavelength, numChans):
+    Qmin = tth_to_q(LUtth[0], wavelength)
+    Qmax = tth_to_q(LUtth[1], wavelength)
+    dQ = (Qmax - Qmin) / numChans
+    Qband = np.array(Qmap / dQ, dtype = np.int32) # incorrect, doesn't start at qmin; check tthband
+    bin_edges = np.arange(Qmin, Qmax+dQ, dQ)
+    return Qband, bin_edges
+
+
 def get_azimbands(azmap, numChansAzim):
     dazim = (360) / numChansAzim
     azimband = np.array(azmap / dazim, dtype=np.int32)
@@ -278,7 +291,7 @@ def qwidth_area_classification(
     Qmap,
     azmap,
     min_arc_area=100,
-    Q_max=0.1,
+    Q_max=0.1, # 0.08
     azim_min=3.5,
     compare_shape=True,
     area_Q_shape_min=150000,
@@ -357,10 +370,12 @@ def qwidth_area_classification(
     if compare_shape:
         # arcs_bool = np.logical_and(props_table.loc[:,'mad2_vs_area'].values <= shape_max, arcs_bool)
         # arcs_bool = np.logical_and(props_table.loc[:,'area_over_width'].values > area_Q_shape_min, arcs_bool)
+        # arcs_bool = np.logical_and(
+        #     props_table.loc[:, "area_over_width2"].values > area_Q_shape_min, arcs_bool
+        # )
         arcs_bool = np.logical_and(
-            props_table.loc[:, "area_over_width2"].values > area_Q_shape_min, arcs_bool
+            props_table.loc[:,'azim_vs_Q'].values > azim_Q_shape_min, arcs_bool
         )
-        # arcs_bool = np.logical_and(props_table.loc[:,'azim_vs_Q'].values > azim_Q_shape_min, arcs_bool)
     # arc_clusters = props_table.loc[arcs,'label'].values
     arcs = props_table.iloc[arcs_bool]
     # arc_cluster_indices = props_table.iloc[arcs_bool].index
@@ -406,6 +421,7 @@ def split_grad_with_Q(
     gradient_dict,
     qmap,
     azmap,
+    Qbins,
     threshold_percentile=0.1,
     return_grad=False,
     return_partials=False,
@@ -637,6 +653,12 @@ def split_grad_with_Q(
     )
     spots_table = pd.DataFrame(spots_table)
 
+    reduced_labeled_new_spot_mask = ski.morphology.remove_small_objects(labeled_spots,min_size=10)
+    reduced_new_spot_mask = reduced_labeled_new_spot_mask > 0
+    # Qbins = get_Qbands(qmap, LUtth, wavelength, numChans)
+    percents, num_spots = spottiness(reduced_new_spot_mask, reduced_labeled_new_spot_mask, Qbins)
+    num_maxima, num_spot_maxima = h_maxima(image, reduced_new_spot_mask, Qbins)
+
     to_return = [new_spot_mask, new_arc_mask, spots_table]
 
     if return_grad:
@@ -645,6 +667,11 @@ def split_grad_with_Q(
 
     if return_partials:
         to_return.append(Qgrad_arc_mask)
+
+    to_return.append(percents)
+    to_return.append(num_spots)
+    to_return.append(num_maxima)
+    to_return.append(num_spot_maxima)
 
     return to_return
 
@@ -655,12 +682,41 @@ def modulo_range(array, center, range):
     return np.logical_or(diff < range, diff > (360 - range))
 
 
+def spottiness(unlabeled_spot_mask, labeled_spot_mask, binsmap):
+    total_pixels = np.array([np.sum(binsmap == i) for i in range(np.max(binsmap))])
+    masked = np.ma.array(binsmap, mask = unlabeled_spot_mask)
+    unmasked_pixels = np.array([np.ma.sum(masked == i) for i in range(np.max(binsmap))])
+    percent_masked = (total_pixels - unmasked_pixels) / total_pixels
+    num_unique_spots = np.array([len(np.unique(labeled_spot_mask[binsmap == i])) - 1 for i in range(np.max(binsmap))]) # subtract off 0 value
+
+    return percent_masked, num_unique_spots
+
+
+def h_maxima(image, spot_mask, binsmap):
+    h = int(0.05*np.percentile(image,99.9))
+    h_maxima = ski.morphology.extrema.h_maxima(image,h)
+    # h_maxima returns a binary array
+    spot_h_maxima = np.logical_and(h_maxima, spot_mask)
+    # masked = np.ma.array(binsmap, mask = ~h_maxima)
+    # binned_maxima = np.array([np.ma.sum(masked == i) for i in range(np.max(binsmap))])
+    # masked = np.ma.array(binsmap, mask = ~spot_h_maxima)
+    # binned_spot_maxima = np.array([np.ma.sum(masked == i) for i in range(np.max(binsmap))])
+    masked = np.array(binsmap)
+    masked[~h_maxima] = 0
+    binned_maxima = np.array([np.sum(masked == i) for i in range(np.max(binsmap))])
+    masked = np.array(binsmap)
+    masked[~spot_h_maxima] = 0
+    binned_spot_maxima = np.array([np.sum(masked == i) for i in range(np.max(binsmap))])
+    return binned_maxima, binned_spot_maxima
+
+
 def current_splitting_method(
     image,
     om,
     qmap,
     azmap,
     gradient_dict,
+    Qbins,
     threshold_percentile=0.1,
     return_steps=False,
     interpolate=False,
@@ -677,7 +733,7 @@ def current_splitting_method(
     # print("Time to do initial q width / area classification: {0:.2f}s".format(t1-t0))
     # spot_mask, arc_mask = split_grad(image,om,base_arc,gradient_dict,threshold_percentile=threshold_percentile)
     if return_steps:
-        spot_mask, arc_mask, spots_table, radial_grad_2, azim_grad_2, qgrad_arc_mask = (
+        spot_mask, arc_mask, spots_table, radial_grad_2, azim_grad_2, qgrad_arc_mask, percents, num_spots, num_maxima, num_spot_maxima = (
             split_grad_with_Q(
                 image,
                 om,
@@ -685,6 +741,7 @@ def current_splitting_method(
                 gradient_dict,
                 qmap,
                 azmap,
+                Qbins,
                 threshold_percentile=threshold_percentile,
                 return_partials=True,
                 return_grad=True,
@@ -694,13 +751,14 @@ def current_splitting_method(
             )
         )
     else:
-        spot_mask, arc_mask, spots_table = split_grad_with_Q(
+        spot_mask, arc_mask, spots_table, percents, num_spots, num_maxima, num_spot_maxima = split_grad_with_Q(
             image,
             om,
             base_arc,
             gradient_dict,
             qmap,
             azmap,
+            Qbins,
             threshold_percentile=threshold_percentile,
             interpolate=interpolate,
             predef_mask=predef_mask,
@@ -713,10 +771,14 @@ def current_splitting_method(
         to_return.append(qgrad_arc_mask)
         to_return.append(azim_grad_2)
         to_return.append(radial_grad_2)
+    to_return.append(percents)
+    to_return.append(num_spots)
+    to_return.append(num_maxima)
+    to_return.append(num_spot_maxima)
     return to_return
 
 
-def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, imgmaskname=None, flatfield=None, ):
+def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, imgmaskname=None, flatfield=None, esdMul=3.0):
     """
     Creates and returns the initial cache.
 
@@ -830,9 +892,22 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
     cache["center"] = center
     image_dict["center"] = center
     # self.cache['d2th'] = (self.cache['pixelTAmap'][int(center[1]),0] - self.cache['pixelTAmap'][int(center[1]),99])/100
-    cache["esdMul"] = 3
+    cache["esdMul"] = esdMul
+    image_dict["Masks"]["SpotMask"]["esdMul"] = esdMul
     numChansAzim = 360
     cache["azimband"] = get_azimbands(cache["pixelAzmap"], numChansAzim)
+
+    # numChans
+    LUtth = np.array(cache["Image Controls"]["IOtth"])
+    wave = cache["Image Controls"]["wavelength"]
+    dsp0 = wave / (2.0 * sind(LUtth[0] / 2.0))
+    dsp1 = wave / (2.0 * sind(LUtth[1] / 2.0))
+    x0 = GetDetectorXY2(dsp0, 0.0, cache["Image Controls"])[0]
+    x1 = GetDetectorXY2(dsp1, 0.0, cache["Image Controls"])[0]
+    if not np.any(x0) or not np.any(x1):
+        raise Exception
+    numChans = int(1000 * (x1 - x0) / cache["Image Controls"]["pixelSize"][0]) // 2
+    cache["numChans"] = numChans
 
     # pytorch integration
     (
@@ -917,6 +992,14 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
     predef_and_nonpositive = np.logical_or(
         nonpositive_mask, cache["predef_mask"]["image"]
     )
+    imsave = Image.fromarray(predef_and_nonpositive)
+    imsave.save(
+        os.path.join(
+            output_directory,
+            "masks",
+            name + "-" + number + "_predef.tif"
+        )
+    )
     predef_mask_extended = ski.morphology.binary_dilation(
         predef_and_nonpositive, footprint=ski.morphology.square(7)
     )  # extend out by three pixels; use for determining whether something is nearby
@@ -969,7 +1052,7 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
         print("Unrecognized closing method: Using none")
         closed_mask = outlier_mask
 
-    return_steps = False
+    # return_steps = False
     if return_steps:
         (
             split_spots,
@@ -979,12 +1062,17 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
             qgrad_arc,
             azim_grad_2,
             radial_grad_2,
+            percents,
+            num_spots,
+            num_maxima,
+            num_spot_maxima
         ) = current_splitting_method(
             image_dict["image"],
             closed_mask,
             cache["pixelQmap"],
             cache["pixelAzmap"],
             cache["gradient"],
+            cache["Qbins"],
             return_steps=return_steps,
             interpolate=False,
             predef_mask=nonpositive_mask,
@@ -1043,12 +1131,17 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
             split_spots,
             split_arcs,
             spots_table,
+            percents,
+            num_spots,
+            num_maxima,
+            num_spot_maxima
         ) = current_splitting_method(
             image_dict["image"],
             closed_mask,
             cache["pixelQmap"],
             cache["pixelAzmap"],
             cache["gradient"],
+            cache["Qbins"],
             return_steps=return_steps,
             interpolate=False,
             predef_mask=nonpositive_mask,
@@ -1158,6 +1251,16 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
         np.save(outfile, hist)
         np.save(outfile, x_edges)
         np.save(outfile, y_edges)
+
+    # spottiness
+    with open(
+        stats_prefix + "-" + number + "_spottiness.npy", "wb"
+    ) as outfile:
+        np.save(outfile, percents)
+        np.save(outfile, num_spots)
+        np.save(outfile, num_maxima)
+        np.save(outfile, num_spot_maxima)
+        np.save(outfile, cache["QbinEdges"])
 
     # Calculate comparisons between images
     # Find and read in previous image given current image number
