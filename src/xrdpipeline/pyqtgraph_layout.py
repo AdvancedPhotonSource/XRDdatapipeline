@@ -65,10 +65,10 @@ class Settings:
             "arcs_mask": ColorSettings("Texture Mask", "red"),
             "arcs_line": ColorSettings("Texture Masked Integral Line", "red"),
             "minus_spot_line": ColorSettings(
-                "Base \u2013 Spot Masked Integral Line", "black"
+                "Base \u2013 Spot Masked Integral Line", "hotpink"
             ),
             "minus_arcs_line": ColorSettings(
-                "Base \u2013 Texture Masked Integral Line", "black"
+                "Base \u2013 Texture Masked Integral Line", "blue"
             ),
             "tth_circle_mask": ColorSettings("2Theta Circle", "white"),
         }
@@ -413,6 +413,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.contour_widget.view.scene().sigMouseClicked.connect(
             self.mouseClickedContourChangeImage
         )
+        self.tabbed_area.spottiness_widget.view.scene().sigMouseMoved.connect(
+            self.mouseMovedSpottiness
+        )
         # checkboxes for the vertical line and circle
         self.vLineCheckbox = QtWidgets.QCheckBox("2Th Line")
         # self.vLineCheckbox.setChecked(True)
@@ -664,7 +667,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
         self.update_num()
         self.updateImages(z_reset=True)
-        self.tabbed_area.contour_widget.reset_integral_data()
+        self.tabbed_area.contour_widget.reset_integral_data(reset_z=True)
         # self.tabbed_area.csim_widget.update_data()
         self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
@@ -676,7 +679,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
         self.update_num()
         self.updateImages(z_reset=True)
-        self.tabbed_area.contour_widget.reset_integral_data()
+        self.tabbed_area.contour_widget.reset_integral_data(reset_z=True)
         # self.tabbed_area.csim_widget.update_data()
         self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
@@ -718,6 +721,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                         self.integral_widget.vLine.setPos(tth)
                         integral_point.setX(tth)
                         self.integral_cursor_label.setPos(integral_point)
+                        self.tabbed_area.spottiness_widget.vLine.setPos(tth)
                     elif self.x_axis_choice.currentIndex() == 1:
                         Q = tth_to_q(tth, self.settings.wavelength)
                         self.integral_widget.vLine.setPos(Q)
@@ -747,6 +751,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 if self.x_axis_choice.currentIndex() == 0:
                     tth = mousePoint.x()
                     self.integral_widget.vLine.setPos(tth)
+                    self.tabbed_area.spottiness_widget.vLine.setPos(tth)
                     # Q = 4*np.pi*np.sin(tth/2 * np.pi/180) / self.wavelength
                     # d = self.wavelength / (2 * np.sin(tth/2 * np.pi/180))
                     Q = tth_to_q(tth, self.settings.wavelength)
@@ -804,6 +809,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.integral_cursor_label.setPos(integral_point)
                 if self.vLineCheckbox.isChecked():
                     self.integral_widget.vLine.setPos(mousePoint.x())
+                    self.tabbed_area.spottiness_widget.vLine.setPos(mousePoint.x())
                     if self.x_axis_choice.currentIndex() == 0:
                         tth = mousePoint.x()
                         Q = tth_to_q(tth, self.settings.wavelength)
@@ -824,6 +830,46 @@ class KeyPressWindow(QtWidgets.QWidget):
                         )
                 if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
                     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+    
+    def mouseMovedSpottiness(self, evt):
+        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
+        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
+        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+        pos = evt
+        if self.tabbed_area.spottiness_widget.view.sceneBoundingRect().contains(pos):
+            mousePoint = self.tabbed_area.spottiness_widget.view.vb.mapSceneToView(pos)
+            integral_point = mousePoint
+            integral_point.setY(
+                self.integral_widget.integral_view.getAxis("left").range[0]
+            )
+            if self.vLineCheckbox.isChecked():
+                self.integral_cursor_label.setPos(integral_point)
+                if self.x_axis_choice.currentIndex() == 0:
+                    tth = mousePoint.x()
+                    self.integral_widget.vLine.setPos(tth)
+                    self.tabbed_area.spottiness_widget.vLine.setPos(tth)
+                    # Q = 4*np.pi*np.sin(tth/2 * np.pi/180) / self.wavelength
+                    # d = self.wavelength / (2 * np.sin(tth/2 * np.pi/180))
+                    Q = tth_to_q(tth, self.settings.wavelength)
+                elif self.x_axis_choice.currentIndex() == 1:
+                    Q = mousePoint.x()
+                    self.integral_widget.vLine.setPos(Q)
+                    self.tabbed_area.spottiness_widget.vLine.setPos(Q)
+                    tth = q_to_tth(Q, self.settings.wavelength)
+                d = tth_to_d(tth, self.settings.wavelength)
+                self.integral_cursor_label.setText(
+                    "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                )
+            if self.circleCheckbox.isChecked():
+                if self.x_axis_choice.currentIndex() == 0:
+                    self.imageview.update_tth_circle(mousePoint.x())
+                elif self.x_axis_choice.currentIndex() == 1:
+                    self.imageview.update_tth_circle(
+                        q_to_tth(mousePoint.x(), self.settings.wavelength)
+                    )
+            if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+                # axes for both are swapped at the same time, so it can still use mousePoint.x()
+                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
 
     # def mouseMovedStats(self,evt):
     #    if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
@@ -904,9 +950,13 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.tabbed_area.contour_widget.view.setXLink(
                 self.integral_widget.integral_view.getViewBox()
             )
+            self.tabbed_area.spottiness_widget.view.setXLink(
+                self.integral_widget.integral_view.getViewBox()
+            )
         else:
             # self.tabbed_area.contour_widget.view.getViewBox().linkView(pg.ViewBox.XAxis,None)
             self.tabbed_area.contour_widget.view.setXLink(None)
+            self.tabbed_area.spottiness_widget.view.setXLink(None)
 
     def x_axis_changed(self, evt):
         # Update integrals, contour graph
@@ -916,6 +966,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         # self.tabbed_area.contour_widget.change_x_axis_type(evt,self.settings.wavelength)
         self.integral_widget.change_x_axis_type(evt)
         self.tabbed_area.contour_widget.change_x_axis_type(evt)
+        self.tabbed_area.spottiness_widget.change_x_axis_type(evt)
 
     def live_view_image_checkbox_changed(self, evt):
         if self.live_view_image_checkbox.isChecked():
@@ -1157,13 +1208,26 @@ class MainImageView(pg.GraphicsLayoutWidget):
         self.update_masks_data()
 
     def update_image_data(self, xy_reset=False, z_reset=False):
-        # global tiflist, keylist, curr_key, curr_pos
-        self.image_data = tf.imread(
+        # check for flatfield-corrected images first
+        if os.path.exists(
             os.path.join(
-                self.settings.image_directory,
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + ".tif"
+                self.settings.output_directory,
+                "flatfield",
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
             )
-        )
+        ):
+            self.image_data = tf.imread(
+                self.settings.output_directory,
+                "flatfield",
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
+            )
+        else:
+            self.image_data = tf.imread(
+                os.path.join(
+                    self.settings.image_directory,
+                    self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + ".tif"
+                )
+            )
         if z_reset:
             maxval = np.percentile(self.image_data, 99.9)
             self.image.updateImage(
@@ -1918,7 +1982,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.integral_type_dict = {
             "Base": "_base.xye",
             # "Outlier Masked":"_om.xye",
-            "Closed Mask": "_closed.xye",
+            "Outlier Mask": "_closed.xye",
         }
         self.integral_types = list(self.integral_type_dict.keys())
         self.integral_select.addItems(self.integral_types)
@@ -1951,7 +2015,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.live_controls_list.append(self.live_integral_step)
 
         for widget in self.live_controls_list:
-            widget.setEnabled(False)
+            # widget.setEnabled(False)
+            widget.hide()
 
         self.manual_controls_list = []
         self.integral_min_label = QtWidgets.QLabel()
@@ -1979,9 +2044,9 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_controls_list.append(self.integral_step)
 
     def update_dir(self):
-        self.reset_integral_data()
+        self.reset_integral_data(reset_z=True)
 
-    def update_integral_list(self):
+    def update_integral_list(self, reset_z=False):
         # global keylist, curr_key
         self.integral_filelist = sorted(
             glob.glob(
@@ -2004,7 +2069,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.integral_filelist.pop()
         if self.automatically_set_spacing:
             self.auto_set_spacing()
-        self.update_integral_data()
+        self.update_integral_data(reset_z=reset_z)
 
     def auto_set_spacing(self):
         # while len(self.integral_filelist) >= (self.max_lines_visible + 1)*self.requested_spacing:
@@ -2051,10 +2116,13 @@ class ContourView(pg.GraphicsLayoutWidget):
                 self.yvals[-1] + self.live_spacing - self.yvals[0],
             )
 
-    def update_integral_data(self):
+    def update_integral_data(self, reset_z = False):
+        # Save existing z values from histogram
+        min_z, max_z = self.intensityBar.getLevels()
         # If the requested spacing hasn't changed, just append the new data
         if self._temp_auto_spacing == self.live_spacing:
             self.append_integral_data()
+            if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
         else:
             # If requested spacing is divisible by old spacing, can just splice down and add back
             if self._temp_auto_spacing % self.live_spacing == 0:
@@ -2073,6 +2141,7 @@ class ContourView(pg.GraphicsLayoutWidget):
                     self.live_integral_step_changed
                 )
                 self.append_integral_data()
+                if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
             # Otherwise, remake the dataset
             else:
                 self.integral_data = []
@@ -2086,6 +2155,7 @@ class ContourView(pg.GraphicsLayoutWidget):
                     self.live_integral_step_changed
                 )
                 self.append_integral_data()
+                if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
 
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
@@ -2117,7 +2187,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         #    if self._temp_auto_spacing % self.live_spacing == 0:
         #        self.integral_data = self.integral_data[]
 
-    def reset_integral_data(self, manual=False):
+    def reset_integral_data(self, manual=False, reset_z = False):
         self.integral_data = []
         self.xvals = []
         self.yvals = []
@@ -2133,7 +2203,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.live_integral_step.valueChanged.connect(
                 self.live_integral_step_changed
             )
-            self.update_integral_list()
+            self.update_integral_list(reset_z=reset_z)
 
     def integral_type_changed(self, evt):
         self.integral_extension = self.integral_type_dict[self.integral_types[evt]]
@@ -2161,17 +2231,21 @@ class ContourView(pg.GraphicsLayoutWidget):
     def pause(self):
         self.timer.stop()
         for widget in self.live_controls_list:
-            widget.setEnabled(False)
+            # widget.setEnabled(False)
+            widget.hide()
         for widget in self.manual_controls_list:
-            widget.setEnabled(True)
+            # widget.setEnabled(True)
+            widget.show()
         self.live_min = self.integral_min.value()
         self.reset_integral_data(manual=True)
 
     def play(self):
         for widget in self.manual_controls_list:
-            widget.setEnabled(False)
+            # widget.setEnabled(False)
+            widget.hide()
         for widget in self.live_controls_list:
-            widget.setEnabled(True)
+            # widget.setEnabled(True)
+            widget.show()
         self.live_min = self.live_integral_min.value()
         self.reset_integral_data()
         self.timer.timeout.connect(self.update_integral_live)
@@ -2248,6 +2322,9 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         }
         self.line = {}
         self.line_data = {}
+        self.tth_bins = []
+        self.q_bins = []
+        self.axis_type = "tth"
         self.legend = self.view.addLegend(offset=(-1,1))
         for k,v in self.methods.items():
             self.line[k] = self.view.plot()
@@ -2281,14 +2358,38 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         # print(f"{dQ = }")
         start = np.min(self.bins)/dQ
         # print(f"{start = }")
-        newbins = np.arange(0, 1010*dQ, dQ)
+        self.q_bins = np.arange(0, 1010*dQ, dQ)
+        self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
         # for k, v in self.methods.items():
         #     print(f"{k} len: {len(self.line_data[k])}")
         # for k, v in self.methods.items():
         #     self.line[k].setData(self.line_data[k])
-        self.line["Percentage"].setData(newbins[1:], self.line_data["Percentage"][1:])
-        # self.line["Unique Spots"].setData(newbins[1:], self.line_data["Unique Spots"][1:])
-        self.line["Spot Maxima"].setData(newbins[1:], self.line_data["Spot Maxima"][1:])
+        if self.axis_type == "tth":
+            self.update_tth()
+        elif self.axis_type == "q":
+            self.update_q()
+        else:
+            print("Spottiness: Unknown axis type. Defaulting to 2theta.")
+            self.update_tth()
+
+    def update_tth(self):
+        self.line["Percentage"].setData(self.tth_bins[1:], self.line_data["Percentage"][1:])
+        self.line["Spot Maxima"].setData(self.tth_bins[1:], self.line_data["Spot Maxima"][1:])
+
+    def update_q(self):
+        self.line["Percentage"].setData(self.q_bins[1:], self.line_data["Percentage"][1:])
+        self.line["Spot Maxima"].setData(self.q_bins[1:], self.line_data["Spot Maxima"][1:])
+
+    def change_x_axis_type(self, axis_type):
+        if axis_type == 0:
+            self.axis_type = "tth"
+            self.update_tth()
+        elif axis_type == 1:
+            self.axis_type = "q"
+            self.update_q()
+        else:
+            print("Spottiness: Unknown axis type. Defaulting to 2theta.")
+            self.update_tth()
 
 
 class TabbedArea(QtWidgets.QTabWidget):
