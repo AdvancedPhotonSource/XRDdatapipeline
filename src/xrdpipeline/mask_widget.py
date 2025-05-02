@@ -1246,77 +1246,78 @@ class MainWindow(pg.GraphicsLayoutWidget):
                 )
 
     def load_immask(self):
-        print("loading")
         infilename = QtWidgets.QFileDialog.getOpenFileName(
             None, "Choose Image Mask", ".", "Immask files (*.immask)"
         )[0]
-        masks = readMasks(infilename)
-        print(masks)
-        # TODO: prompt for clearing the current table vs appending
-        if not self.hasLoadedConfig:
-            print("No config loaded. Please load a config.")
-            return
-        for poly in masks["Polygons"]:
-            self.add_polygon()
-            print(poly)
-            for point in poly:
-                p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
-                p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
-                self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
-            self.done_creating()
-        if len(masks["Frames"]) > 0:
-            self.add_polygon(isFrame=True)
-            for point in masks["Frames"]:
-                p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
-                p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
-                self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
-            self.done_creating()
-        if (len(masks["Points"]) > 0) and not self.imagescale_is_square:
-            print(
-                "Warning: Radius of spots may not align with GSASII due to the image not being square. "
-                "The radius is calculated in pixels here, but in mm in GSASII. "
-                "Direct translations between the two would make ellipses."
-            )
-        for spot in masks["Points"]:
-            self.add_spot()
-            x, y, d = spot
-            x_pix = mm_to_pixel(x, self.cache["pixelSize"][0])
-            y_pix = mm_to_pixel(y, self.cache["pixelSize"][1])
-            if self.imagescale_is_square:
-                r_pix = mm_to_pixel(d/2, self.cache["pixelSize"][0])
-            else:
-                r_pix = mm_to_pixel(
-                    d/2,
-                    np.sqrt(
-                        self.cache["pixelSize"][0] ** 2
-                        + self.cache["pixelSize"][1] **2
-                    )
+        if not ((infilename is None) or (infilename == "")):
+            print(f"Loading {infilename}")
+            masks = readMasks(infilename)
+            print(masks)
+            # TODO: prompt for clearing the current table vs appending
+            if not self.hasLoadedConfig:
+                print("No config loaded. Please load a config.")
+                return
+            for poly in masks["Polygons"]:
+                self.add_polygon()
+                print(poly)
+                for point in poly:
+                    p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
+                    p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
+                    self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
+                self.done_creating()
+            if len(masks["Frames"]) > 0:
+                self.add_polygon(isFrame=True)
+                for point in masks["Frames"]:
+                    p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
+                    p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
+                    self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
+                self.done_creating()
+            if (len(masks["Points"]) > 0) and not self.imagescale_is_square:
+                print(
+                    "Warning: Radius of spots may not align with GSASII due to the image not being square. "
+                    "The radius is calculated in pixels here, but in mm in GSASII. "
+                    "Direct translations between the two would make ellipses."
                 )
-            spot = [x_pix, y_pix, r_pix]
-            self.main_image.objects[-1].table_item.setText(str(spot))
-            self.main_image.objects[-1].updateFromTable()
-        for ring in masks["Rings"]:
-            self.add_ring()
-            self.main_image.objects[-1].table_item.setText(str(ring))
-            self.main_image.objects[-1].updateFromTable()
-        for arc in masks["Arcs"]:
-            self.add_arc()
-            self.main_image.set_arc_point(pg.QtCore.QPoint(0, 0))
+            for spot in masks["Points"]:
+                self.add_spot()
+                x, y, d = spot
+                x_pix = mm_to_pixel(x, self.cache["pixelSize"][0])
+                y_pix = mm_to_pixel(y, self.cache["pixelSize"][1])
+                if self.imagescale_is_square:
+                    r_pix = mm_to_pixel(d/2, self.cache["pixelSize"][0])
+                else:
+                    r_pix = mm_to_pixel(
+                        d/2,
+                        np.sqrt(
+                            self.cache["pixelSize"][0] ** 2
+                            + self.cache["pixelSize"][1] **2
+                        )
+                    )
+                spot = [x_pix, y_pix, r_pix]
+                self.main_image.objects[-1].table_item.setText(str(spot))
+                self.main_image.objects[-1].updateFromTable()
+            for ring in masks["Rings"]:
+                self.add_ring()
+                self.main_image.objects[-1].table_item.setText(str(ring))
+                self.main_image.objects[-1].updateFromTable()
+            for arc in masks["Arcs"]:
+                self.add_arc()
+                self.main_image.set_arc_point(pg.QtCore.QPoint(0, 0))
+                self.done_creating()
+                self.main_image.objects[-1].table_item.setText(str(arc))
+                self.main_image.objects[-1].updateFromTable()
+            for xline in masks["Xlines"]:
+                self.add_line(orientation="horizontal")
+                self.main_image.objects[-1].table_item.setText(str(xline))
+                self.main_image.objects[-1].updateFromTable()
+            for yline in masks["Ylines"]:
+                self.add_line(orientation="vertical")
+                self.main_image.objects[-1].table_item.setText(str(yline))
+                self.main_image.objects[-1].updateFromTable()
+            # Run 'done creating' one more time just in case
             self.done_creating()
-            self.main_image.objects[-1].table_item.setText(str(arc))
-            self.main_image.objects[-1].updateFromTable()
-        for xline in masks["Xlines"]:
-            self.add_line(orientation="horizontal")
-            self.main_image.objects[-1].table_item.setText(str(xline))
-            self.main_image.objects[-1].updateFromTable()
-        for yline in masks["Ylines"]:
-            self.add_line(orientation="vertical")
-            self.main_image.objects[-1].table_item.setText(str(yline))
-            self.main_image.objects[-1].updateFromTable()
-        # Run 'done creating' one more time just in case
-        self.done_creating()
-        self.min_intensity_threshold.setValue(masks["Thresholds"][1][0])
-        self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
+            self.min_intensity_threshold.setValue(masks["Thresholds"][1][0])
+            self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
 
 
     def image_changed(self, data):
