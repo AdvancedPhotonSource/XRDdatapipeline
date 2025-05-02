@@ -309,6 +309,7 @@ class SingleIterator(QtCore.QObject):
         number,
         ext,
         closing_method="binary_closing",
+        calc_spottiness=True,
         logging=False,
     ):
         super().__init__()
@@ -322,10 +323,11 @@ class SingleIterator(QtCore.QObject):
         self.number = number
         self.ext = ext
         self.closing_method = closing_method
+        self.calc_spottiness = calc_spottiness
         self.logging = logging
 
     def run(self):
-        run_iteration(self.filename, self.input_directory, self.output_directory, self.name, self.number, self.cache, self.ext, return_steps = False)
+        run_iteration(self.filename, self.input_directory, self.output_directory, self.name, self.number, self.cache, self.ext, return_steps = False, calc_spottiness = self.calc_spottiness)
         self.finished.emit()
 
     def run_bak(self):
@@ -832,12 +834,12 @@ class SingleIterator(QtCore.QObject):
 
 
 class AdvancedSettings(QtWidgets.QWidget):
-    apply_settings = QtCore.Signal()
 
     def __init__(self, settings):
         super().__init__()
         self.settings = settings
 
+        # self.settings_label = QtWidgets.QLabel("Advanced Settings")
         # self.override_config_label = QtWidgets.QLabel("Override Config Values: ")
         self.override_label = QtWidgets.QLabel("Override configuration file values by checking the box and setting the value.")
 
@@ -851,6 +853,9 @@ class AdvancedSettings(QtWidgets.QWidget):
         # self.sigma_label.setDisabled(True)
         # self.sigma.setDisabled(True)
 
+        self.calc_spottiness = False
+        self.calc_spottiness_checkbox = QtWidgets.QCheckBox("Calculate Spottiness of Rings")
+
         self.defaults_button = QtWidgets.QPushButton("Restore Defaults")
         self.defaults_button.released.connect(self.restore_defaults)
 
@@ -859,12 +864,14 @@ class AdvancedSettings(QtWidgets.QWidget):
         
 
         self.settings_layout = QtWidgets.QGridLayout()
-        self.settings_layout.addWidget(self.override_label, 0, 0, 1, 2)
-        self.settings_layout.addWidget(self.sigma_override, 1, 0)
-        self.settings_layout.addWidget(self.sigma, 1, 1)
-        self.settings_layout.addWidget(self.defaults_button, 2, 0)
+        # self.settings_layout.addWidget(self.settings_label, 0, 0, 1, 2)
+        self.settings_layout.addWidget(self.calc_spottiness_checkbox, 0, 0, 1, 2)
+        self.settings_layout.addWidget(self.override_label, 1, 0, 1, 2)
+        self.settings_layout.addWidget(self.sigma_override, 2, 0)
+        self.settings_layout.addWidget(self.sigma, 2, 1)
+        self.settings_layout.addWidget(self.defaults_button, 3, 0)
 
-        self.setLayout(self.settings_layout)
+        # self.setLayout(self.settings_layout)
 
     def restore_defaults(self):
         self.sigma.setValue(self.sigma_default)
@@ -936,6 +943,7 @@ class main_window(QtWidgets.QWidget):
 
         self.settings = {}
         self.settings_widget = AdvancedSettings(settings=self.settings)
+        self.settings_shown = False
 
         # self.time_checkpoints = ["Start","Image loaded","Cache","Zero mask","Polar-correct","Outlier mask","Closing mask","Split first mask","Split second mask","All integrations","Save integrals","Delete project"]
         # self.time_checkpoints = ["Start", "Cache", "Zero mask", "Outlier mask", "Closing mask", "Splitting mask", "Integrations", "Save integrals", "CSim", "NMI", "SSim"]
@@ -976,10 +984,16 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.start_button, 6, 0)
         self.window_layout.addWidget(self.clear_queue_button, 6, 1)
         self.window_layout.addWidget(self.stop_button, 6, 2)
-        self.window_layout.addWidget(self.process_existing_images_checkbox, 8, 0)
-        self.window_layout.addWidget(self.queue_length_info, 9, 0)
+        self.window_layout.addLayout(self.settings_widget.settings_layout, 8, 0, 1, 3)
+        self.window_layout.addWidget(self.process_existing_images_checkbox, 9, 0)
+        self.window_layout.addWidget(self.queue_length_info, 10, 0)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
+        self.settings_widget.calc_spottiness_checkbox.hide()
+        self.settings_widget.override_label.hide()
+        self.settings_widget.sigma_override.hide()
+        self.settings_widget.sigma.hide()
+        self.settings_widget.defaults_button.hide()
 
         self.setLayout(self.window_layout)
         self.show()
@@ -1024,6 +1038,7 @@ class main_window(QtWidgets.QWidget):
                             name,
                             number,
                             ext,
+                            calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
                         )
                         self.iteration_worker.moveToThread(self.iteration_thread)
                         self.iteration_thread.started.connect(self.iteration_worker.run)
@@ -1097,6 +1112,8 @@ class main_window(QtWidgets.QWidget):
         # self.process = main_process(dir_name,ctrl_name,predef_mask)
         # create subdirectories if needed
         newdirs = ["maps", "masks", "integrals", "stats", "grads"]
+        if not ((self.flatfield is None) or (self.flatfield == "")):
+            newdirs.append("flatfield")
         for newdir in newdirs:
             path = os.path.join(self.output_directory, newdir)  # store maps with the images
             if not os.path.exists(path):
@@ -1157,6 +1174,7 @@ class main_window(QtWidgets.QWidget):
         )
 
     def pause(self):
+        print("Pausing. If processing an image, that process will complete first.")
         self.keep_running = False
         # watchdog thread will still keep populating the queue
 
@@ -1175,7 +1193,21 @@ class main_window(QtWidgets.QWidget):
         # self.resume()
 
     def advanced_settings_button_pressed(self):
-        self.settings_widget.show()
+        # self.settings_widget.show()
+        if self.settings_shown:
+            self.settings_shown = False
+            self.settings_widget.calc_spottiness_checkbox.hide()
+            self.settings_widget.override_label.hide()
+            self.settings_widget.sigma_override.hide()
+            self.settings_widget.sigma.hide()
+            self.settings_widget.defaults_button.hide()
+        else:
+            self.settings_widget.calc_spottiness_checkbox.show()
+            self.settings_widget.override_label.show()
+            self.settings_widget.sigma_override.show()
+            self.settings_widget.sigma.show()
+            self.settings_widget.defaults_button.show()
+            self.settings_shown = True
 
     def start_button_pressed(self):
         if self.start_button.text() == "Start":
@@ -1207,7 +1239,8 @@ class main_window(QtWidgets.QWidget):
         self.start_button.setEnabled(False)
         self.clear_queue_button.setEnabled(False)
         self.stop_button.setEnabled(False)
-        self.pause()
+        # self.pause()
+        self.keep_running = False
         self.clear_queue()
         # self.watchdog_thread.stop()
         # self.watchdog_thread.join()
@@ -1239,6 +1272,7 @@ class main_window(QtWidgets.QWidget):
 
     def really_stopped(self):
         # self.is_running_process = False
+        print("Stopped")
         self.advanced_settings_button.setEnabled(True)
         self.start_button.setText("Start")
         self.start_button.setEnabled(True)
