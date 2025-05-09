@@ -18,7 +18,10 @@ from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
 from GSASII_imports import *
-from pipeline import getmaps, get_azimbands, prepare_qmaps, gradient_cache, run_iteration, get_Qbands
+from pipeline import run_iteration, get_Qbands, pytorch_integrate, Export_xye
+from classification import current_splitting_method
+from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
+from corrections_and_maps import flatfield_correct, nonzeromask
 
 class image_monitor(RegexMatchingEventHandler):
     def __init__(self, queue):
@@ -169,7 +172,7 @@ class CacheCreator(QtCore.QObject):
                 print("Unsupported bad pixel mask image type. Skipping file read. Any zero-intensity pixels will automatically be masked.")
         self.cache["predef_mask"] = predef_mask
 
-        flatfield_image = np.ones_like(self.cache["image"])
+        flatfield_image = None
         if (self.flatfield is not None) and (self.flatfield != ""):
             # flatfield_image = tf.imread(self.flatfield)
             flatfield_image = load_image(self.flatfield)
@@ -188,14 +191,15 @@ class CacheCreator(QtCore.QObject):
                 os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_predef.tif"
             )
         )
-        imsave = Image.fromarray(flatfield_image)
-        imsave.save(
-            os.path.join(
-                self.output_directory,
-                "maps",
-                os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"
+        if (self.flatfield is not None) and (self.flatfield != ""):
+            imsave = Image.fromarray(flatfield_image)
+            imsave.save(
+                os.path.join(
+                    self.output_directory,
+                    "maps",
+                    os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"
+                )
             )
-        )
         self.cache["Image Controls"] = image_dict["Image Controls"]
         # TODO: Look at image size?
         # img.setControl('pixelSize',[150.0,150.0])
