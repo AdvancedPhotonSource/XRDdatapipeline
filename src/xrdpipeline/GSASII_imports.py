@@ -218,6 +218,106 @@ def LoadControls(Slines, data):
     data.update(save)
 
 
+# recreate for poni files
+def LoadControlsPONI(Slines, data):
+    "Read values from a .poni image control file."
+    cntlList = [
+        "Detector_config",
+        "Distance",
+        "Poni1",
+        "Poni2",
+        "Rot1",
+        "Rot2",
+        "Rot3",
+        "Wavelength"
+    ]
+    initial_data = {}
+    for S in Slines:
+        if S[0] == "#":
+            continue
+        [key, val] = S.strip().split(":", 1)
+        if key in [
+            "Detector_config"
+        ]:
+            initial_data[key] = eval(val) # dictionary
+        elif key in [
+            "Distance",
+            "Poni1",
+            "Poni2",
+            "Rot1",
+            "Rot2",
+            "Rot3",
+            "Wavelength"
+        ]:
+            initial_data[key] = float(val)
+    # now convert
+    save = poni_to_gsasii(initial_data)
+    # add info for number of outchannels, iotth
+    # save["outChannels"] = 2500 # seems a default in the imctrl files
+    # save["IOtth"] = [0.8, 16.8] # needs to be adjusted/determined
+    # save["PolaVal"] = [0.9, False] # boolean unclear; should probably set to 1.0 and tell people to provide polarization correction file or number if needed
+    # temporarily overwrite with what they should be in case this is incorrectly converting:
+    # save["distance"] = 689.5465510332797
+    # save["tilt"] = -0.16803895763020923
+    # save["rotation"] = 327.8798449443938
+    # save["center"] = [214.78748452404744, 216.55137107349705]
+    # save["wavelength"] = 0.24087
+
+    data.update(save)
+
+# from pyfai.geometry.fit2d.convert_to_Fit2d
+def poni_to_gsasii(controls):
+    cos_tilt = np.cos(controls["Rot1"]) * np.cos(controls["Rot2"])
+    sin_tilt = np.sqrt(1.0 - cos_tilt * cos_tilt)
+    tan_tilt = sin_tilt / cos_tilt
+
+    # PyFai's 'tilt plane rotation'
+    if sin_tilt == 0:
+        # tilt plane rotation undefined when there is no tilt
+        cos_tilt = 1.0
+        sin_tilt = 0.0
+        cos_tpr = 1.0
+        sin_tpr = 0.0
+    else:
+        cos_tpr = max(-1.0, min(1.0, -np.cos(controls["Rot2"]) * np.sin(controls["Rot1"]) / sin_tilt))
+        sin_tpr = np.sin(controls["Rot2"]) / sin_tilt
+    directDist = 1.0e3 * controls["Distance"] / cos_tilt
+    tilt = np.degrees(np.arccos(cos_tilt))
+    if sin_tpr < 0:
+        tpr = -np.degrees(np.arccos(cos_tpr))
+    else:
+        tpr = np.degrees(np.arccos(cos_tpr))
+
+    # centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) / controls["Detector_config"]["pixel2"]
+    centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) * 1000
+    if abs(tilt) < 1e-5: # in degrees
+        # centerY = (controls["Poni1"]) / controls["Detector_config"]["pixel1"]
+        centerY = (controls["Poni1"]) * 1000
+    else:
+        # centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) / controls["Detector_config"]["pixel1"]
+        centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) * 1000
+    
+    # further corrections to match GSASII: angle is off by 90 degrees
+    
+    tilt = -tilt
+    tpr = 360-tpr
+    if tpr > 360:
+        tpr -= 360
+    tpr -= 90.
+    if tpr < 0:
+        tpr += 360
+
+    out = {}
+    out["distance"] = directDist
+    out["tilt"] = tilt
+    out["rotation"] = tpr
+    out["center"] = [centerX, centerY]
+    out["wavelength"] = controls["Wavelength"] * 1e10
+    print(out)
+
+    return out
+
+
 # G2fil; used to read in user-defined GSAS-II masks
 def readMasks(filename, masks, ignoreThreshold):
     """Read a GSAS-II masks file"""

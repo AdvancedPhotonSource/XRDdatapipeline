@@ -54,7 +54,22 @@ def pytorch_integrate(
     return data
 
 
-def run_iteration(filename, input_directory, output_directory, name, number, cache, ext, closing_method = "binary_closing", return_steps = False, calc_spottiness = False):
+def run_iteration(
+        filename,
+        input_directory,
+        output_directory,
+        name,
+        number,
+        cache,
+        ext,
+        closing_method = "binary_closing",
+        return_steps = False,
+        calc_outlier = True,
+        outChannels = None,
+        calc_splitting = True,
+        azim_Q_shape_min = 100,
+        calc_spottiness = False
+    ):
     """
     Runs over each file, outputting masks and integral files.
 
@@ -130,158 +145,162 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
     frame_and_predef = np.logical_or(
         predef_and_nonpositive, cache["FrameMask"]
     )
-    GeneratePixelMask(
-        image_dict,
-        esdMul=cache["esdMul"],
-        FrameMask=frame_and_predef,
-        ThetaMap=cache["maskTmap"],
-    )
-    # outlier_mask = img.data['Masks']['SpotMask']['spotMask']
-    outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]
-    imsave = Image.fromarray(outlier_mask)
-    imsave.save(
-        os.path.join(
-            output_directory,
-            "masks",
-            name + "-" + number + "_om.tif"
+    if calc_outlier:
+        esdMul = cache["esdMul"]
+        GeneratePixelMask(
+            image_dict,
+            esdMul=esdMul,
+            FrameMask=frame_and_predef,
+            ThetaMap=cache["maskTmap"],
         )
-    )
-    # close holes
-    if closing_method == "binary_closing":
-        t0 = time.time()
-        closed_mask = ski.morphology.binary_closing(
-            outlier_mask, footprint=ski.morphology.square(3)
-        )
-        imsave = Image.fromarray(closed_mask)
+        # outlier_mask = img.data['Masks']['SpotMask']['spotMask']
+        outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]
+        imsave = Image.fromarray(outlier_mask)
         imsave.save(
             os.path.join(
                 output_directory,
                 "masks",
-                name + "-" + number + "_closedmask.tif"
+                name + "-" + number + "_om.tif"
             )
         )
-        t1 = time.time()
-        print(f"Binary closing time: {t1-t0}")
+        # close holes
+        if closing_method == "binary_closing":
+            t0 = time.time()
+            closed_mask = ski.morphology.binary_closing(
+                outlier_mask, footprint=ski.morphology.square(3)
+            )
+            imsave = Image.fromarray(closed_mask)
+            imsave.save(
+                os.path.join(
+                    output_directory,
+                    "masks",
+                    name + "-" + number + "_closedmask.tif"
+                )
+            )
+            t1 = time.time()
+            print(f"Binary closing time: {t1-t0}")
 
-    elif closing_method == "remove_small":
-        closed_mask = ski.morphology.remove_small_holes(outlier_mask, 6)
-        imsave = Image.fromarray(closed_mask)
-        imsave.save(
-            os.path.join(
-                output_directory,
-                "masks",
-                name + "-" + number + "_closedmask.tif"
+        elif closing_method == "remove_small":
+            closed_mask = ski.morphology.remove_small_holes(outlier_mask, 6)
+            imsave = Image.fromarray(closed_mask)
+            imsave.save(
+                os.path.join(
+                    output_directory,
+                    "masks",
+                    name + "-" + number + "_closedmask.tif"
+                )
             )
-        )
-    elif (closing_method == None) or (closing_method == ""):
-        closed_mask = outlier_mask
-    else:
-        print("Unrecognized closing method: Using none")
-        closed_mask = outlier_mask
+        elif (closing_method == None) or (closing_method == ""):
+            closed_mask = outlier_mask
+        else:
+            print("Unrecognized closing method: Using none")
+            closed_mask = outlier_mask
 
-    # return_steps = False
-    returned_items = current_splitting_method(
-        image_dict["image"],
-        closed_mask,
-        cache["pixelQmap"],
-        cache["pixelAzmap"],
-        cache["gradient"],
-        cache["Qbins"],
-        return_steps=return_steps,
-        interpolate=False,
-        calc_spottiness=calc_spottiness,
-        predef_mask=nonpositive_mask,
-        predef_mask_extended=predef_mask_extended,
-    )
-    if return_steps and calc_spottiness:
-        (
-            split_spots,
-            split_arcs,
-            spots_table,
-            base_arc,
-            qgrad_arc,
-            azim_grad_2,
-            radial_grad_2,
-            percents,
-            num_spots,
-            num_maxima,
-            num_spot_maxima
-        ) = returned_items
-    elif return_steps:
-        (
-            split_spots,
-            split_arcs,
-            spots_table,
-            base_arc,
-            qgrad_arc,
-            azim_grad_2,
-            radial_grad_2,
-        ) = returned_items
-    elif calc_spottiness:
-        (
-            split_spots,
-            split_arcs,
-            spots_table,
-            percents,
-            num_spots,
-            num_maxima,
-            num_spot_maxima
-        ) = returned_items
-    else:
-        (
-            split_spots,
-            split_arcs,
-            spots_table,
-        ) = returned_items
-    imsave = Image.fromarray(split_spots)
-    imsave.save(
-        os.path.join(
-            output_directory,
-            "masks",
-            name + "-" + number + "_spots.tif"
-        )
-    )
-    imsave = Image.fromarray(split_arcs)
-    imsave.save(
-        os.path.join(
-            output_directory,
-            "masks",
-            name + "-" + number + "_arcs.tif"
-        )
-    )
-    if return_steps:
-        imsave = Image.fromarray(base_arc)
-        imsave.save(
-            os.path.join(
-                output_directory,
-                "masks",
-                name + "-" + number + "_qwidth_arc.tif"
+        if calc_splitting:
+            # return_steps = False
+            returned_items = current_splitting_method(
+                image_dict["image"],
+                closed_mask,
+                cache["pixelQmap"],
+                cache["pixelAzmap"],
+                cache["gradient"],
+                cache["Qbins"],
+                return_steps=return_steps,
+                interpolate=False,
+                azim_Q_shape_min=azim_Q_shape_min,
+                calc_spottiness=calc_spottiness,
+                predef_mask=nonpositive_mask,
+                predef_mask_extended=predef_mask_extended,
             )
-        )
-        imsave = Image.fromarray(qgrad_arc)
-        imsave.save(
-            os.path.join(
-                output_directory,
-                "masks",
-                name + "-" + number + "_qgrad_arc.tif"
+            if return_steps and calc_spottiness:
+                (
+                    split_spots,
+                    split_arcs,
+                    spots_table,
+                    base_arc,
+                    qgrad_arc,
+                    azim_grad_2,
+                    radial_grad_2,
+                    percents,
+                    num_spots,
+                    num_maxima,
+                    num_spot_maxima
+                ) = returned_items
+            elif return_steps:
+                (
+                    split_spots,
+                    split_arcs,
+                    spots_table,
+                    base_arc,
+                    qgrad_arc,
+                    azim_grad_2,
+                    radial_grad_2,
+                ) = returned_items
+            elif calc_spottiness:
+                (
+                    split_spots,
+                    split_arcs,
+                    spots_table,
+                    percents,
+                    num_spots,
+                    num_maxima,
+                    num_spot_maxima
+                ) = returned_items
+            else:
+                (
+                    split_spots,
+                    split_arcs,
+                    spots_table,
+                ) = returned_items
+            imsave = Image.fromarray(split_spots)
+            imsave.save(
+                os.path.join(
+                    output_directory,
+                    "masks",
+                    name + "-" + number + "_spots.tif"
+                )
             )
-        )
-        imsave = Image.fromarray(azim_grad_2)
-        imsave.save(
-            os.path.join(
-                output_directory,
-                "grads",
-                name + "-" + number + "_azim_grad_2.tif"
+            imsave = Image.fromarray(split_arcs)
+            imsave.save(
+                os.path.join(
+                    output_directory,
+                    "masks",
+                    name + "-" + number + "_arcs.tif"
+                )
             )
-        )
-        imsave = Image.fromarray(radial_grad_2)
-        imsave.save(
-            os.path.join(
-                output_directory,
-                "grads",
-                name + "-" + number + "_radial_grad_2.tif"
-            )
-        )
+            if return_steps:
+                imsave = Image.fromarray(base_arc)
+                imsave.save(
+                    os.path.join(
+                        output_directory,
+                        "masks",
+                        name + "-" + number + "_qwidth_arc.tif"
+                    )
+                )
+                imsave = Image.fromarray(qgrad_arc)
+                imsave.save(
+                    os.path.join(
+                        output_directory,
+                        "masks",
+                        name + "-" + number + "_qgrad_arc.tif"
+                    )
+                )
+                imsave = Image.fromarray(azim_grad_2)
+                imsave.save(
+                    os.path.join(
+                        output_directory,
+                        "grads",
+                        name + "-" + number + "_azim_grad_2.tif"
+                    )
+                )
+                imsave = Image.fromarray(radial_grad_2)
+                imsave.save(
+                    os.path.join(
+                        output_directory,
+                        "grads",
+                        name + "-" + number + "_radial_grad_2.tif"
+                    )
+                )
 
 
     # integrate
@@ -294,33 +313,35 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
         cache["raveled_dist"],
         cache["tth_size"],
     )
-    hist_closed = pytorch_integrate(
-        image_dict["image"],
-        np.logical_or(closed_mask, frame_and_predef),
-        cache["tth_idx"],
-        cache["tth_val"],
-        cache["raveled_pol"],
-        cache["raveled_dist"],
-        cache["tth_size"],
-    )
-    hist_closedspotsmasked = pytorch_integrate(
-        image_dict["image"],
-        np.logical_or(split_spots, frame_and_predef),
-        cache["tth_idx"],
-        cache["tth_val"],
-        cache["raveled_pol"],
-        cache["raveled_dist"],
-        cache["tth_size"],
-    )
-    hist_closedarcsmasked = pytorch_integrate(
-        image_dict["image"],
-        np.logical_or(split_arcs, frame_and_predef),
-        cache["tth_idx"],
-        cache["tth_val"],
-        cache["raveled_pol"],
-        cache["raveled_dist"],
-        cache["tth_size"],
-    )
+    if calc_outlier:
+        hist_closed = pytorch_integrate(
+            image_dict["image"],
+            np.logical_or(closed_mask, frame_and_predef),
+            cache["tth_idx"],
+            cache["tth_val"],
+            cache["raveled_pol"],
+            cache["raveled_dist"],
+            cache["tth_size"],
+        )
+        if calc_splitting:
+            hist_closedspotsmasked = pytorch_integrate(
+                image_dict["image"],
+                np.logical_or(split_spots, frame_and_predef),
+                cache["tth_idx"],
+                cache["tth_val"],
+                cache["raveled_pol"],
+                cache["raveled_dist"],
+                cache["tth_size"],
+            )
+            hist_closedarcsmasked = pytorch_integrate(
+                image_dict["image"],
+                np.logical_or(split_arcs, frame_and_predef),
+                cache["tth_idx"],
+                cache["tth_val"],
+                cache["raveled_pol"],
+                cache["raveled_dist"],
+                cache["tth_size"],
+            )
     # save integrals
     integral_file_base = os.path.join(
         output_directory,
@@ -333,53 +354,56 @@ def run_iteration(filename, input_directory, output_directory, name, number, cac
         integral_file_base + "_base.xye",
         error=False,
     )
-    Export_xye(
-        name + "-" + number + "_closed",
-        hist_closed.T,
-        integral_file_base + "_closed.xye",
-        error=False,
-    )
-    Export_xye(
-        name + "-" + number + "_closedspotsmasked",
-        hist_closedspotsmasked.T,
-        integral_file_base + "_closedspotsmasked.xye",
-        error=False,
-    )
-    Export_xye(
-        name + "-" + number + "_closedarcsmasked",
-        hist_closedarcsmasked.T,
-        integral_file_base + "_closedarcsmasked.xye",
-        error=False,
-    )
+    if calc_outlier:
+        Export_xye(
+            name + "-" + number + "_closed",
+            hist_closed.T,
+            integral_file_base + "_closed.xye",
+            error=False,
+        )
+        if calc_splitting:
+            Export_xye(
+                name + "-" + number + "_closedspotsmasked",
+                hist_closedspotsmasked.T,
+                integral_file_base + "_closedspotsmasked.xye",
+                error=False,
+            )
+            Export_xye(
+                name + "-" + number + "_closedarcsmasked",
+                hist_closedarcsmasked.T,
+                integral_file_base + "_closedarcsmasked.xye",
+                error=False,
+            )
     
-    # stats
     stats_prefix = os.path.join(output_directory, "stats", name)
-    # spots stats
-    spots_table.to_csv(stats_prefix + "-" + number + "_spots_stats.csv")
-    # ~ 950 KB for table
-    # 2d histogram: area, Q position
-    # ~7800 KB for 1000x1000 bin histogram
-    # 81 KB for 100x100 bin histogram
-    hist, x_edges, y_edges = np.histogram2d(
-        spots_table["area"].values, spots_table["intensity_mean"].values, 100
-    )
-    with open(
-        stats_prefix + "-" + number + "_spots_hist.npy", "wb"
-    ) as outfile:
-        np.save(outfile, hist)
-        np.save(outfile, x_edges)
-        np.save(outfile, y_edges)
+    if calc_outlier:
+        if calc_splitting:
+            # spots stats
+            spots_table.to_csv(stats_prefix + "-" + number + "_spots_stats.csv")
+            # ~ 950 KB for table
+            # 2d histogram: area, Q position
+            # ~7800 KB for 1000x1000 bin histogram
+            # 81 KB for 100x100 bin histogram
+            hist, x_edges, y_edges = np.histogram2d(
+                spots_table["area"].values, spots_table["intensity_mean"].values, 100
+            )
+            with open(
+                stats_prefix + "-" + number + "_spots_hist.npy", "wb"
+            ) as outfile:
+                np.save(outfile, hist)
+                np.save(outfile, x_edges)
+                np.save(outfile, y_edges)
 
-    # spottiness
-    if calc_spottiness:
-        with open(
-            stats_prefix + "-" + number + "_spottiness.npy", "wb"
-        ) as outfile:
-            np.save(outfile, percents)
-            np.save(outfile, num_spots)
-            np.save(outfile, num_maxima)
-            np.save(outfile, num_spot_maxima)
-            np.save(outfile, cache["QbinEdges"])
+        # spottiness
+        if calc_spottiness:
+            with open(
+                stats_prefix + "-" + number + "_spottiness.npy", "wb"
+            ) as outfile:
+                np.save(outfile, percents)
+                np.save(outfile, num_spots)
+                np.save(outfile, num_maxima)
+                np.save(outfile, num_spot_maxima)
+                np.save(outfile, cache["QbinEdges"])
 
     # Calculate comparisons between images
     # Find and read in previous image given current image number

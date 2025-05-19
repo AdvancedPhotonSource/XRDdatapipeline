@@ -490,19 +490,20 @@ def qwidth_area_classification(
 
     props = ["label", "area", "intensity_min", "intensity_max"]
 
+    # props_table = ski.measure.regionprops_table(
+    #     labeled_mask, intensity_image=Qmap, properties=props
+    # )
+    # props_table = pd.DataFrame(props_table)
+    # props_table["diffs_Q"] = props_table["intensity_max"] - props_table["intensity_min"]
     props_table = ski.measure.regionprops_table(
-        labeled_mask, intensity_image=Qmap, properties=props
-    )
-    props_table = pd.DataFrame(props_table)
-    props_table["diffs_Q"] = props_table["intensity_max"] - props_table["intensity_min"]
-    props_table_azim = ski.measure.regionprops_table(
         labeled_mask,
         intensity_image=azmap,
-        properties=["label", "intensity_min", "intensity_max"],
+        # properties=["label", "intensity_min", "intensity_max"],
+        properties=props,
     )
-    props_table_azim = pd.DataFrame(props_table_azim)
+    props_table = pd.DataFrame(props_table)
     props_table["diffs_azim"] = (
-        props_table_azim["intensity_max"] - props_table_azim["intensity_min"]
+        props_table["intensity_max"] - props_table["intensity_min"]
     )  # same label should mean same order, same index
 
     # median absolute deviations sorted by label
@@ -585,6 +586,7 @@ def current_splitting_method(
     return_steps=False,
     interpolate=False,
     calc_spottiness=False,
+    azim_Q_shape_min = 100,
     predef_mask=None,
     predef_mask_extended=None,
 ):
@@ -592,8 +594,8 @@ def current_splitting_method(
     # base_spot, base_arc = qwidth_area_classification(om, qmap, min_arc_area=100, max_width=0.2, compare_shape=True, shape_max = 0.00001)
     # base_spot, base_arc = qwidth_area_classification(om, qmap, azmap, min_arc_area=100, max_width=0.2, compare_shape=True, shape_min = 3500)
     time0 = time.time()
-    base_spot, base_arc = qwidth_area_classification_2(
-        om, qmap, azmap, min_arc_area=100, Q_max=0.08, azim_min=3.5, compare_shape=True
+    base_spot, base_arc = qwidth_area_classification(
+        om, qmap, azmap, min_arc_area=100, Q_max=0.08, azim_min=3.5, azim_Q_shape_min=azim_Q_shape_min, compare_shape=True
     )
     time1 = time.time()
     print(f"Time for qwidth area classification: {time1-time0}")

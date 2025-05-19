@@ -319,7 +319,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
         cache["pixelsampledistmap"],
         cache["Image Controls"]["IOtth"][0],
         cache["Image Controls"]["IOtth"][1],
-        cache["Image Controls"]["outChannels"],
+        cache["Image Controls"]["outChannels"], # could use numchans as calc'd by gsasii
     )
 
     # comparisons

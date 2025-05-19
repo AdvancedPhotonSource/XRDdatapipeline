@@ -121,7 +121,13 @@ class CacheCreator(QtCore.QObject):
         imgmaskname,
         bad_pixels,
         blkSize,
+        calc_outlier = True,
         esdMul = 3.0,
+        outChannels = None,
+        calc_splitting = True,
+        azim_Q_shape_min = 100,
+        calc_spottiness = False,
+        not_in_poni_settings = {},
         logging=False,
     ):
         super().__init__()
@@ -135,7 +141,13 @@ class CacheCreator(QtCore.QObject):
         self.bad_pixels = bad_pixels
         self.blkSize = blkSize
         self.logging = logging
+        self.calc_outlier = calc_outlier
         self.esdMul = esdMul
+        self.outChannels = outChannels
+        self.calc_splitting = calc_splitting
+        self.azim_Q_shape_min = azim_Q_shape_min
+        self.calc_spottiness = calc_spottiness
+        self.not_in_poni_settings = not_in_poni_settings
         self.stopEarly = False
 
     def run(self):
@@ -144,9 +156,16 @@ class CacheCreator(QtCore.QObject):
             print("Creating cache")
         image_dict = read_image(self.filename)
         # img.loadControls(imctrlname)   # set controls/calibrations/masks
-        with open(self.imctrlname, "r") as imctrlfile:
-            lines = imctrlfile.readlines()
-            LoadControls(lines, image_dict["Image Controls"])
+        if os.path.splitext(self.imctrlname)[1] == ".imctrl":
+            with open(self.imctrlname, "r") as imctrlfile:
+                lines = imctrlfile.readlines()
+                LoadControls(lines, image_dict["Image Controls"])
+        else:
+            with open(self.imctrlname, "r") as imctrlfile:
+                lines = imctrlfile.readlines()
+                LoadControlsPONI(lines, image_dict["Image Controls"])
+        for k, v in self.not_in_poni_settings.items():
+            image_dict["Image Controls"][k] = v
         # cache['Image Controls'] = img.getControls() # save controls & masks contents for quick reload
         # self.cache['image'] = tf.imread(self.filename)
         self.cache["image"] = load_image(self.filename)
@@ -313,7 +332,11 @@ class SingleIterator(QtCore.QObject):
         number,
         ext,
         closing_method="binary_closing",
-        calc_spottiness=True,
+        calc_outlier = True,
+        outChannels = 0,
+        calc_splitting = True,
+        azim_Q_shape_min = 100,
+        calc_spottiness = False,
         logging=False,
     ):
         super().__init__()
@@ -327,11 +350,29 @@ class SingleIterator(QtCore.QObject):
         self.number = number
         self.ext = ext
         self.closing_method = closing_method
+        self.calc_outlier = calc_outlier
+        self.outChannels = outChannels
+        self.calc_splitting = calc_splitting
+        self.azim_Q_shape_min = azim_Q_shape_min
         self.calc_spottiness = calc_spottiness
         self.logging = logging
 
     def run(self):
-        run_iteration(self.filename, self.input_directory, self.output_directory, self.name, self.number, self.cache, self.ext, return_steps = False, calc_spottiness = self.calc_spottiness)
+        run_iteration(
+            self.filename,
+            self.input_directory,
+            self.output_directory,
+            self.name,
+            self.number,
+            self.cache,
+            self.ext,
+            return_steps = False,
+            calc_outlier = self.calc_outlier,
+            outChannels = self.outChannels,
+            calc_splitting = self.calc_splitting,
+            azim_Q_shape_min = self.azim_Q_shape_min,
+            calc_spottiness = self.calc_spottiness,
+        )
         self.finished.emit()
 
     def run_bak(self):
@@ -847,38 +888,82 @@ class AdvancedSettings(QtWidgets.QWidget):
         # self.override_config_label = QtWidgets.QLabel("Override Config Values: ")
         self.override_label = QtWidgets.QLabel("Override configuration file values by checking the box and setting the value.")
 
-        self.sigma_override = QtWidgets.QCheckBox("Multiple of Median Absolute Deviation for Outlier Masking:")
-        self.sigma = QtWidgets.QDoubleSpinBox()
-        self.sigma_default = 3
-        self.sigma.setValue(self.sigma_default)
-        self.sigma.setMinimum(0)
-        self.sigma.setMaximum(10)
-        self.sigma.setSingleStep(0.1)
-        # self.sigma_label.setDisabled(True)
-        # self.sigma.setDisabled(True)
+        self.madmult_override = QtWidgets.QCheckBox("Multiple of median absolute deviation for outlier masking:")
+        self.madmult_override_default = False
+        self.madmult_override.setChecked(self.madmult_override_default)
+        self.madmult = QtWidgets.QDoubleSpinBox()
+        self.madmult_default = 3
+        self.madmult.setMinimum(0)
+        self.madmult.setMaximum(10)
+        self.madmult.setSingleStep(0.1)
+        self.madmult.setValue(self.madmult_default)
+        # self.madmult_label.setDisabled(True)
+        # self.madmult.setDisabled(True)
+        self.nbins_om_override = QtWidgets.QCheckBox("Number of 2theta bins for outlier masking:")
+        self.nbins_om_override_default = False
+        self.nbins_om_override.setChecked(self.nbins_om_override_default)
+        self.nbins_om = QtWidgets.QSpinBox()
+        self.nbins_om_default = 1000
+        self.nbins_om.setMinimum(0)
+        self.nbins_om.setMaximum(10000)
+        self.nbins_om.setValue(self.nbins_om_default)
+        self.azim_q_override = QtWidgets.QCheckBox("Azim / Q classification ratio:")
+        self.azim_q_override_default = False
+        self.azim_q_override.setChecked(self.azim_q_override_default)
+        self.azim_q = QtWidgets.QSpinBox()
+        self.azim_q_default = 100
+        self.azim_q.setMinimum(0)
+        self.azim_q.setMaximum(1000)
+        self.azim_q.setValue(self.azim_q_default)
 
-        self.calc_spottiness = False
+        self.calc_outlier_checkbox = QtWidgets.QCheckBox("Perform outlier masking")
+        self.calc_outlier_default = True
+        self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
+        self.calc_outlier_checkbox.checkStateChanged.connect(self.toggle_outlier_settings)
+        self.calc_splitting_checkbox = QtWidgets.QCheckBox("Perform spot/texture outlier mask splitting")
+        self.calc_splitting_default = True
+        self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
         self.calc_spottiness_checkbox = QtWidgets.QCheckBox("Calculate Spottiness of Rings")
+        self.calc_spottiness_default = False
+        self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
 
         self.defaults_button = QtWidgets.QPushButton("Restore Defaults")
         self.defaults_button.released.connect(self.restore_defaults)
 
-        # self.outlier_masking_bin_size_label = QtWidgets.QLabel("Outlier Masking Bin Size:")
-        # self.outlier_masking_bin_size = QtWidgets.QSpinBox()
-        
-
+        self.outlier_settings = QtWidgets.QWidget()
+        self.outlier_layout = QtWidgets.QGridLayout()
+        self.outlier_settings.setLayout(self.outlier_layout)
         self.settings_layout = QtWidgets.QGridLayout()
         # self.settings_layout.addWidget(self.settings_label, 0, 0, 1, 2)
-        self.settings_layout.addWidget(self.calc_spottiness_checkbox, 0, 0, 1, 2)
-        self.settings_layout.addWidget(self.override_label, 1, 0, 1, 2)
-        self.settings_layout.addWidget(self.sigma_override, 2, 0)
-        self.settings_layout.addWidget(self.sigma, 2, 1)
-        self.settings_layout.addWidget(self.defaults_button, 3, 0)
+        self.settings_layout.addWidget(self.calc_outlier_checkbox, 0, 0, 1, 2)
+        self.outlier_layout.addWidget(self.override_label, 0, 0, 1, 2)
+        self.outlier_layout.addWidget(self.madmult_override, 1, 0)
+        self.outlier_layout.addWidget(self.madmult, 1, 1)
+        self.outlier_layout.addWidget(self.nbins_om_override, 2, 0)
+        self.outlier_layout.addWidget(self.nbins_om, 2, 1)
+        self.outlier_layout.addWidget(self.calc_splitting_checkbox, 3, 0, 1, 2)
+        self.outlier_layout.addWidget(self.azim_q_override, 4, 0)
+        self.outlier_layout.addWidget(self.azim_q, 4, 1)
+        self.outlier_layout.addWidget(self.calc_spottiness_checkbox, 5, 0, 1, 2)
+        self.settings_layout.addWidget(self.outlier_settings, 1, 0, 6, 2)
+        self.settings_layout.addWidget(self.defaults_button, 7, 0)
 
-        # self.setLayout(self.settings_layout)
+        self.setLayout(self.settings_layout)
 
+    def toggle_outlier_settings(self):
+        if self.calc_outlier_checkbox.isChecked():
+            self.outlier_settings.show()
+        else:
+            self.outlier_settings.hide()
+    
     def restore_defaults(self):
-        self.sigma.setValue(self.sigma_default)
+        self.madmult_override.setChecked(self.madmult_override_default)
+        self.madmult.setValue(self.madmult_default)
+        self.nbins_om_override.setChecked(self.nbins_om_override_default)
+        self.nbins_om.setValue(self.nbins_om_default)
+        self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
+        self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
+        self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
 
 
 class main_window(QtWidgets.QWidget):
@@ -928,6 +1013,18 @@ class main_window(QtWidgets.QWidget):
             default_text=bad_pixels,
             startdir=self.input_directory_widget.file_name.text(),
         )
+
+        self.poni_config_options = QtWidgets.QWidget()
+        self.iotth_label = QtWidgets.QLabel("2theta Integration Range:")
+        self.iotth_min = QtWidgets.QDoubleSpinBox()
+        self.iotth_max = QtWidgets.QDoubleSpinBox()
+        self.outChannels_label = QtWidgets.QLabel("Number of Integration Bins:")
+        self.outChannels = QtWidgets.QSpinBox()
+        self.outChannels.setMaximum(10000)
+        self.PolaVal_label = QtWidgets.QLabel("Polarization:")
+        self.PolaVal = QtWidgets.QDoubleSpinBox()
+        self.PolaVal.setMaximum(1.0)
+
         self.advanced_settings_button = QtWidgets.QPushButton("Advanced Settings")
         self.advanced_settings_button.released.connect(self.advanced_settings_button_pressed)
         self.start_button = QtWidgets.QPushButton("Start")
@@ -977,27 +1074,34 @@ class main_window(QtWidgets.QWidget):
 
         # self.is_running_process = False
 
+        self.poni_config_options_layout = QtWidgets.QGridLayout()
+        self.poni_config_options.setLayout(self.poni_config_options_layout)
+        self.poni_config_options_layout.addWidget(self.iotth_label, 0, 0)
+        self.poni_config_options_layout.addWidget(self.iotth_min, 0, 1)
+        self.poni_config_options_layout.addWidget(self.iotth_max, 0, 2)
+        self.poni_config_options_layout.addWidget(self.outChannels_label, 1, 0)
+        self.poni_config_options_layout.addWidget(self.outChannels, 1, 1)
+        self.poni_config_options_layout.addWidget(self.PolaVal_label, 2, 0)
+        self.poni_config_options_layout.addWidget(self.PolaVal, 2, 1)
+
         self.window_layout = QtWidgets.QGridLayout()
         self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
         self.window_layout.addWidget(self.output_directory_widget, 1, 0, 1, 3)
         self.window_layout.addWidget(self.config_widget, 2, 0, 1, 3)
-        self.window_layout.addWidget(self.flatfield_widget, 3, 0, 1, 3)
-        self.window_layout.addWidget(self.predef_mask_widget, 4, 0, 1, 3)
-        self.window_layout.addWidget(self.bad_pixel_mask_widget, 5, 0, 1, 3)
-        self.window_layout.addWidget(self.advanced_settings_button, 7, 0)
-        self.window_layout.addWidget(self.start_button, 6, 0)
-        self.window_layout.addWidget(self.clear_queue_button, 6, 1)
-        self.window_layout.addWidget(self.stop_button, 6, 2)
-        self.window_layout.addLayout(self.settings_widget.settings_layout, 8, 0, 1, 3)
-        self.window_layout.addWidget(self.process_existing_images_checkbox, 9, 0)
-        self.window_layout.addWidget(self.queue_length_info, 10, 0)
+        self.window_layout.addWidget(self.poni_config_options, 3, 1, 3, 2)
+        self.window_layout.addWidget(self.flatfield_widget, 6, 0, 1, 3)
+        self.window_layout.addWidget(self.predef_mask_widget, 7, 0, 1, 3)
+        self.window_layout.addWidget(self.bad_pixel_mask_widget, 8, 0, 1, 3)
+        self.window_layout.addWidget(self.advanced_settings_button, 10, 0)
+        self.window_layout.addWidget(self.start_button, 9, 0)
+        self.window_layout.addWidget(self.clear_queue_button, 9, 1)
+        self.window_layout.addWidget(self.stop_button, 9, 2)
+        self.window_layout.addWidget(self.settings_widget, 11, 0, 1, 3)
+        self.window_layout.addWidget(self.process_existing_images_checkbox, 12, 0)
+        self.window_layout.addWidget(self.queue_length_info, 13, 0)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
-        self.settings_widget.calc_spottiness_checkbox.hide()
-        self.settings_widget.override_label.hide()
-        self.settings_widget.sigma_override.hide()
-        self.settings_widget.sigma.hide()
-        self.settings_widget.defaults_button.hide()
+        self.settings_widget.hide()
 
         self.setLayout(self.window_layout)
         self.show()
@@ -1032,18 +1136,37 @@ class main_window(QtWidgets.QWidget):
                         # set up iteration thread. Should set these up with a pool and just run, but for now, run one at a time.
                         self.timer.stop()
                         self.iteration_thread = QtCore.QThread()
-                        self.iteration_worker = SingleIterator(
-                            self.cache,
-                            filename,
-                            self.imgctrl,
-                            self.imgmask,
-                            self.input_directory,
-                            self.output_directory,
-                            name,
-                            number,
-                            ext,
-                            calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
-                        )
+                        if not self.settings_widget.azim_q_override.isChecked():
+                            self.iteration_worker = SingleIterator(
+                                self.cache,
+                                filename,
+                                self.imgctrl,
+                                self.imgmask,
+                                self.input_directory,
+                                self.output_directory,
+                                name,
+                                number,
+                                ext,
+                                calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
+                                calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
+                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
+                            )
+                        else:
+                            self.iteration_worker = SingleIterator(
+                                self.cache,
+                                filename,
+                                self.imgctrl,
+                                self.imgmask,
+                                self.input_directory,
+                                self.output_directory,
+                                name,
+                                number,
+                                ext,
+                                azim_Q_shape_min = self.settings_widget.azim_q.value(),
+                                calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
+                                calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
+                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
+                            )
                         self.iteration_worker.moveToThread(self.iteration_thread)
                         self.iteration_thread.started.connect(self.iteration_worker.run)
                         self.iteration_worker.finished.connect(
@@ -1069,9 +1192,19 @@ class main_window(QtWidgets.QWidget):
                         self.cache_thread = QtCore.QThread()
                         filename = self.queue[0][0]
                         print(filename)
-                        esdMul = self.settings_widget.sigma_default
-                        if self.settings_widget.sigma_override.isChecked():
-                            esdMul = self.settings_widget.sigma.value()
+                        esdMul = self.settings_widget.madmult_default
+                        if self.settings_widget.madmult_override.isChecked():
+                            esdMul = self.settings_widget.madmult.value()
+                        not_in_poni_settings = {}
+                        if self.iotth_max.value() != 0.0:
+                            not_in_poni_settings["IOtth"] = [
+                                self.iotth_min.value(),
+                                self.iotth_max.value()
+                            ]
+                        if self.outChannels.value() != 0.0:
+                            not_in_poni_settings["outChannels"] = self.outChannels.value()
+                        if self.PolaVal.value() != 0.0:
+                            not_in_poni_settings["PolaVal"] = [self.PolaVal.value(), False]
                         self.cache_worker = CacheCreator(
                             self.cache,
                             self.input_directory,
@@ -1082,7 +1215,8 @@ class main_window(QtWidgets.QWidget):
                             self.imgmask,
                             self.bad_pixels,
                             self.blkSize,
-                            esdMul = esdMul
+                            esdMul = esdMul,
+                            not_in_poni_settings = not_in_poni_settings,
                         )
                         self.cache_worker.moveToThread(self.cache_thread)
                         self.cache_thread.started.connect(self.cache_worker.run)
@@ -1197,24 +1331,19 @@ class main_window(QtWidgets.QWidget):
         # self.resume()
 
     def advanced_settings_button_pressed(self):
-        # self.settings_widget.show()
         if self.settings_shown:
             self.settings_shown = False
-            self.settings_widget.calc_spottiness_checkbox.hide()
-            self.settings_widget.override_label.hide()
-            self.settings_widget.sigma_override.hide()
-            self.settings_widget.sigma.hide()
-            self.settings_widget.defaults_button.hide()
+            self.settings_widget.hide()
         else:
-            self.settings_widget.calc_spottiness_checkbox.show()
-            self.settings_widget.override_label.show()
-            self.settings_widget.sigma_override.show()
-            self.settings_widget.sigma.show()
-            self.settings_widget.defaults_button.show()
             self.settings_shown = True
+            self.settings_widget.show()
 
     def start_button_pressed(self):
         if self.start_button.text() == "Start":
+            if os.path.splitext(self.config_widget.file_name.text())[1] == ".poni":
+                if ((self.iotth_max.value() == 0) or (self.outChannels.value() == 0) or (self.PolaVal.value() == 0)):
+                    print("Please specify the 2theta integration range, number of integration bins, and polarization value.")
+                    return
             self.start_processing()
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)

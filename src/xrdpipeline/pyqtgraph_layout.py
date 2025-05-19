@@ -65,10 +65,10 @@ class Settings:
             "arcs_mask": ColorSettings("Texture Mask", "red"),
             "arcs_line": ColorSettings("Texture Masked Integral Line", "red"),
             "minus_spot_line": ColorSettings(
-                "Base \u2013 Spot Masked Integral Line", "hotpink"
+                "Base \u2013 Spot Masked Integral Line", "blue"
             ),
             "minus_arcs_line": ColorSettings(
-                "Base \u2013 Texture Masked Integral Line", "blue"
+                "Base \u2013 Texture Masked Integral Line", "hotpink"
             ),
             "tth_circle_mask": ColorSettings("2Theta Circle", "white"),
         }
@@ -1429,13 +1429,13 @@ class IntegralView(pg.GraphicsLayoutWidget):
         )
 
         self.spots_diff_integral_checkbox = QtWidgets.QCheckBox(
-            "Base \u2013 Spot Masked"
+            "Texture Phases"
         )
         self.spots_diff_integral_checkbox.stateChanged.connect(
             self.spots_diff_integral_checkbox_changed
         )
         self.arcs_diff_integral_checkbox = QtWidgets.QCheckBox(
-            "Base \u2013 Texture Masked"
+            "Spot Phases"
         )
         self.arcs_diff_integral_checkbox.stateChanged.connect(
             self.arcs_diff_integral_checkbox_changed
@@ -1451,8 +1451,8 @@ class IntegralView(pg.GraphicsLayoutWidget):
         self.legend.addItem(self.masked_integral, "Outlier Masked")
         self.legend.addItem(self.spotmasked_integral, "Spot Masked")
         self.legend.addItem(self.texturemasked_integral, "Texture Masked")
-        self.legend.addItem(self.spots_diff_integral, "Base \u2013 Spot Masked")
-        self.legend.addItem(self.arcs_diff_integral, "Base \u2013 Texture Masked")
+        self.legend.addItem(self.spots_diff_integral, "Texture Phases")
+        self.legend.addItem(self.arcs_diff_integral, "Spot Phases")
 
     def update_dir(self):
         # print("Integrals: updating directory")
@@ -1535,11 +1535,11 @@ class IntegralView(pg.GraphicsLayoutWidget):
             )
             self.spots_diff_integral.setData(
                 self.spotmasked_integral_data[:, 0],
-                self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1],
+                self.spotmasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
             )
             self.arcs_diff_integral.setData(
                 self.texturemasked_integral_data[:, 0],
-                self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1],
+                self.texturemasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
             )
 
         elif self.axis_type == 1:
@@ -1564,13 +1564,13 @@ class IntegralView(pg.GraphicsLayoutWidget):
             )
             self.spots_diff_integral.setData(
                 tth_to_q(self.spotmasked_integral_data[:, 0], self.settings.wavelength),
-                self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1],
+                self.spotmasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
             )
             self.arcs_diff_integral.setData(
                 tth_to_q(
                     self.texturemasked_integral_data[:, 0], self.settings.wavelength
                 ),
-                self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1],
+                self.texturemasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
             )
 
     def sqrt_toggle(self, evt):
