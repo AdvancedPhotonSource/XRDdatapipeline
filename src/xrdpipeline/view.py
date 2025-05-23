@@ -1,11 +1,13 @@
 import os
+
 os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"
-from pyqtgraph.Qt import QtGui, QtWidgets, QtCore
 import glob
 import re
+
 import numpy as np
-from skimage.io import imread
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from skimage.io import imread
 
 pg.setConfigOptions(imageAxisOrder="row-major")
 
@@ -212,7 +214,9 @@ class KeyPressWindow(QtWidgets.QMainWindow):
 
         # signals
         self.image_directory_widget.file_selected.connect(self.image_directory_changed)
-        self.output_directory_widget.file_selected.connect(self.output_directory_changed)
+        self.output_directory_widget.file_selected.connect(
+            self.output_directory_changed
+        )
         self.hide_config_button.released.connect(self.config_button_pressed)
 
         self.image_1.image_dir.editingFinished.connect(self.updateImages)
@@ -364,7 +368,9 @@ class KeyPressWindow(QtWidgets.QMainWindow):
                     os.path.join(
                         self.image_directory,
                         subdir,
-                        self.tiflist[self.keylist[self.curr_key]][self.curr_pos] + ext + ".tif"
+                        self.tiflist[self.keylist[self.curr_key]][self.curr_pos]
+                        + ext
+                        + ".tif",
                     )
                 )
             except:
@@ -375,7 +381,9 @@ class KeyPressWindow(QtWidgets.QMainWindow):
                     os.path.join(
                         self.output_directory,
                         subdir,
-                        self.tiflist[self.keylist[self.curr_key]][self.curr_pos] + ext + ".tif"
+                        self.tiflist[self.keylist[self.curr_key]][self.curr_pos]
+                        + ext
+                        + ".tif",
                     )
                 )
             except:
@@ -385,8 +393,8 @@ class KeyPressWindow(QtWidgets.QMainWindow):
     def addMaskImage(self, ext, image_item, subdir="masks" + os.sep, alpha=175):
         im_data = self.findImage(subdir=subdir, ext=ext)
         im_RGBA = np.zeros((im_data.shape[0], im_data.shape[1], 4), dtype=np.uint8)
-        im_RGBA[:,:,0] = 255
-        im_RGBA[:,:,3] = im_data * alpha
+        im_RGBA[:, :, 0] = 255
+        im_RGBA[:, :, 3] = im_data * alpha
         image_item.setImage(im_RGBA)
 
     def forward(self):

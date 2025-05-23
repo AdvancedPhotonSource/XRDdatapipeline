@@ -2,16 +2,13 @@ import os
 import time
 
 import numpy as np
-from scipy import spatial
-
 import skimage as ski
-
 import torch
-from PIL import Image
-
 from classification import current_splitting_method
 from corrections_and_maps import *
 from GSASII_imports import *
+from PIL import Image
+from scipy import spatial
 
 
 # recreating xye export function
@@ -55,21 +52,21 @@ def pytorch_integrate(
 
 
 def run_iteration(
-        filename,
-        input_directory,
-        output_directory,
-        name,
-        number,
-        cache,
-        ext,
-        closing_method = "binary_closing",
-        return_steps = False,
-        calc_outlier = True,
-        outChannels = None,
-        calc_splitting = True,
-        azim_Q_shape_min = 100,
-        calc_spottiness = False
-    ):
+    filename,
+    input_directory,
+    output_directory,
+    name,
+    number,
+    cache,
+    ext,
+    closing_method="binary_closing",
+    return_steps=False,
+    calc_outlier=True,
+    outChannels=None,
+    calc_splitting=True,
+    azim_Q_shape_min=100,
+    calc_spottiness=False,
+):
     """
     Runs over each file, outputting masks and integral files.
 
@@ -107,15 +104,13 @@ def run_iteration(
     image_dict["image"] = load_image(filename)
     # add the correction in now
     if cache["flatfield"] is not None:
-        image_dict["image"] = flatfield_correct(
-            image_dict["image"], cache["flatfield"]
-        )
+        image_dict["image"] = flatfield_correct(image_dict["image"], cache["flatfield"])
         imsave = Image.fromarray(image_dict["image"])
         imsave.save(
             os.path.join(
                 output_directory,
                 "flatfield",
-                name + "-" + number + "_flatfield_correct.tif"
+                name + "-" + number + "_flatfield_correct.tif",
             )
         )
     image_dict["corrected_image"] = None
@@ -123,9 +118,7 @@ def run_iteration(
     imsave = Image.fromarray(nonpositive_mask)
     imsave.save(
         os.path.join(
-            output_directory,
-            "masks",
-            name + "-" + number + "_nonpositive.tif"
+            output_directory, "masks", name + "-" + number + "_nonpositive.tif"
         )
     )
     predef_and_nonpositive = np.logical_or(
@@ -133,18 +126,12 @@ def run_iteration(
     )
     imsave = Image.fromarray(predef_and_nonpositive)
     imsave.save(
-        os.path.join(
-            output_directory,
-            "masks",
-            name + "-" + number + "_predef.tif"
-        )
+        os.path.join(output_directory, "masks", name + "-" + number + "_predef.tif")
     )
     predef_mask_extended = ski.morphology.binary_dilation(
         predef_and_nonpositive, footprint=ski.morphology.square(7)
     )  # extend out by three pixels; use for determining whether something is nearby
-    frame_and_predef = np.logical_or(
-        predef_and_nonpositive, cache["FrameMask"]
-    )
+    frame_and_predef = np.logical_or(predef_and_nonpositive, cache["FrameMask"])
     if calc_outlier:
         esdMul = cache["esdMul"]
         GeneratePixelMask(
@@ -157,11 +144,7 @@ def run_iteration(
         outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]
         imsave = Image.fromarray(outlier_mask)
         imsave.save(
-            os.path.join(
-                output_directory,
-                "masks",
-                name + "-" + number + "_om.tif"
-            )
+            os.path.join(output_directory, "masks", name + "-" + number + "_om.tif")
         )
         # close holes
         if closing_method == "binary_closing":
@@ -172,9 +155,7 @@ def run_iteration(
             imsave = Image.fromarray(closed_mask)
             imsave.save(
                 os.path.join(
-                    output_directory,
-                    "masks",
-                    name + "-" + number + "_closedmask.tif"
+                    output_directory, "masks", name + "-" + number + "_closedmask.tif"
                 )
             )
             t1 = time.time()
@@ -185,9 +166,7 @@ def run_iteration(
             imsave = Image.fromarray(closed_mask)
             imsave.save(
                 os.path.join(
-                    output_directory,
-                    "masks",
-                    name + "-" + number + "_closedmask.tif"
+                    output_directory, "masks", name + "-" + number + "_closedmask.tif"
                 )
             )
         elif (closing_method == None) or (closing_method == ""):
@@ -224,7 +203,7 @@ def run_iteration(
                     percents,
                     num_spots,
                     num_maxima,
-                    num_spot_maxima
+                    num_spot_maxima,
                 ) = returned_items
             elif return_steps:
                 (
@@ -244,7 +223,7 @@ def run_iteration(
                     percents,
                     num_spots,
                     num_maxima,
-                    num_spot_maxima
+                    num_spot_maxima,
                 ) = returned_items
             else:
                 (
@@ -255,17 +234,13 @@ def run_iteration(
             imsave = Image.fromarray(split_spots)
             imsave.save(
                 os.path.join(
-                    output_directory,
-                    "masks",
-                    name + "-" + number + "_spots.tif"
+                    output_directory, "masks", name + "-" + number + "_spots.tif"
                 )
             )
             imsave = Image.fromarray(split_arcs)
             imsave.save(
                 os.path.join(
-                    output_directory,
-                    "masks",
-                    name + "-" + number + "_arcs.tif"
+                    output_directory, "masks", name + "-" + number + "_arcs.tif"
                 )
             )
             if return_steps:
@@ -274,7 +249,7 @@ def run_iteration(
                     os.path.join(
                         output_directory,
                         "masks",
-                        name + "-" + number + "_qwidth_arc.tif"
+                        name + "-" + number + "_qwidth_arc.tif",
                     )
                 )
                 imsave = Image.fromarray(qgrad_arc)
@@ -282,7 +257,7 @@ def run_iteration(
                     os.path.join(
                         output_directory,
                         "masks",
-                        name + "-" + number + "_qgrad_arc.tif"
+                        name + "-" + number + "_qgrad_arc.tif",
                     )
                 )
                 imsave = Image.fromarray(azim_grad_2)
@@ -290,7 +265,7 @@ def run_iteration(
                     os.path.join(
                         output_directory,
                         "grads",
-                        name + "-" + number + "_azim_grad_2.tif"
+                        name + "-" + number + "_azim_grad_2.tif",
                     )
                 )
                 imsave = Image.fromarray(radial_grad_2)
@@ -298,10 +273,9 @@ def run_iteration(
                     os.path.join(
                         output_directory,
                         "grads",
-                        name + "-" + number + "_radial_grad_2.tif"
+                        name + "-" + number + "_radial_grad_2.tif",
                     )
                 )
-
 
     # integrate
     hist_base = pytorch_integrate(
@@ -344,9 +318,7 @@ def run_iteration(
             )
     # save integrals
     integral_file_base = os.path.join(
-        output_directory,
-        "integrals",
-        name + "-" + number
+        output_directory, "integrals", name + "-" + number
     )
     Export_xye(
         name + "-" + number + "_base",
@@ -374,7 +346,7 @@ def run_iteration(
                 integral_file_base + "_closedarcsmasked.xye",
                 error=False,
             )
-    
+
     stats_prefix = os.path.join(output_directory, "stats", name)
     if calc_outlier:
         if calc_splitting:
@@ -387,18 +359,14 @@ def run_iteration(
             hist, x_edges, y_edges = np.histogram2d(
                 spots_table["area"].values, spots_table["intensity_mean"].values, 100
             )
-            with open(
-                stats_prefix + "-" + number + "_spots_hist.npy", "wb"
-            ) as outfile:
+            with open(stats_prefix + "-" + number + "_spots_hist.npy", "wb") as outfile:
                 np.save(outfile, hist)
                 np.save(outfile, x_edges)
                 np.save(outfile, y_edges)
 
         # spottiness
         if calc_spottiness:
-            with open(
-                stats_prefix + "-" + number + "_spottiness.npy", "wb"
-            ) as outfile:
+            with open(stats_prefix + "-" + number + "_spottiness.npy", "wb") as outfile:
                 np.save(outfile, percents)
                 np.save(outfile, num_spots)
                 np.save(outfile, num_maxima)
@@ -420,7 +388,9 @@ def run_iteration(
             os.path.join(input_directory, name + "-" + prev_number + ext)
         ).astype(np.float32)
     except:
-        print("Cannot find previous image for cosine similarity; using current instead.")
+        print(
+            "Cannot find previous image for cosine similarity; using current instead."
+        )
         previous_image = image_dict["image"].astype(np.float32)
     csim_f = 1 - spatial.distance.cosine(
         np.array(image_dict["image"], dtype=np.float32).ravel(),
@@ -431,11 +401,7 @@ def run_iteration(
         previous_image.ravel(),
     )
     with open(stats_prefix + "-" + number + "_csim.txt", "w") as outfile:
-        outfile.write(
-            "{first:0.4f}\t{prev:0.4f}\n".format(first=csim_f, prev=csim_p)
-        )
+        outfile.write("{first:0.4f}\t{prev:0.4f}\n".format(first=csim_f, prev=csim_p))
 
     # Also not safe for multiprocessing. Need to grab number-1 when it exists
     cache["Previous image"] = image_dict["image"]
-
-    

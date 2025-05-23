@@ -1,13 +1,13 @@
 import glob
-import sys
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 
 import numpy as np
-import PySide6
 import pyqtgraph as pg
+import PySide6
 import tifffile as tf
 from pyqtgraph.Qt import QtCore, QtWidgets
 
@@ -261,6 +261,7 @@ class SettingsWindow(QtWidgets.QWidget):
     #         else:
     #             evt.ignore()
 
+
 class FileSelectWindow(QtWidgets.QWidget):
 
     file_selected = pg.QtCore.Signal()
@@ -316,11 +317,15 @@ class FileSelectWindow(QtWidgets.QWidget):
         self.imctrl_file_text.setText(self.settings.imagecontrol)
 
     def browse_image_dir(self):
-        image_directory_name = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Image Directory")
+        image_directory_name = QtWidgets.QFileDialog.getExistingDirectory(
+            None, "Select Image Directory"
+        )
         self.image_directory_text.setText(image_directory_name)
 
     def browse_output_dir(self):
-        output_directory_name = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Image Directory")
+        output_directory_name = QtWidgets.QFileDialog.getExistingDirectory(
+            None, "Select Image Directory"
+        )
         self.output_directory_text.setText(output_directory_name)
 
     def browse_imctrl(self):
@@ -328,7 +333,7 @@ class FileSelectWindow(QtWidgets.QWidget):
             None,
             "Choose Configuration File",
             self.image_directory_text.text(),
-            "Imctrl and PONI files (*.imctrl *.poni)"
+            "Imctrl and PONI files (*.imctrl *.poni)",
         )
         self.imctrl_file_text.setText(imctrl_file_name[0])
 
@@ -345,8 +350,9 @@ class FileSelectWindow(QtWidgets.QWidget):
     def cancel_button_pressed(self):
         self.close()
 
+
 class KeyPressWindow(QtWidgets.QWidget):
-    def __init__(self, image_directory=".", output_directory = ".", imagecontrol=""):
+    def __init__(self, image_directory=".", output_directory=".", imagecontrol=""):
         super().__init__()
         # global tiflist, keylist, curr_key, curr_pos
         # self.curr_key = 0
@@ -364,7 +370,16 @@ class KeyPressWindow(QtWidgets.QWidget):
         #     # "curr_pos": self.curr_pos
         # }
         self.settings = Settings(
-            image_directory, output_directory, imagecontrol, (2880, 2880), 0, 0, [], {}, 0, 0
+            image_directory,
+            output_directory,
+            imagecontrol,
+            (2880, 2880),
+            0,
+            0,
+            [],
+            {},
+            0,
+            0,
         )
         self.file_select_widget = FileSelectWindow(self.settings)
         self.file_select_widget.file_selected.connect(self.update_dir)
@@ -544,18 +559,24 @@ class KeyPressWindow(QtWidgets.QWidget):
             )
         )
         matchstring = rf".*{re.escape(self.settings.curr_key)}(?P<number>\d{5}|\d{5}[_\-]\d{5})\..*"
-        matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
+        matches = re.match(
+            matchstring,
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                self.settings.curr_pos
+            ],
+        )
         self.settings.curr_num = matches.group("number")
 
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos
         fulltiflist = sorted(
-            glob.glob(self.settings.image_directory + "/*.tif"), key = lambda x: (len(x), x)
+            glob.glob(self.settings.image_directory + "/*.tif"),
+            key=lambda x: (len(x), x),
         )
         keylist = []
         tiflist = {}
-        for tif in fulltiflist: # Probably losing sort here
-            #key = tif.split("\\")[-1].split("/")[-1].split("-")[0] # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
+        for tif in fulltiflist:  # Probably losing sort here
+            # key = tif.split("\\")[-1].split("/")[-1].split("-")[0] # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
             key = os.path.split(tif)[1]
             result = re.search(r"(\d{5})", key)
             if result is not None:
@@ -563,7 +584,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 if key not in keylist:
                     keylist.append(key)
                     tiflist[key] = []
-            #initialimage = tif[0:re.search(r'(\d+)\D+$', tif).end(1)] # string from the start to the end of the last set of numbers.
+            # initialimage = tif[0:re.search(r'(\d+)\D+$', tif).end(1)] # string from the start to the end of the last set of numbers.
             initialimage = os.path.splitext(os.path.split(tif)[1])[0]
             if initialimage not in tiflist[key]:
                 tiflist[key].append(initialimage)
@@ -573,7 +594,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.image_size = self.get_image_size(
             os.path.join(
                 self.settings.image_directory,
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]+".tif"
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                    self.settings.curr_pos
+                ]
+                + ".tif",
             )
         )
 
@@ -636,8 +660,16 @@ class KeyPressWindow(QtWidgets.QWidget):
         #    print("Only Left, Right, Up, Down and Space keys are functional!")
 
     def update_num(self):
-        matchstring = rf".*{re.escape(self.settings.keylist[self.settings.curr_key])}" + r"(?P<number>\d{5}[_\-]\d{5}|\d{5})"
-        matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
+        matchstring = (
+            rf".*{re.escape(self.settings.keylist[self.settings.curr_key])}"
+            + r"(?P<number>\d{5}[_\-]\d{5}|\d{5})"
+        )
+        matches = re.match(
+            matchstring,
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                self.settings.curr_pos
+            ],
+        )
         self.settings.curr_num = matches.group("number")
 
     def forward(self):
@@ -830,7 +862,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                         )
                 if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
                     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
-    
+
     def mouseMovedSpottiness(self, evt):
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
@@ -1191,10 +1223,18 @@ class MainImageView(pg.GraphicsLayoutWidget):
         # Range: x, y min and max
         # HistogramRange: visible axis range for z
         self.tth_map = tf.imread(
-            glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_2thetamap.tif")[0]
+            glob.glob(
+                os.path.join(self.settings.output_directory, "maps")
+                + os.sep
+                + "*_2thetamap.tif"
+            )[0]
         )
         self.azim_map = tf.imread(
-            glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_azmmap.tif")[0]
+            glob.glob(
+                os.path.join(self.settings.output_directory, "maps")
+                + os.sep
+                + "*_azmmap.tif"
+            )[0]
         )
         self.predef_mask_data.set_color(self.settings.colors["predef_mask"].color)
         self.nonpositive_mask_data.set_color(
@@ -1213,19 +1253,28 @@ class MainImageView(pg.GraphicsLayoutWidget):
             os.path.join(
                 self.settings.output_directory,
                 "flatfield",
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                    self.settings.curr_pos
+                ]
+                + "_flatfield_correct.tif",
             )
         ):
             self.image_data = tf.imread(
                 self.settings.output_directory,
                 "flatfield",
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                    self.settings.curr_pos
+                ]
+                + "_flatfield_correct.tif",
             )
         else:
             self.image_data = tf.imread(
                 os.path.join(
                     self.settings.image_directory,
-                    self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + ".tif"
+                    self.settings.tiflist[
+                        self.settings.keylist[self.settings.curr_key]
+                    ][self.settings.curr_pos]
+                    + ".tif",
                 )
             )
         if z_reset:
@@ -1250,14 +1299,17 @@ class MainImageView(pg.GraphicsLayoutWidget):
 
     def update_masks_data(self):
         # global tiflist, keylist, curr_key, curr_pos
-        for mask,vals in self.masks.items():
-            #print(tiflist[keylist[curr_key]][curr_pos])
+        for mask, vals in self.masks.items():
+            # print(tiflist[keylist[curr_key]][curr_pos])
             file_name = os.path.join(
                 self.settings.output_directory,
                 "masks",
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + vals[1]
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                    self.settings.curr_pos
+                ]
+                + vals[1],
             )
-            #if os.path.exists(file_name):
+            # if os.path.exists(file_name):
             #    vals[0][:,:,3] = tf.imread(file_name)
             # else:
             #    vals[0][:,:,3] = 0
@@ -1428,15 +1480,11 @@ class IntegralView(pg.GraphicsLayoutWidget):
             self.texturemasked_integral_checkbox_changed
         )
 
-        self.spots_diff_integral_checkbox = QtWidgets.QCheckBox(
-            "Texture Phases"
-        )
+        self.spots_diff_integral_checkbox = QtWidgets.QCheckBox("Texture Phases")
         self.spots_diff_integral_checkbox.stateChanged.connect(
             self.spots_diff_integral_checkbox_changed
         )
-        self.arcs_diff_integral_checkbox = QtWidgets.QCheckBox(
-            "Spot Phases"
-        )
+        self.arcs_diff_integral_checkbox = QtWidgets.QCheckBox("Spot Phases")
         self.arcs_diff_integral_checkbox.stateChanged.connect(
             self.arcs_diff_integral_checkbox_changed
         )
@@ -1474,7 +1522,9 @@ class IntegralView(pg.GraphicsLayoutWidget):
         integral_infile_piece = os.path.join(
             self.settings.output_directory,
             "integrals",
-            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                self.settings.curr_pos
+            ],
         )
         integrals_dict = {
             "_base.xye": self.integral_data,
@@ -1539,7 +1589,8 @@ class IntegralView(pg.GraphicsLayoutWidget):
             )
             self.arcs_diff_integral.setData(
                 self.texturemasked_integral_data[:, 0],
-                self.texturemasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
+                self.texturemasked_integral_data[:, 1]
+                - self.masked_integral_data[:, 1],
             )
 
         elif self.axis_type == 1:
@@ -1570,7 +1621,8 @@ class IntegralView(pg.GraphicsLayoutWidget):
                 tth_to_q(
                     self.texturemasked_integral_data[:, 0], self.settings.wavelength
                 ),
-                self.texturemasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
+                self.texturemasked_integral_data[:, 1]
+                - self.masked_integral_data[:, 1],
             )
 
     def sqrt_toggle(self, evt):
@@ -1825,9 +1877,12 @@ class StatsView(pg.GraphicsLayoutWidget):
         stats_infile = os.path.join(
             self.settings.output_directory,
             "stats",
-            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_hist.npy"
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][
+                self.settings.curr_pos
+            ]
+            + "_spots_hist.npy",
         )
-        with open(stats_infile, 'rb') as infile:
+        with open(stats_infile, "rb") as infile:
             self.spots_stats_hist = np.load(infile)
             self.area_bins = np.load(infile)
             self.Q_bins = np.load(infile)
@@ -1846,9 +1901,10 @@ class StatsView(pg.GraphicsLayoutWidget):
             os.path.join(
                 self.settings.output_directory,
                 "stats",
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
-                ) + "*_spots_hist.npy",
-            key = lambda x: (len(x), x)
+                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]],
+            )
+            + "*_spots_hist.npy",
+            key=lambda x: (len(x), x),
         )
         print(stats_infiles)
 
@@ -1907,14 +1963,12 @@ class CSimView(pg.GraphicsLayoutWidget):
             filename_piece = os.path.join(
                 self.settings.output_directory,
                 "stats",
-                self.settings.keylist[self.settings.curr_key] + "*" + v
+                self.settings.keylist[self.settings.curr_key] + "*" + v,
             )
             # print(f"{filename_piece = }")
-            filenames = glob.glob(
-                filename_piece
-            )
+            filenames = glob.glob(filename_piece)
             # print(f"CSim filenames: {filenames}")
-            filenames.sort(key = lambda x: (len(x), x))
+            filenames.sort(key=lambda x: (len(x), x))
             arrays = [np.loadtxt(filename) for filename in filenames]
             self.similarity_line_data[k] = np.vstack(arrays)
             # [:,0] for comparison to first, [:,1] for comparison to previous
@@ -2053,16 +2107,16 @@ class ContourView(pg.GraphicsLayoutWidget):
                 os.path.join(
                     self.settings.output_directory,
                     "integrals",
-                    self.settings.keylist[self.settings.curr_key]
+                    self.settings.keylist[self.settings.curr_key],
                 )
                 + "*"
                 + self.integral_extension
             ),
-            key = lambda x: (len(x), x)
+            key=lambda x: (len(x), x),
         )
-        #Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
-        #Test files showing 0.02 seconds from creation time to modification time
-        #print(os.path.getmtime(self.integral_filelist[-1]) - os.path.getctime(self.integral_filelist[-1]))
+        # Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
+        # Test files showing 0.02 seconds from creation time to modification time
+        # print(os.path.getmtime(self.integral_filelist[-1]) - os.path.getctime(self.integral_filelist[-1]))
         if (len(self.integral_filelist) > 0) and (
             time.time() - os.path.getctime(self.integral_filelist[-1]) < 0.5
         ):
@@ -2116,13 +2170,14 @@ class ContourView(pg.GraphicsLayoutWidget):
                 self.yvals[-1] + self.live_spacing - self.yvals[0],
             )
 
-    def update_integral_data(self, reset_z = False):
+    def update_integral_data(self, reset_z=False):
         # Save existing z values from histogram
         min_z, max_z = self.intensityBar.getLevels()
         # If the requested spacing hasn't changed, just append the new data
         if self._temp_auto_spacing == self.live_spacing:
             self.append_integral_data()
-            if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
+            if not reset_z:
+                self.intensityBar.setLevels(min=min_z, max=max_z)
         else:
             # If requested spacing is divisible by old spacing, can just splice down and add back
             if self._temp_auto_spacing % self.live_spacing == 0:
@@ -2141,7 +2196,8 @@ class ContourView(pg.GraphicsLayoutWidget):
                     self.live_integral_step_changed
                 )
                 self.append_integral_data()
-                if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
+                if not reset_z:
+                    self.intensityBar.setLevels(min=min_z, max=max_z)
             # Otherwise, remake the dataset
             else:
                 self.integral_data = []
@@ -2155,7 +2211,8 @@ class ContourView(pg.GraphicsLayoutWidget):
                     self.live_integral_step_changed
                 )
                 self.append_integral_data()
-                if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
+                if not reset_z:
+                    self.intensityBar.setLevels(min=min_z, max=max_z)
 
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
@@ -2187,7 +2244,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         #    if self._temp_auto_spacing % self.live_spacing == 0:
         #        self.integral_data = self.integral_data[]
 
-    def reset_integral_data(self, manual=False, reset_z = False):
+    def reset_integral_data(self, manual=False, reset_z=False):
         self.integral_data = []
         self.xvals = []
         self.yvals = []
@@ -2325,8 +2382,8 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         self.tth_bins = []
         self.q_bins = []
         self.axis_type = "tth"
-        self.legend = self.view.addLegend(offset=(-1,1))
-        for k,v in self.methods.items():
+        self.legend = self.view.addLegend(offset=(-1, 1))
+        for k, v in self.methods.items():
             self.line[k] = self.view.plot()
             self.line_data[k] = []
             self.legend.addItem(self.line[k], k)
@@ -2336,17 +2393,19 @@ class SpottinessView(pg.GraphicsLayoutWidget):
 
         self.vLine = pg.InfiniteLine(angle=90, movable=False)
         self.view.addItem(self.vLine, ignoreBounds=True)
-    
+
     def update_dir(self):
         self.update_data()
-    
+
     def update_data(self):
         filename = os.path.join(
             self.settings.output_directory,
             "stats",
-            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spottiness.npy"
+            self.settings.keylist[self.settings.curr_key]
+            + self.settings.curr_num
+            + "_spottiness.npy",
         )
-        with open(filename, 'rb') as infile:
+        with open(filename, "rb") as infile:
             self.line_data["Percentage"] = np.load(infile) * 100
             _ = np.load(infile)
             _ = np.load(infile)
@@ -2354,11 +2413,11 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.bins = np.load(infile)
         # print(f"bins len: {len(self.bins)}")
         # print(f"{np.min(self.bins)}, {np.max(self.bins)}")
-        dQ = (np.max(self.bins) - np.min(self.bins))/len(self.bins)
+        dQ = (np.max(self.bins) - np.min(self.bins)) / len(self.bins)
         # print(f"{dQ = }")
-        start = np.min(self.bins)/dQ
+        start = np.min(self.bins) / dQ
         # print(f"{start = }")
-        self.q_bins = np.arange(0, 1010*dQ, dQ)
+        self.q_bins = np.arange(0, 1010 * dQ, dQ)
         self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
         # for k, v in self.methods.items():
         #     print(f"{k} len: {len(self.line_data[k])}")
@@ -2373,12 +2432,20 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.update_tth()
 
     def update_tth(self):
-        self.line["Percentage"].setData(self.tth_bins[1:], self.line_data["Percentage"][1:])
-        self.line["Spot Maxima"].setData(self.tth_bins[1:], self.line_data["Spot Maxima"][1:])
+        self.line["Percentage"].setData(
+            self.tth_bins[1:], self.line_data["Percentage"][1:]
+        )
+        self.line["Spot Maxima"].setData(
+            self.tth_bins[1:], self.line_data["Spot Maxima"][1:]
+        )
 
     def update_q(self):
-        self.line["Percentage"].setData(self.q_bins[1:], self.line_data["Percentage"][1:])
-        self.line["Spot Maxima"].setData(self.q_bins[1:], self.line_data["Spot Maxima"][1:])
+        self.line["Percentage"].setData(
+            self.q_bins[1:], self.line_data["Percentage"][1:]
+        )
+        self.line["Spot Maxima"].setData(
+            self.q_bins[1:], self.line_data["Spot Maxima"][1:]
+        )
 
     def change_x_axis_type(self, axis_type):
         if axis_type == 0:
@@ -2530,5 +2597,5 @@ def main_GUI():
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main_GUI()

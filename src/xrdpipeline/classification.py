@@ -1,9 +1,9 @@
-import numpy as np
-import skimage as ski
-import pandas as pd
 import time
 
-from spottiness import spottiness, h_maxima_calc
+import numpy as np
+import pandas as pd
+import skimage as ski
+from spottiness import h_maxima_calc, spottiness
 
 
 def remove_overlaps(labeled_cuts, predef_mask):
@@ -327,18 +327,22 @@ def split_grad_with_Q(
     spots_table = pd.DataFrame(spots_table)
 
     if calc_spottiness:
-        reduced_labeled_new_spot_mask = ski.morphology.remove_small_objects(labeled_spots,min_size=10)
+        reduced_labeled_new_spot_mask = ski.morphology.remove_small_objects(
+            labeled_spots, min_size=10
+        )
         reduced_new_spot_mask = reduced_labeled_new_spot_mask > 0
         time6 = time.time()
         print(f"New spot table: {time6-time5}")
         # Qbins = get_Qbands(qmap, LUtth, wavelength, numChans)
-        percents, num_spots = spottiness(reduced_new_spot_mask, reduced_labeled_new_spot_mask, Qbins)
+        percents, num_spots = spottiness(
+            reduced_new_spot_mask, reduced_labeled_new_spot_mask, Qbins
+        )
         time7 = time.time()
         print(f"Spottiness calculated: {time7-time6}")
         num_maxima, num_spot_maxima = h_maxima_calc(image, reduced_new_spot_mask, Qbins)
         time8 = time.time()
         print(f"h_maxima calculated: {time8-time7}")
-    
+
     to_return = [new_spot_mask, new_arc_mask, spots_table]
 
     if return_grad:
@@ -362,12 +366,12 @@ def qwidth_area_classification_2(
     Qmap,
     azmap,
     min_arc_area=100,
-    Q_max=0.1, # 0.08
+    Q_max=0.1,  # 0.08
     azim_min=3.5,
     compare_shape=True,
     area_Q_shape_min=150000,
     azim_Q_shape_min=100,
-    return_time=False, 
+    return_time=False,
 ):
     # azim_Q: 150
     # area_Q: 4500
@@ -375,7 +379,7 @@ def qwidth_area_classification_2(
     if return_time:
         time0 = time.time()
     om = np.array(om)
-    reduced_om = ski.morphology.remove_small_objects(om,min_arc_area)
+    reduced_om = ski.morphology.remove_small_objects(om, min_arc_area)
     labeled_mask = ski.measure.label(reduced_om)
     # print("Labeled mask values at Amine locations: {0},{1}".format(labeled_mask[1675,2155],labeled_mask[1539,1189])) #18178
     # print("Labeled mask values at Ties locations: {0},{1}".format(labeled_mask[2365,1580],labeled_mask[2328,1537]))
@@ -446,7 +450,7 @@ def qwidth_area_classification_2(
         #     props_table.loc[:, "area_over_width2"].values > area_Q_shape_min, arcs_bool
         # )
         arcs_bool = np.logical_and(
-            props_table.loc[:,'azim_vs_Q'].values > azim_Q_shape_min, arcs_bool
+            props_table.loc[:, "azim_vs_Q"].values > azim_Q_shape_min, arcs_bool
         )
     # arc_clusters = props_table.loc[arcs,'label'].values
     arcs = props_table.iloc[arcs_bool]
@@ -471,7 +475,7 @@ def qwidth_area_classification(
     Qmap,
     azmap,
     min_arc_area=100,
-    Q_max=0.1, # 0.08
+    Q_max=0.1,  # 0.08
     azim_min=3.5,
     compare_shape=True,
     area_Q_shape_min=150000,
@@ -555,7 +559,7 @@ def qwidth_area_classification(
         #     props_table.loc[:, "area_over_width2"].values > area_Q_shape_min, arcs_bool
         # )
         arcs_bool = np.logical_and(
-            props_table.loc[:,'azim_vs_Q'].values > azim_Q_shape_min, arcs_bool
+            props_table.loc[:, "azim_vs_Q"].values > azim_Q_shape_min, arcs_bool
         )
     # arc_clusters = props_table.loc[arcs,'label'].values
     arcs = props_table.iloc[arcs_bool]
@@ -586,7 +590,7 @@ def current_splitting_method(
     return_steps=False,
     interpolate=False,
     calc_spottiness=False,
-    azim_Q_shape_min = 100,
+    azim_Q_shape_min=100,
     predef_mask=None,
     predef_mask_extended=None,
 ):
@@ -595,7 +599,14 @@ def current_splitting_method(
     # base_spot, base_arc = qwidth_area_classification(om, qmap, azmap, min_arc_area=100, max_width=0.2, compare_shape=True, shape_min = 3500)
     time0 = time.time()
     base_spot, base_arc = qwidth_area_classification(
-        om, qmap, azmap, min_arc_area=100, Q_max=0.08, azim_min=3.5, azim_Q_shape_min=azim_Q_shape_min, compare_shape=True
+        om,
+        qmap,
+        azmap,
+        min_arc_area=100,
+        Q_max=0.08,
+        azim_min=3.5,
+        azim_Q_shape_min=azim_Q_shape_min,
+        compare_shape=True,
     )
     time1 = time.time()
     print(f"Time for qwidth area classification: {time1-time0}")
@@ -621,11 +632,32 @@ def current_splitting_method(
     )
     # can just skip to returning this^
     if return_steps and calc_spottiness:
-        spot_mask, arc_mask, spots_table, radial_grad_2, azim_grad_2, qgrad_arc_mask, percents, num_spots, num_maxima, num_spot_maxima = returned_values
+        (
+            spot_mask,
+            arc_mask,
+            spots_table,
+            radial_grad_2,
+            azim_grad_2,
+            qgrad_arc_mask,
+            percents,
+            num_spots,
+            num_maxima,
+            num_spot_maxima,
+        ) = returned_values
     elif return_steps:
-        spot_mask, arc_mask, spots_table, radial_grad_2, azim_grad_2, qgrad_arc_mask = returned_values
+        spot_mask, arc_mask, spots_table, radial_grad_2, azim_grad_2, qgrad_arc_mask = (
+            returned_values
+        )
     elif calc_spottiness:
-        spot_mask, arc_mask, spots_table, percents, num_spots, num_maxima, num_spot_maxima = returned_values
+        (
+            spot_mask,
+            arc_mask,
+            spots_table,
+            percents,
+            num_spots,
+            num_maxima,
+            num_spot_maxima,
+        ) = returned_values
     else:
         spot_mask, arc_mask, spots_table = returned_values
     time2 = time.time()
@@ -642,5 +674,3 @@ def current_splitting_method(
         to_return.append(num_maxima)
         to_return.append(num_spot_maxima)
     return to_return
-
-

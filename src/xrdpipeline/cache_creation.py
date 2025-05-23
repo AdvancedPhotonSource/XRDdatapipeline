@@ -1,7 +1,8 @@
-from PIL import Image
-from GSASII_imports import *
-import torch
 import time
+
+import torch
+from GSASII_imports import *
+from PIL import Image
 
 
 def get_Qmap(Tmap, wavelength):
@@ -159,11 +160,7 @@ def gradient_cache(image_shape, center, footprint):
     # print("Kernels calculated, getting convolutions")
     r_hat, phi_hat = r_and_phi_hat(image_shape, center)
     t1 = time.time()
-    print(
-        "Gradient time spent on cache calculations: {0:.2f}s".format(
-            t1 - t0
-        )
-    )
+    print("Gradient time spent on cache calculations: {0:.2f}s".format(t1 - t0))
     return_dict = {
         "r_hat": r_hat,
         "phi_hat": phi_hat,
@@ -173,7 +170,16 @@ def gradient_cache(image_shape, center, footprint):
     return return_dict
 
 
-def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, imgmaskname=None, flatfield=None, esdMul=3.0):
+def run_cache(
+    filename,
+    input_directory,
+    output_directory,
+    imctrlname,
+    blkSize,
+    imgmaskname=None,
+    flatfield=None,
+    esdMul=3.0,
+):
     """
     Creates and returns the initial cache.
 
@@ -187,7 +193,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
 
     output_directory: st
         Path to the directory to place output files such as integrals
-    
+
     imctrlname: str
         Name of the image control file
 
@@ -229,7 +235,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
         # flatfield_image = tf.imread(self.flatfield)
         flatfield_image = load_image(flatfield)
     cache["flatfield"] = flatfield_image
-    
+
     # imctrlname = imctrlname.split("\\")[-1].split('/')[-1]
     # path1 =  os.path.join(pathmaps,imctrlname)
     # im = Image.fromarray(TA[0])
@@ -239,7 +245,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
         os.path.join(
             output_directory,
             "maps",
-            os.path.splitext(os.path.split(imctrlname)[1])[0] + "_predef.tif"
+            os.path.splitext(os.path.split(imctrlname)[1])[0] + "_predef.tif",
         )
     )
     if flatfield_image is not None:
@@ -248,7 +254,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
             os.path.join(
                 output_directory,
                 "maps",
-                os.path.splitext(os.path.split(imctrlname)[1])[0] + "_flatfield.tif"
+                os.path.splitext(os.path.split(imctrlname)[1])[0] + "_flatfield.tif",
             )
         )
     cache["Image Controls"] = image_dict["Image Controls"]
@@ -267,7 +273,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
     # Missing 5: size, samplechangerpos, det2theta, ImageTag, formatName
     # [2880,2880] None 0.0 None GSAS-II known TIF image
     # only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
-    
+
     # self.cache["intMaskMap"] = MakeUseMask(
     #     image_dict["Image Controls"],image_dict["Masks"], blkSize=self.blkSize
     # )
@@ -279,7 +285,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
     cache["maskTmap"] = Make2ThetaAzimuthMap(
         image_dict["Image Controls"],
         (0, image_dict["Image Controls"]["size"][0]),
-        (0, image_dict["Image Controls"]["size"][1])
+        (0, image_dict["Image Controls"]["size"][1]),
     )[0]
     getmaps(cache, imctrlname, os.path.join(output_directory, "maps"))
     # 2th fairly linear along center; calc 2th - pixelsize conversion
@@ -319,7 +325,9 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
         cache["pixelsampledistmap"],
         cache["Image Controls"]["IOtth"][0],
         cache["Image Controls"]["IOtth"][1],
-        cache["Image Controls"]["outChannels"], # could use numchans as calc'd by gsasii
+        cache["Image Controls"][
+            "outChannels"
+        ],  # could use numchans as calc'd by gsasii
     )
 
     # comparisons
@@ -335,4 +343,3 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
     cache["image_dict"] = image_dict
 
     return cache
-

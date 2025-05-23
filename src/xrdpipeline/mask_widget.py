@@ -1,12 +1,14 @@
-import os, sys
-import numpy as np
-import PySide6
-from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
-import pyqtgraph as pg
-import tifffile as tf
-from PIL import Image
+import os
 import re
+import sys
+
+import numpy as np
+import pyqtgraph as pg
+import PySide6
+import tifffile as tf
 from GSASII_imports import *
+from PIL import Image
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 pg.setConfigOptions(imageAxisOrder="row-major")
 
@@ -14,6 +16,7 @@ pg.setConfigOptions(imageAxisOrder="row-major")
 def pixel_to_mm(distance, pixel_size):
     scale = pixel_size / 1000
     return distance * scale
+
 
 def mm_to_pixel(distance, pixel_size):
     scale = pixel_size / 1000
@@ -37,8 +40,17 @@ def readMasks(filename):
             if S[0] == "#":
                 S = infile.readline()
                 continue
-            [key,val] = S.strip().split(":", 1)
-            if key in ["Points", "Rings", "Arcs", "Polygons", "Frames", "Thresholds", "Xlines", "Ylines"]:
+            [key, val] = S.strip().split(":", 1)
+            if key in [
+                "Points",
+                "Rings",
+                "Arcs",
+                "Polygons",
+                "Frames",
+                "Thresholds",
+                "Xlines",
+                "Ylines",
+            ]:
                 masks[key] = eval(val)
             S = infile.readline()
     for key in ["Points", "Rings", "Arcs", "Polygons"]:
@@ -46,21 +58,24 @@ def readMasks(filename):
         masks[key] = [i for i in masks[key] if len(i)]
     return masks
 
+
 # now need to make the 2theta map from the config file
-#create and save TA[x] maps
-#from savemaps.py by Wenqian Xu
-def getmaps(cache, imctrlname, pathmaps, save=True):		# fast integration using the same imctrl and mask
-    #TA = G2img.Make2ThetaAzimuthMap(imctrls,(0,imctrls['size'][0]),(0,imctrls['size'][1]))    #2-theta array, 2880 according to detector pixel numbers
+# create and save TA[x] maps
+# from savemaps.py by Wenqian Xu
+def getmaps(
+    cache, imctrlname, pathmaps, save=True
+):  # fast integration using the same imctrl and mask
+    # TA = G2img.Make2ThetaAzimuthMap(imctrls,(0,imctrls['size'][0]),(0,imctrls['size'][1]))    #2-theta array, 2880 according to detector pixel numbers
     imctrls = read_imctrl(imctrlname)
-    if cache["size"] == (2880,2880):
-        cache["pixelSize"] = (150,150)
+    if cache["size"] == (2880, 2880):
+        cache["pixelSize"] = (150, 150)
     imctrls["pixelSize"] = cache["pixelSize"]
-    cache["center"] = [0,0]
-    cache["center"][0] = imctrls["center"][0]*1000/(imctrls["pixelSize"][0])
-    cache["center"][1] = imctrls["center"][1]*1000/(imctrls["pixelSize"][1])
+    cache["center"] = [0, 0]
+    cache["center"][0] = imctrls["center"][0] * 1000 / (imctrls["pixelSize"][0])
+    cache["center"][1] = imctrls["center"][1] * 1000 / (imctrls["pixelSize"][1])
     imctrls["det2theta"] = 0.0
     cache["Image Controls"] = imctrls
-    TA = Make2ThetaAzimuthMap(imctrls,(0,cache["size"][0]),(0,cache["size"][1]))
+    TA = Make2ThetaAzimuthMap(imctrls, (0, cache["size"][0]), (0, cache["size"][1]))
     cache["pixelTAmap"] = TA[0]
     cache["pixelAzmap"] = TA[1]
     cache["pixelsampledistmap"] = TA[2]
@@ -68,7 +83,7 @@ def getmaps(cache, imctrlname, pathmaps, save=True):		# fast integration using t
     if save:
         # imctrlname = imctrlname.split("\\")[-1].split("/")[-1]
         imctrlname = os.path.split(imctrlname)[1]
-        path1 =  os.path.join(pathmaps,imctrlname)
+        path1 = os.path.join(pathmaps, imctrlname)
         im = Image.fromarray(TA[0])
         im.save(os.path.splitext(path1)[0] + "_2thetamap.tif")
         im = Image.fromarray(TA[1])
@@ -82,9 +97,9 @@ def getmaps(cache, imctrlname, pathmaps, save=True):		# fast integration using t
 
 def read_imctrl(imctrlname):
     image_controls = {}
-    with open(imctrlname,'r') as imctrlfile:
+    with open(imctrlname, "r") as imctrlfile:
         lines = imctrlfile.readlines()
-        LoadControls(lines,image_controls)
+        LoadControls(lines, image_controls)
     return image_controls
 
 
@@ -112,8 +127,7 @@ class Point(pg.QtCore.QPoint):
         self.verifyState()
         self.table_label = QtWidgets.QTableWidgetItem("Point")
         self.table_item = QtWidgets.QTableWidgetItem(
-            "(" + str(self.x()) + ","
-            + str(self.y()) + ")"
+            "(" + str(self.x()) + "," + str(self.y()) + ")"
         )
 
     def verifyState(self):
@@ -127,21 +141,21 @@ class Point(pg.QtCore.QPoint):
             self.setY(self.image_size[1])
         if self.y() < 0:
             self.setY(0)
-    
+
     def updateFromTable(self):
-        matches = re.findall(r"(?P<x>\d+\.*\d*),(?P<y>\d+\.*\d*)",self.table_item.text())
+        matches = re.findall(
+            r"(?P<x>\d+\.*\d*),(?P<y>\d+\.*\d*)", self.table_item.text()
+        )
         # print(matches)
         self.setX(int(matches[0][0]))
         self.setY(int(matches[0][1]))
         self.verifyState()
-        self.table_item.setText(
-            "(" + str(self.x()) + ","
-            + str(self.y()) + ")"
-        )
+        self.table_item.setText("(" + str(self.x()) + "," + str(self.y()) + ")")
 
-    def setMouseHover(self,isHovered):
+    def setMouseHover(self, isHovered):
         # currently dummy, should highlight location
         return
+
 
 class Polygon(pg.PolyLineROI):
     def __init__(self, image_size, *args, isFrame=False, **kwargs):
@@ -220,7 +234,6 @@ class Polygon(pg.PolyLineROI):
         super().setPoints(points, closed)
         if self.has_initialized:
             self.table_item.setText(str(points))
-
 
     # reimplement movePoint() to go to edge if out of bounds
     def movePoint(self, handle, pos, modifiers=None, finish=True, coords="parent"):
@@ -440,12 +453,14 @@ class Polygon(pg.PolyLineROI):
         # self.stateChanged(finish=finish)
 
     def updateFromTable(self):
-        matches = re.findall(r'(?P<x>\d+\.*\d*),\s*(?P<y>\d+\.*\d*)',self.table_item.text())
+        matches = re.findall(
+            r"(?P<x>\d+\.*\d*),\s*(?P<y>\d+\.*\d*)", self.table_item.text()
+        )
         newpoints = []
         for i in range(len(matches)):
             print(matches[i])
-            print(matches[i][0],matches[i][1])
-            print(int(float(matches[i][0])),int(float(matches[i][1])))
+            print(matches[i][0], matches[i][1])
+            print(int(float(matches[i][0])), int(float(matches[i][1])))
             x = int(float(matches[i][0]))
             y = int(float(matches[i][1]))
             if x < 0:
@@ -456,9 +471,8 @@ class Polygon(pg.PolyLineROI):
                 y = 0
             elif y > self.image_size[1]:
                 y = self.image_size[1]
-            newpoints.append((x,y))
+            newpoints.append((x, y))
         self.setPoints(newpoints)
-        
 
     def verifyState(self):
         # something doesn't properly update when dragging out of bounds
@@ -467,36 +481,48 @@ class Polygon(pg.PolyLineROI):
         print(points, str(points))
         self.setPoints(points)
 
+
 class Arc(pg.ROI):
     center = None
     tthmap = None
     azmap = None
+
     def __init__(self, **args):
         print(self.center)
         self.path = None
-        pg.ROI.__init__(self, pos=self.center, size=(1,1), movable=False, rotatable=False, resizable=False, **args)
+        pg.ROI.__init__(
+            self,
+            pos=self.center,
+            size=(1, 1),
+            movable=False,
+            rotatable=False,
+            resizable=False,
+            **args,
+        )
         self.sigRegionChanged.connect(self._clearPath)
         self.table_label = pg.QtWidgets.QTableWidgetItem("Arc")
         self.table_item = pg.QtWidgets.QTableWidgetItem()
         # self._addHandles()
-        self.mask_data = np.zeros(self.tthmap.shape,dtype=bool)
-        self.mask_RGBA = np.zeros((self.tthmap.shape[0],self.tthmap.shape[1],4),dtype=np.uint8)
-        self.mask_RGBA[:,:,0] = 255
-        self.mask_RGBA[:,:,2] = 255
-        
-    def initialize_handles(self,point):
+        self.mask_data = np.zeros(self.tthmap.shape, dtype=bool)
+        self.mask_RGBA = np.zeros(
+            (self.tthmap.shape[0], self.tthmap.shape[1], 4), dtype=np.uint8
+        )
+        self.mask_RGBA[:, :, 0] = 255
+        self.mask_RGBA[:, :, 2] = 255
+
+    def initialize_handles(self, point):
         while len(self.handles) > 0:
-            self.removeHandle(self.handles[0]['item'])
+            self.removeHandle(self.handles[0]["item"])
         angle = self.azmap[point.y()][point.x()]
         # print(angle)
         self.setPos(point)
-        self.setSize((1,1))
+        self.setSize((1, 1))
         self.setAngle(angle)
-        self.addTranslateHandle((0.5,0.5),name="Center_point")
-        self.addFreeHandle((5.5,0.5),name="Tth_high")
-        self.addFreeHandle((-4.5,0.5),name="Tth_low")
-        self.addFreeHandle((0.5,50.5),name="Azim_left")
-        self.addFreeHandle((0.5,-49.5),name="Azim_right")
+        self.addTranslateHandle((0.5, 0.5), name="Center_point")
+        self.addFreeHandle((5.5, 0.5), name="Tth_high")
+        self.addFreeHandle((-4.5, 0.5), name="Tth_low")
+        self.addFreeHandle((0.5, 50.5), name="Azim_left")
+        self.addFreeHandle((0.5, -49.5), name="Azim_right")
         print(self.getLocalHandlePositions())
         print(self.getHandles())
         print(self.getSceneHandlePositions())
@@ -504,10 +530,10 @@ class Arc(pg.ROI):
             handle.buildPath()
             handle.update()
 
-    def checkPointMove(self,handle,pos,modifiers):
-        if handle.typ == 't':
+    def checkPointMove(self, handle, pos, modifiers):
+        if handle.typ == "t":
             pos = self.getViewBox().mapSceneToView(pos)
-            print(pos,pos.x(),pos.y())
+            print(pos, pos.x(), pos.y())
             angle = self.azmap[int(pos.y())][int(pos.x())]
             print(angle)
             self.setAngle(angle)
@@ -516,38 +542,45 @@ class Arc(pg.ROI):
     def verifyState(self):
         return
 
-    def paint(self,p,*args):
+    def paint(self, p, *args):
         # super().paint(p,*args)
-        p.setRenderHint(
-            p.RenderHint.Antialiasing,
-            self._antialias
-        )
+        p.setRenderHint(p.RenderHint.Antialiasing, self._antialias)
         p.setPen(self.currentPen)
         if len(self.handles) > 0:
             for i in range(len(self.handles)):
-                name = self.handles[i]['name']
+                name = self.handles[i]["name"]
                 if name == "Azim_left":
-                    azim_left_pos = self.handles[i]['item'].pos()
+                    azim_left_pos = self.handles[i]["item"].pos()
                 elif name == "Center_point":
-                    center_pos = self.handles[i]['item'].pos()
+                    center_pos = self.handles[i]["item"].pos()
                 elif name == "Azim_right":
-                    azim_right_pos = self.handles[i]['item'].pos()
+                    azim_right_pos = self.handles[i]["item"].pos()
                 elif name == "Tth_high":
-                    tth_high_pos = self.handles[i]['item'].pos()
+                    tth_high_pos = self.handles[i]["item"].pos()
                 elif name == "Tth_low":
-                    tth_low_pos = self.handles[i]['item'].pos()
-            p.drawLine(azim_left_pos,center_pos)
-            p.drawLine(center_pos,azim_right_pos)
-            p.drawLine(tth_high_pos,center_pos)
-            p.drawLine(center_pos,tth_low_pos)
+                    tth_low_pos = self.handles[i]["item"].pos()
+            p.drawLine(azim_left_pos, center_pos)
+            p.drawLine(center_pos, azim_right_pos)
+            p.drawLine(tth_high_pos, center_pos)
+            p.drawLine(center_pos, tth_low_pos)
             scene_points = self.getSceneHandlePositions()
             mapped_points = {}
             for i in range(len(scene_points)):
-                mapped_points[scene_points[i][0]] = self.getViewBox().mapSceneToView(scene_points[i][1])
-            maxtth = self.tthmap[int(mapped_points['Tth_high'].y())][int(mapped_points['Tth_high'].x())]
-            mintth = self.tthmap[int(mapped_points['Tth_low'].y())][int(mapped_points['Tth_low'].x())]
-            maxazim = self.azmap[int(mapped_points['Azim_left'].y())][int(mapped_points['Azim_left'].x())]
-            minazim = self.azmap[int(mapped_points['Azim_right'].y())][int(mapped_points['Azim_right'].x())]
+                mapped_points[scene_points[i][0]] = self.getViewBox().mapSceneToView(
+                    scene_points[i][1]
+                )
+            maxtth = self.tthmap[int(mapped_points["Tth_high"].y())][
+                int(mapped_points["Tth_high"].x())
+            ]
+            mintth = self.tthmap[int(mapped_points["Tth_low"].y())][
+                int(mapped_points["Tth_low"].x())
+            ]
+            maxazim = self.azmap[int(mapped_points["Azim_left"].y())][
+                int(mapped_points["Azim_left"].x())
+            ]
+            minazim = self.azmap[int(mapped_points["Azim_right"].y())][
+                int(mapped_points["Azim_right"].x())
+            ]
             # print(mintth, maxtth, minazim, maxazim)
 
             self.mask_data = self.tthmap >= mintth
@@ -559,28 +592,38 @@ class Arc(pg.ROI):
                 temp = self.azmap <= maxazim
                 temp |= self.azmap >= minazim
                 self.mask_data &= temp
-            
-            self.mask_RGBA[:,:,3] = 175*self.mask_data
 
-            self.tth_center = maxtth-.5*(maxtth-mintth)
+            self.mask_RGBA[:, :, 3] = 175 * self.mask_data
+
+            self.tth_center = maxtth - 0.5 * (maxtth - mintth)
             self.startazim = minazim
             self.endazim = maxazim
-            self.tthwidth = maxtth-mintth
+            self.tthwidth = maxtth - mintth
 
             # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=maxtth-.5*(maxtth-mintth),startazim=minazim,endazim=maxazim,tthwidth=maxtth-mintth))
-            self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
+            self.table_item.setText(
+                "[{tth},[{startazim},{endazim}],{tthwidth}]".format(
+                    tth=self.tth_center,
+                    startazim=self.startazim,
+                    endazim=self.endazim,
+                    tthwidth=self.tthwidth,
+                )
+            )
 
     def updateFromTable(self):
         # checking self.isMoving does not help
         # change to update table when handle is let go
-        match = re.match(r'\[(?P<tth>\d+\.*\d*),\s*\[(?P<startazim>\d+\.*\d*),\s*(?P<endazim>\d+\.*\d*)\],\s*(?P<tthwidth>\d+\.*\d*)\]',self.table_item.text())
+        match = re.match(
+            r"\[(?P<tth>\d+\.*\d*),\s*\[(?P<startazim>\d+\.*\d*),\s*(?P<endazim>\d+\.*\d*)\],\s*(?P<tthwidth>\d+\.*\d*)\]",
+            self.table_item.text(),
+        )
         # print(match.group('tth'))
-        tth_center = float(match.group('tth'))
-        tthwidth = float(match.group('tthwidth'))
-        tthmin = tth_center - 0.5*tthwidth
-        tthmax = tth_center + 0.5*tthwidth
-        minazim = float(match.group('startazim'))
-        maxazim = float(match.group('endazim'))
+        tth_center = float(match.group("tth"))
+        tthwidth = float(match.group("tthwidth"))
+        tthmin = tth_center - 0.5 * tthwidth
+        tthmax = tth_center + 0.5 * tthwidth
+        minazim = float(match.group("startazim"))
+        maxazim = float(match.group("endazim"))
         self.tth_center = tth_center
         self.startazim = minazim
         self.endazim = maxazim
@@ -595,135 +638,172 @@ class Arc(pg.ROI):
         elif maxazim > 360:
             maxazim -= 360
         if minazim <= maxazim:
-            center_azim = 0.5*(maxazim+minazim)
+            center_azim = 0.5 * (maxazim + minazim)
         else:
-            center_azim = 0.5*(maxazim+minazim-360)
-        tth_low = self.find_closest_point(tthmin,center_azim)
-        tth_high = self.find_closest_point(tthmax,center_azim)
-        center_point = self.find_closest_point(tth_center,center_azim)
-        azim_right = self.find_closest_point(tth_center,minazim)
-        azim_left = self.find_closest_point(tth_center,maxazim)
+            center_azim = 0.5 * (maxazim + minazim - 360)
+        tth_low = self.find_closest_point(tthmin, center_azim)
+        tth_high = self.find_closest_point(tthmax, center_azim)
+        center_point = self.find_closest_point(tth_center, center_azim)
+        azim_right = self.find_closest_point(tth_center, minazim)
+        azim_left = self.find_closest_point(tth_center, maxazim)
 
         # print(tthmin, tthmax, tth_center, minazim, maxazim)
         # print(tth_low, tth_high, center_point, azim_right, azim_left)
 
         for handle in self.handles:
-            if handle['name'] == "Tth_high":
-                handle['item'].movePoint(tth_high)
-            elif handle['name'] == "Tth_low":
-                handle['item'].movePoint(tth_low)
-            elif handle['name'] == "Azim_left":
-                handle['item'].movePoint(azim_left)
-            elif handle['name'] == "Azim_right":
-                handle['item'].movePoint(azim_right)
-            elif handle['name'] == "Center_point":
-                handle['item'].movePoint(center_point)
+            if handle["name"] == "Tth_high":
+                handle["item"].movePoint(tth_high)
+            elif handle["name"] == "Tth_low":
+                handle["item"].movePoint(tth_low)
+            elif handle["name"] == "Azim_left":
+                handle["item"].movePoint(azim_left)
+            elif handle["name"] == "Azim_right":
+                handle["item"].movePoint(azim_right)
+            elif handle["name"] == "Center_point":
+                handle["item"].movePoint(center_point)
 
-    def find_closest_point(self,tth,azim):
+    def find_closest_point(self, tth, azim):
         # handle cases near azim=0
-        z = (self.tthmap - tth)**2 + (self.azmap-azim)**2
-        p_yx = np.unravel_index(np.argmin(z),z.shape)
+        z = (self.tthmap - tth) ** 2 + (self.azmap - azim) ** 2
+        p_yx = np.unravel_index(np.argmin(z), z.shape)
         # print("closest point:",tth,azim,pxy)
-        point = pg.QtCore.QPoint(p_yx[1],p_yx[0])
+        point = pg.QtCore.QPoint(p_yx[1], p_yx[0])
         # translate to scene coords
         point = self.getViewBox().mapViewToScene(point)
         print(point)
         return point
-    
+
     def clearPoints(self):
         """
         Remove all handles and segments.
         """
         while len(self.handles) > 0:
-            self.removeHandle(self.handles[0]['item'])
+            self.removeHandle(self.handles[0]["item"])
 
     @pg.QtCore.Slot()
     def _clearPath(self):
         self.path = None
 
+
 class Line(pg.ROI):
-    def __init__(self,image_size,orientation,*args,**kwargs):
+    def __init__(self, image_size, orientation, *args, **kwargs):
         self.image_size = image_size
         self.table_item = pg.QtWidgets.QTableWidgetItem()
         self.orientation = orientation
         if self.orientation == "horizontal":
-            self.position = self.image_size[0]/2
+            self.position = self.image_size[0] / 2
             self.table_label = pg.QtWidgets.QTableWidgetItem("X Line")
         else:
-            self.position = self.image_size[1]/2
+            self.position = self.image_size[1] / 2
             self.table_label = pg.QtWidgets.QTableWidgetItem("Y Line")
-        super().__init__(pos=self.position,movable=False, rotatable=False, resizable=False,*args,**kwargs)
+        super().__init__(
+            pos=self.position,
+            movable=False,
+            rotatable=False,
+            resizable=False,
+            *args,
+            **kwargs,
+        )
 
-    def setPosition(self,position):
+    def setPosition(self, position):
         self.position = position
 
     def updateFromTable(self):
         position = int(self.table_item.text())
         self.setPosition(position)
-    
+
     def verifyState(self):
         return
 
-    def paint(self,p,*args):
-        p.setRenderHint(
-            p.RenderHint.Antialiasing,
-            self._antialias
-        )
+    def paint(self, p, *args):
+        p.setRenderHint(p.RenderHint.Antialiasing, self._antialias)
         p.setPen(self.currentPen)
         if self.orientation == "horizontal":
-            p.drawLine(pg.QtCore.QPoint(0,self.position),pg.QtCore.QPoint(self.image_size[1],self.position))
+            p.drawLine(
+                pg.QtCore.QPoint(0, self.position),
+                pg.QtCore.QPoint(self.image_size[1], self.position),
+            )
         else:
-            p.drawLine(pg.QtCore.QPoint(self.position,0),pg.QtCore.QPoint(self.position,self.image_size[0]))
+            p.drawLine(
+                pg.QtCore.QPoint(self.position, 0),
+                pg.QtCore.QPoint(self.position, self.image_size[0]),
+            )
+
 
 class Ring(pg.CircleROI):
-    def __init__(self,image_size,*args,**kwargs):
-        super().__init__(pos=(0,0),radius=1,movable=False,rotatable=False,resizable=False,*args,**kwargs)
+    def __init__(self, image_size, *args, **kwargs):
+        super().__init__(
+            pos=(0, 0),
+            radius=1,
+            movable=False,
+            rotatable=False,
+            resizable=False,
+            *args,
+            **kwargs,
+        )
         self.image_size = image_size
         self.table_label = pg.QtWidgets.QTableWidgetItem("Ring")
         self.table_item = pg.QtWidgets.QTableWidgetItem()
-    
+
     def updateFromTable(self):
-        match = re.match(r'\[(?P<center_tth>\d+\.*\d*),\s*(?P<tth_width>\d+\.*\d*)\]',self.table_item.text())
-        self.center_tth = float(match.group('center_tth'))
-        self.tth_width = float(match.group('tth_width'))
+        match = re.match(
+            r"\[(?P<center_tth>\d+\.*\d*),\s*(?P<tth_width>\d+\.*\d*)\]",
+            self.table_item.text(),
+        )
+        self.center_tth = float(match.group("center_tth"))
+        self.tth_width = float(match.group("tth_width"))
 
     def verifyState(self):
         return
 
+
 class Spot(pg.CircleROI):
-    def __init__(self,image_size,*args,**kwargs):
-        super().__init__(pos=(0,0),radius=1,movable=False,rotatable=False,resizable=False,*args,**kwargs)
+    def __init__(self, image_size, *args, **kwargs):
+        super().__init__(
+            pos=(0, 0),
+            radius=1,
+            movable=False,
+            rotatable=False,
+            resizable=False,
+            *args,
+            **kwargs,
+        )
         self.image_size = image_size
         self.table_label = pg.QtWidgets.QTableWidgetItem("Spot")
         self.table_item = pg.QtWidgets.QTableWidgetItem()
 
     def _addHandles(self):
-        self.addTranslateHandle([0.5,0.5],name="Center_point")
-        self.addScaleHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5],[0.5,0.5],name="Scale")
+        self.addTranslateHandle([0.5, 0.5], name="Center_point")
+        self.addScaleHandle(
+            [0.5 * 2.0**-0.5 + 0.5, 0.5 * 2.0**-0.5 + 0.5], [0.5, 0.5], name="Scale"
+        )
 
     def updateFromTable(self):
-        match = re.match(r'\[(?P<x>\d+\.*\d*),\s*(?P<y>\d+\.*\d*),\s*(?P<r>\d+\.*\d*)\]',self.table_item.text())
-        self.center = [float(match.group('y')),float(match.group('x'))]
-        self.radius = float(match.group('r'))
+        match = re.match(
+            r"\[(?P<x>\d+\.*\d*),\s*(?P<y>\d+\.*\d*),\s*(?P<r>\d+\.*\d*)\]",
+            self.table_item.text(),
+        )
+        self.center = [float(match.group("y")), float(match.group("x"))]
+        self.radius = float(match.group("r"))
 
     def paint(self, p, opt, widget):
-        super().paint(p,opt,widget)
-        # self.center = 
+        super().paint(p, opt, widget)
+        # self.center =
         # self.table_item.setText()
 
     def verifyState(self):
         return
 
+
 class NoImctrlWarning(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
 
-    
 
 class MainWindow(pg.GraphicsLayoutWidget):
     def __init__(self):
         super().__init__()
-        self.setMinimumSize(1000,600)
+        self.setMinimumSize(1000, 600)
         self.main_image = MainImage()
         # Read/Write buttons
         self.load_immask_button = QtWidgets.QPushButton(
@@ -741,14 +821,25 @@ class MainWindow(pg.GraphicsLayoutWidget):
         )  # require user to preview first?
         self.save_mask_button.released.connect(self.save_mask)
         # imctrl file options
-        self.load_imctrl_button = QtWidgets.QPushButton("Load image control file") # load in GSASII-compatible imctrl file or pyfai poni file
+        self.load_imctrl_button = QtWidgets.QPushButton(
+            "Load image control file"
+        )  # load in GSASII-compatible imctrl file or pyfai poni file
         self.load_imctrl_button.released.connect(self.load_imctrls)
         self.cache = None
         self.hasLoadedConfig = False
 
         # ROI mask options
         self.object_dropdown = QtWidgets.QComboBox()
-        self.objects = ["Frame","Polygon","Point","Arc","X Line","Y Line","Spot","Ring"]
+        self.objects = [
+            "Frame",
+            "Polygon",
+            "Point",
+            "Arc",
+            "X Line",
+            "Y Line",
+            "Spot",
+            "Ring",
+        ]
         self.object_dropdown.addItems(self.objects)
         self.object_dropdown.setCurrentIndex(1)
         self.object_dropdown.currentIndexChanged.connect(self.object_type_changed)
@@ -792,7 +883,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # self.objects = [] # keeping in MainImage for the mouseReleaseEvent
         self.polygons_label = QtWidgets.QLabel("Objects")
         self.polygons_table = QtWidgets.QTableWidget()
-        self.setBackground('w')
+        self.setBackground("w")
         self.polygons_table.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
         )
@@ -805,8 +896,12 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # self.polygons_table.enter_pressed.connect(self.table_data_changed)
         # self.polygons_table.cellChanged.connect(self.table_data_changed)
 
-        self.update_objects_from_table_button = QtWidgets.QPushButton("Update Objects from Table")
-        self.update_objects_from_table_button.released.connect(self.update_objects_from_table)
+        self.update_objects_from_table_button = QtWidgets.QPushButton(
+            "Update Objects from Table"
+        )
+        self.update_objects_from_table_button.released.connect(
+            self.update_objects_from_table
+        )
 
         # for testing
         # items are created separate from the table
@@ -853,34 +948,38 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.show()
 
     def load_imctrls(self):
-        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","imctrl files (*.imctrl)")[0]
+        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
+            None, "Choose Image Control File", ".", "imctrl files (*.imctrl)"
+        )[0]
         self.cache = {}
-        self.cache['size'] = self.main_image.image_data.shape
-        getmaps(self.cache, imctrl_file_name,".", save=False) # use os path
-        Arc.tthmap = self.cache['pixelTAmap']
-        Arc.azmap = self.cache['pixelAzmap']
-        Arc.center = self.cache['center']
+        self.cache["size"] = self.main_image.image_data.shape
+        getmaps(self.cache, imctrl_file_name, ".", save=False)  # use os path
+        Arc.tthmap = self.cache["pixelTAmap"]
+        Arc.azmap = self.cache["pixelAzmap"]
+        Arc.center = self.cache["center"]
         self.min_tth_threshold_label.setEnabled(True)
         self.min_tth_threshold.setEnabled(True)
         self.min_tth_threshold.setMinimum(0)
-        self.min_tth_threshold.setMaximum(np.max(self.cache['pixelTAmap']))
+        self.min_tth_threshold.setMaximum(np.max(self.cache["pixelTAmap"]))
         self.min_tth_threshold.setValue(0)
         self.max_tth_threshold_label.setEnabled(True)
         self.max_tth_threshold.setEnabled(True)
         self.max_tth_threshold.setMinimum(0)
-        self.max_tth_threshold.setMaximum(np.max(self.cache['pixelTAmap']))
-        self.max_tth_threshold.setValue(np.max(self.cache['pixelTAmap']))
+        self.max_tth_threshold.setMaximum(np.max(self.cache["pixelTAmap"]))
+        self.max_tth_threshold.setValue(np.max(self.cache["pixelTAmap"]))
         self.hasLoadedConfig = True
         self.imagescale_is_square = False
-        if self.cache['pixelSize'][0] == self.cache['pixelSize'][1]:
+        if self.cache["pixelSize"][0] == self.cache["pixelSize"][1]:
             self.imagescale_is_square = True
 
-    def object_type_changed(self,evt):
+    def object_type_changed(self, evt):
         # ensure previous object loses focus
         self.done_creating()
         # define an enum or the like so these automatically update with new options
         if evt == 0:
-            frame_list = self.polygons_table.findItems("Frame",QtCore.Qt.MatchFlag.MatchExactly)
+            frame_list = self.polygons_table.findItems(
+                "Frame", QtCore.Qt.MatchFlag.MatchExactly
+            )
             print(frame_list, len(frame_list))
             if len(frame_list) > 0:
                 self.add_object_button.setText("Max 1 Frame")
@@ -891,7 +990,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         elif evt == 2:
             self.add_object_button.setText("New Point")
         elif evt == 3:
-            self.add_object_button.setText("New Arc")   
+            self.add_object_button.setText("New Arc")
         elif evt == 4:
             self.add_object_button.setText("New X Line")
         elif evt == 5:
@@ -921,7 +1020,13 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.creating_object = False
         elif cur_text == "New Arc":
             if not self.hasLoadedConfig:
-                QtWidgets.QMessageBox.question(self,"Exit","Please load an image control file before using arcs and rings.",QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
+                QtWidgets.QMessageBox.question(
+                    self,
+                    "Exit",
+                    "Please load an image control file before using arcs and rings.",
+                    QtWidgets.QMessageBox.StandardButton.Ok,
+                    QtWidgets.QMessageBox.StandardButton.Ok,
+                )
                 return
             self.add_arc()
             self.add_object_button.setText("Complete Arc")
@@ -946,12 +1051,18 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.add_spot()
         elif cur_text == "New Ring":
             if not self.hasLoadedConfig:
-                QtWidgets.QMessageBox.question(self,"Exit","Please load an image control file before using arcs and rings.",QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
+                QtWidgets.QMessageBox.question(
+                    self,
+                    "Exit",
+                    "Please load an image control file before using arcs and rings.",
+                    QtWidgets.QMessageBox.StandardButton.Ok,
+                    QtWidgets.QMessageBox.StandardButton.Ok,
+                )
                 return
             self.add_ring()
 
-    def add_polygon(self,isFrame = False):
-        poly = self.main_image.add_polygon(isFrame = isFrame)
+    def add_polygon(self, isFrame=False):
+        poly = self.main_image.add_polygon(isFrame=isFrame)
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
         self.polygons_table.setItem(self.number_of_objects - 1, 0, poly.table_label)
@@ -959,28 +1070,28 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.main_image.objects.append(poly)
         self.main_image.current_polygon = self.main_image.objects[-1]
 
-    def add_line(self,orientation):
-        line = Line(self.main_image.image_data.shape,orientation=orientation)
+    def add_line(self, orientation):
+        line = Line(self.main_image.image_data.shape, orientation=orientation)
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
-        self.polygons_table.setItem(self.number_of_objects-1,0,line.table_label)
-        self.polygons_table.setItem(self.number_of_objects-1,1,line.table_item)
+        self.polygons_table.setItem(self.number_of_objects - 1, 0, line.table_label)
+        self.polygons_table.setItem(self.number_of_objects - 1, 1, line.table_item)
         self.main_image.objects.append(line)
 
     def add_spot(self):
         spot = Spot(self.main_image.image_data.shape)
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
-        self.polygons_table.setItem(self.number_of_objects-1,0,spot.table_label)
-        self.polygons_table.setItem(self.number_of_objects-1,1,spot.table_item)
+        self.polygons_table.setItem(self.number_of_objects - 1, 0, spot.table_label)
+        self.polygons_table.setItem(self.number_of_objects - 1, 1, spot.table_item)
         self.main_image.objects.append(spot)
 
     def add_ring(self):
         ring = Ring(self.main_image.image_data.shape)
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
-        self.polygons_table.setItem(self.number_of_objects-1,0,ring.table_label)
-        self.polygons_table.setItem(self.number_of_objects-1,1,ring.table_item)
+        self.polygons_table.setItem(self.number_of_objects - 1, 0, ring.table_label)
+        self.polygons_table.setItem(self.number_of_objects - 1, 1, ring.table_item)
         self.main_image.objects.append(ring)
 
     def done_creating(self):
@@ -993,8 +1104,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
         point = Point(image_size=self.main_image.image_data.shape)
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
-        self.polygons_table.setItem(self.number_of_objects-1,0,point.table_label)
-        self.polygons_table.setItem(self.number_of_objects-1,1,point.table_item)
+        self.polygons_table.setItem(self.number_of_objects - 1, 0, point.table_label)
+        self.polygons_table.setItem(self.number_of_objects - 1, 1, point.table_item)
         self.main_image.objects.append(point)
         self.main_image.current_point = self.main_image.objects[-1]
 
@@ -1002,8 +1113,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
         arc = self.main_image.add_arc()
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
-        self.polygons_table.setItem(self.number_of_objects-1,0,arc.table_label)
-        self.polygons_table.setItem(self.number_of_objects-1,1,arc.table_item)
+        self.polygons_table.setItem(self.number_of_objects - 1, 0, arc.table_label)
+        self.polygons_table.setItem(self.number_of_objects - 1, 1, arc.table_item)
         self.main_image.objects.append(arc)
         self.main_image.current_arc = self.main_image.objects[-1]
 
@@ -1025,31 +1136,39 @@ class MainWindow(pg.GraphicsLayoutWidget):
                     corrected_points = points
                     for it in range(len(corrected_points)):
                         # print(corrected_points[it])
-                        if corrected_points[it][0] >= self.main_image.image_data.shape[0]:
+                        if (
+                            corrected_points[it][0]
+                            >= self.main_image.image_data.shape[0]
+                        ):
                             corrected_points[it] = (
                                 self.main_image.image_data.shape[0] - 1,
-                                corrected_points[it][1]
+                                corrected_points[it][1],
                             )
-                        if corrected_points[it][1] >= self.main_image.image_data.shape[1]:
+                        if (
+                            corrected_points[it][1]
+                            >= self.main_image.image_data.shape[1]
+                        ):
                             corrected_points[it] = (
                                 corrected_points[it][0],
-                                self.main_image.image_data.shape[1] - 1
+                                self.main_image.image_data.shape[1] - 1,
                             )
                         # print(corrected_points[it])
                     # print("Corrected points:", corrected_points)
                     i.setPoints(corrected_points)
                     # i.stateChanged()
                     array_slice = i.getArraySlice(
-                        self.main_image.image_data, self.main_image.image, returnSlice=False
+                        self.main_image.image_data,
+                        self.main_image.image,
+                        returnSlice=False,
                     )
                     # print(array_slice)
                     # print(np.abs(array_slice[0][1][0]-array_slice[0][1][1]),np.abs(array_slice[0][0][0]-array_slice[0][0][1]))
                     small_poly_mask = i.renderShapeMask(
-                        np.abs(array_slice[0][1][0]-array_slice[0][1][1]),
-                        np.abs(array_slice[0][0][0]-array_slice[0][0][1])
+                        np.abs(array_slice[0][1][0] - array_slice[0][1][1]),
+                        np.abs(array_slice[0][0][0] - array_slice[0][0][1]),
                     )
                     # small_poly_mask = i.renderShapeMask(np.abs(array_slice[0][0][0]-array_slice[0][0][1]),np.abs(array_slice[0][1][0]-array_slice[0][1][1]))
-                    poly_mask = np.zeros_like(self.main_image.image_data,dtype=bool)
+                    poly_mask = np.zeros_like(self.main_image.image_data, dtype=bool)
                     array_slice = i.getArraySlice(
                         self.main_image.image_data, self.main_image.image
                     )
@@ -1074,17 +1193,17 @@ class MainWindow(pg.GraphicsLayoutWidget):
                         self.predef_mask[:, i.position] = True
                 elif type(i) == Spot:
                     x, y = np.mgrid[
-                        0:self.main_image.image_data.shape[0],
-                        0:self.main_image.image_data.shape[1]
+                        0 : self.main_image.image_data.shape[0],
+                        0 : self.main_image.image_data.shape[1],
                     ]
-                    dist = np.sqrt(
-                        (x-i.center[0])**2
-                        + (y-i.center[1])**2
-                    )
-                    self.predef_mask |= (dist < i.radius)
+                    dist = np.sqrt((x - i.center[0]) ** 2 + (y - i.center[1]) ** 2)
+                    self.predef_mask |= dist < i.radius
                 elif type(i) == Ring:
                     temp = self.cache["pixelTAmap"] > (i.center_tth - 0.5 * i.tth_width)
-                    temp = np.logical_and(temp,self.cache["pixelTAmap"] < (i.center_tth + 0.5 * i.tth_width))
+                    temp = np.logical_and(
+                        temp,
+                        self.cache["pixelTAmap"] < (i.center_tth + 0.5 * i.tth_width),
+                    )
                     self.predef_mask |= temp
                     ~temp
 
@@ -1102,11 +1221,15 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
             # tth thresholds
             if self.cache is not None:
-                below_mins = np.nonzero(self.cache["pixelTAmap"] < self.min_tth_threshold.value())
-                above_maxs = np.nonzero(self.cache["pixelTAmap"] > self.max_tth_threshold.value())
+                below_mins = np.nonzero(
+                    self.cache["pixelTAmap"] < self.min_tth_threshold.value()
+                )
+                above_maxs = np.nonzero(
+                    self.cache["pixelTAmap"] > self.max_tth_threshold.value()
+                )
                 self.predef_mask[below_mins] = True
                 self.predef_mask[above_maxs] = True
-            
+
             # set mask image data
             # self.main_image.predef_mask.setData(np.array(self.predef_mask,dtype=np.uint8))
             self.poly_mask_rgba = (
@@ -1149,8 +1272,9 @@ class MainWindow(pg.GraphicsLayoutWidget):
                     poly_points = [
                         [
                             pixel_to_mm(x, self.cache["pixelSize"][0]),
-                            pixel_to_mm(y,self.cache["pixelSize"][1])
-                        ] for x,y in poly_points
+                            pixel_to_mm(y, self.cache["pixelSize"][1]),
+                        ]
+                        for x, y in poly_points
                     ]
                     # print(poly_points)
                     poly_points.append(poly_points[0])
@@ -1161,81 +1285,67 @@ class MainWindow(pg.GraphicsLayoutWidget):
                 elif type(i) == Arc:
                     # arcs_list.append(i.table_item.text())
                     # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
-                    arcs_list.append([
-                        i.tth_center,
-                        [i.startazim,i.endazim],
-                        i.tthwidth
-                    ])
+                    arcs_list.append(
+                        [i.tth_center, [i.startazim, i.endazim], i.tthwidth]
+                    )
                 elif type(i) == Line:
                     if i.orientation == "horizontal":
                         xlines.append(int(i.table_item.text()))
                     else:
                         ylines.append(int(i.table_item.text()))
                 elif type(i) == Spot:
-                    center0_mm = pixel_to_mm(
-                        i.center[1],
-                        self.cache["pixelSize"][0]
-                    )
-                    center1_mm = pixel_to_mm(
-                        i.center[0],
-                        self.cache["pixelSize"][1]
-                    )
+                    center0_mm = pixel_to_mm(i.center[1], self.cache["pixelSize"][0])
+                    center1_mm = pixel_to_mm(i.center[0], self.cache["pixelSize"][1])
                     if self.imagescale_is_square:
                         diameter_mm = pixel_to_mm(
-                            i.radius * 2,
-                            self.cache["pixelSize"][0]
+                            i.radius * 2, self.cache["pixelSize"][0]
                         )
                     else:
-                        print("Warning: Radius may not align with GSASII as image is not square.")
+                        print(
+                            "Warning: Radius may not align with GSASII as image is not square."
+                        )
                         diameter_mm = pixel_to_mm(
                             i.radius * 2,
                             np.sqrt(
                                 self.cache["pixelSize"][0] ** 2
                                 + self.cache["pixelSize"][1] ** 2
-                            )
+                            ),
                         )
                     points.append([center0_mm, center1_mm, diameter_mm])
                 elif type(i) == Point:
-                    x_mm = pixel_to_mm(
-                        i.x(),
-                        self.cache["pixelSize"][0]
-                    )
-                    y_mm = pixel_to_mm(
-                        i.y(),
-                        self.cache["pixelSize"][1]
-                    )
+                    x_mm = pixel_to_mm(i.x(), self.cache["pixelSize"][0])
+                    y_mm = pixel_to_mm(i.y(), self.cache["pixelSize"][1])
                     if self.imagescale_is_square:
-                        d_mm = pixel_to_mm(
-                            1,
-                            self.cache["pixelSize"][0]
-                        )
+                        d_mm = pixel_to_mm(1, self.cache["pixelSize"][0])
                     else:
                         d_mm = pixel_to_mm(
                             1,
                             np.sqrt(
                                 self.cache["pixelSize"][0] ** 2
                                 + self.cache["pixelSize"][1] ** 2
-                            )
+                            ),
                         )
                     points.append([x_mm, y_mm, d_mm])
                 elif type(i) == Ring:
                     rings_list.append([i.center_tth, i.tth_width])
 
             # outfilename = os.path.join(".", "mask.immask")
-            with open(outfilename,'w') as outfile:
+            with open(outfilename, "w") as outfile:
                 outfile.write("Points:{points}\n".format(points=points))
                 outfile.write("Rings:{rings}\n".format(rings=rings_list))
                 outfile.write("Arcs:{arcs}\n".format(arcs=arcs_list))
                 # print(points_list)
                 outfile.write(
                     "Polygons:{polys}\n".format(polys=polygon_points_list)
-                    .replace('(','[').replace(')',']')
+                    .replace("(", "[")
+                    .replace(")", "]")
                 )
                 outfile.write("Xlines:{xlines}\n".format(xlines=xlines))
                 outfile.write("Ylines:{ylines}\n".format(ylines=ylines))
                 outfile.write(
                     "Frames:{frames}\n".format(frames=frame_points_list)
-                    .replace('(','[').replace(')',']')
+                    .replace("(", "[")
+                    .replace(")", "]")
                 )
                 # outfile.write("Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(image_min=np.min(self.main_image.image_data),image_max=np.max(self.main_image.image_data)))
                 outfile.write(
@@ -1284,14 +1394,14 @@ class MainWindow(pg.GraphicsLayoutWidget):
                 x_pix = mm_to_pixel(x, self.cache["pixelSize"][0])
                 y_pix = mm_to_pixel(y, self.cache["pixelSize"][1])
                 if self.imagescale_is_square:
-                    r_pix = mm_to_pixel(d/2, self.cache["pixelSize"][0])
+                    r_pix = mm_to_pixel(d / 2, self.cache["pixelSize"][0])
                 else:
                     r_pix = mm_to_pixel(
-                        d/2,
+                        d / 2,
                         np.sqrt(
                             self.cache["pixelSize"][0] ** 2
-                            + self.cache["pixelSize"][1] **2
-                        )
+                            + self.cache["pixelSize"][1] ** 2
+                        ),
                     )
                 spot = [x_pix, y_pix, r_pix]
                 self.main_image.objects[-1].table_item.setText(str(spot))
@@ -1319,7 +1429,6 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.min_intensity_threshold.setValue(masks["Thresholds"][1][0])
             self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
 
-
     def image_changed(self, data):
         # set image data
         self.main_image.image_data = data
@@ -1336,7 +1445,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.number_of_objects -= 1
         # remove from table
         self.polygons_table.removeRow(index)
-        # remove from objects list 
+        # remove from objects list
         del self.main_image.objects[index]
 
     def clear_arc(self, index):
@@ -1392,7 +1501,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.clear_ring(index=selected_row)
 
     def update_objects_from_table(self):
-       for index in range(len(self.main_image.objects)):
+        for index in range(len(self.main_image.objects)):
             item = self.main_image.objects[index]
             if not self.creating_object:
                 item.updateFromTable()
@@ -1404,8 +1513,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
     #             item.updateFromTable()
     #     except IndexError:
     #         return
-        
-    def highlightROI(self,current,previous):
+
+    def highlightROI(self, current, previous):
         # print("Selected {0} object at {1}: {2},{3}".format(self.polygons_table.item(current.row(),0).text(),current.row(),self.polygons_table.item(current.row(),1).text(),current))
         for i in range(self.number_of_objects):
             if (current) and (i == current.row()):
@@ -1456,7 +1565,7 @@ class MainImage(pg.GraphicsLayoutWidget):
         # self.polygon = QtGui.QPainter.drawPolygon()
         # self.show()
 
-    def add_polygon(self, isFrame = False):
+    def add_polygon(self, isFrame=False):
         # bounds = QtCore.QRect(0,2880,2880,2880)
         # bounds = QtCore.QRect(QtCore.QPoint(2880,0),QtCore.QPoint(0,2880))
         bounds = QtCore.QRect()
@@ -1477,18 +1586,18 @@ class MainImage(pg.GraphicsLayoutWidget):
             rotatable=False,
             image_size=self.image_data.shape,
             isFrame=isFrame,
-            parent=self.view
+            parent=self.view,
         )
-        
+
         self.view.addItem(polygon)
         return polygon
-    
+
     def add_polygon_point(self, point):
         # print("Adding point")
         # self.polygon_points.append(point)
         points_list = [tuple(h.pos()) for h in self.current_polygon.getHandles()]
         # points_list.append((int(point.x()),int(point.y())))
-        points_list.append((float(round(point.x())), float(round(point.y(),0))))
+        points_list.append((float(round(point.x())), float(round(point.y(), 0))))
         # print("points list: ",points_list,type(points_list))
         self.current_polygon.setPoints(points_list)
 
@@ -1501,7 +1610,7 @@ class MainImage(pg.GraphicsLayoutWidget):
         arc = Arc(parent=self.view)
         self.view.addItem(arc, ignoreBounds=True)
         return arc
-    
+
     def set_arc_point(self, point):
         self.current_arc.initialize_handles(point)
 
@@ -1510,7 +1619,9 @@ class MainImage(pg.GraphicsLayoutWidget):
     #     self.polygon.setPoints(self.polygon_points)
 
     def mouse_click(self, evt):
-        if ((evt.button() == 1) or (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton)) and (self.view.sceneBoundingRect().contains(evt.pos())):
+        if (
+            (evt.button() == 1) or (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton)
+        ) and (self.view.sceneBoundingRect().contains(evt.pos())):
             mousePoint = self.view.vb.mapSceneToView(evt.scenePos())
             # print(mousePoint)
             if self.current_polygon != None:
@@ -1529,7 +1640,13 @@ class MainImage(pg.GraphicsLayoutWidget):
                 self.current_point.setX(x)
                 self.current_point.setY(y)
                 self.current_point.verifyState()
-                self.current_point.table_item.setText("("+str(self.current_point.x())+","+str(self.current_point.y())+")")
+                self.current_point.table_item.setText(
+                    "("
+                    + str(self.current_point.x())
+                    + ","
+                    + str(self.current_point.y())
+                    + ")"
+                )
             elif self.current_arc != None:
                 self.set_arc_point(mousePoint.toPoint())
             # self.add_point(mousePoint)

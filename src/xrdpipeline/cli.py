@@ -1,8 +1,8 @@
 """Console script for xrdpipeline."""
-import xrdpipeline
-
 import typer
 from rich.console import Console
+
+import xrdpipeline
 
 app = typer.Typer()
 console = Console()

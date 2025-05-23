@@ -1,4 +1,6 @@
-import os, sys
+import os
+import sys
+
 import numpy as np
 import skimage as ski
 import tifffile as tf
@@ -6,11 +8,12 @@ import tifffile as tf
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
 bindist_dir = os.path.join(script_dir, "bindist")
-bin_dir = os.path.join(script_dir,'bin')
+bin_dir = os.path.join(script_dir, "bin")
 # Add 'bindist' to the beginning of sys.path
 print(bindist_dir)
 sys.path.insert(0, bindist_dir)
-sys.path.insert(0,bin_dir)
+sys.path.insert(0, bin_dir)
+
 
 # trig functions using degrees
 # numpy versions
@@ -41,23 +44,30 @@ def npatand(x):
 def npatan2d(y, x):
     return 180.0 * np.arctan2(y, x) / np.pi
 
+
 def sind(x):
     return npsind(x)
+
 
 def asind(x):
     return npasind(x)
 
+
 def cosd(x):
     return npcosd(x)
+
 
 def acosd(x):
     return npacosd(x)
 
+
 def tand(x):
     return nptand(x)
 
+
 def atand(x):
     return npatand(x)
+
 
 def atan2d(y, x):
     return npatan2d(y, x)
@@ -231,17 +241,15 @@ def LoadControlsPONI(Slines, data):
         "Rot1",
         "Rot2",
         "Rot3",
-        "Wavelength"
+        "Wavelength",
     ]
     initial_data = {}
     for S in Slines:
         if S[0] == "#":
             continue
         [key, val] = S.strip().split(":", 1)
-        if key in [
-            "Detector_config"
-        ]:
-            initial_data[key] = eval(val) # dictionary
+        if key in ["Detector_config"]:
+            initial_data[key] = eval(val)  # dictionary
         elif key in [
             "Distance",
             "Poni1",
@@ -249,7 +257,7 @@ def LoadControlsPONI(Slines, data):
             "Rot1",
             "Rot2",
             "Rot3",
-            "Wavelength"
+            "Wavelength",
         ]:
             initial_data[key] = float(val)
     # now convert
@@ -267,6 +275,7 @@ def LoadControlsPONI(Slines, data):
 
     data.update(save)
 
+
 # from pyfai.geometry.fit2d.convert_to_Fit2d
 def poni_to_gsasii(controls):
     cos_tilt = np.cos(controls["Rot1"]) * np.cos(controls["Rot2"])
@@ -281,7 +290,10 @@ def poni_to_gsasii(controls):
         cos_tpr = 1.0
         sin_tpr = 0.0
     else:
-        cos_tpr = max(-1.0, min(1.0, -np.cos(controls["Rot2"]) * np.sin(controls["Rot1"]) / sin_tilt))
+        cos_tpr = max(
+            -1.0,
+            min(1.0, -np.cos(controls["Rot2"]) * np.sin(controls["Rot1"]) / sin_tilt),
+        )
         sin_tpr = np.sin(controls["Rot2"]) / sin_tilt
     directDist = 1.0e3 * controls["Distance"] / cos_tilt
     tilt = np.degrees(np.arccos(cos_tilt))
@@ -292,20 +304,20 @@ def poni_to_gsasii(controls):
 
     # centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) / controls["Detector_config"]["pixel2"]
     centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) * 1000
-    if abs(tilt) < 1e-5: # in degrees
+    if abs(tilt) < 1e-5:  # in degrees
         # centerY = (controls["Poni1"]) / controls["Detector_config"]["pixel1"]
         centerY = (controls["Poni1"]) * 1000
     else:
         # centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) / controls["Detector_config"]["pixel1"]
         centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) * 1000
-    
+
     # further corrections to match GSASII: angle is off by 90 degrees
-    
+
     tilt = -tilt
-    tpr = 360-tpr
+    tpr = 360 - tpr
     if tpr > 360:
         tpr -= 360
-    tpr -= 90.
+    tpr -= 90.0
     if tpr < 0:
         tpr += 360
 
@@ -1053,4 +1065,3 @@ def makeMat(Angle, Axis):
 def peneCorr(tth, dep, dist):
     "Needs a doc string"
     return dep * (1.0 - npcosd(tth)) * dist**2 / 1000.0  # best one
-
