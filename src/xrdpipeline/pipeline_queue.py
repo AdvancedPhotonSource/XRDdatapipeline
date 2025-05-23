@@ -1,27 +1,23 @@
-from collections import deque
 import argparse
-import copy
 import glob
+import os
 import re
-import os, sys
-import time
+import sys
 import threading
+import time
+from collections import deque
 
+from cache_creation import get_azimbands, getmaps, gradient_cache, prepare_qmaps
+from classification import current_splitting_method
+from corrections_and_maps import flatfield_correct, nonzeromask
+from GSASII_imports import *
 from PIL import Image
-
-import PySide6
+from pipeline import Export_xye, get_Qbands, pytorch_integrate, run_iteration
 from pyqtgraph.Qt import QtCore, QtWidgets
-
 from scipy import spatial
-
 from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
-from GSASII_imports import *
-from pipeline import run_iteration, get_Qbands, pytorch_integrate, Export_xye
-from classification import current_splitting_method
-from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
-from corrections_and_maps import flatfield_correct, nonzeromask
 
 class image_monitor(RegexMatchingEventHandler):
     def __init__(self, queue):
@@ -121,13 +117,13 @@ class CacheCreator(QtCore.QObject):
         imgmaskname,
         bad_pixels,
         blkSize,
-        calc_outlier = True,
-        esdMul = 3.0,
-        outChannels = None,
-        calc_splitting = True,
-        azim_Q_shape_min = 100,
-        calc_spottiness = False,
-        not_in_poni_settings = {},
+        calc_outlier=True,
+        esdMul=3.0,
+        outChannels=None,
+        calc_splitting=True,
+        azim_Q_shape_min=100,
+        calc_spottiness=False,
+        not_in_poni_settings={},
         logging=False,
     ):
         super().__init__()
@@ -169,7 +165,8 @@ class CacheCreator(QtCore.QObject):
         # cache['Image Controls'] = img.getControls() # save controls & masks contents for quick reload
         # self.cache['image'] = tf.imread(self.filename)
         self.cache["image"] = load_image(self.filename)
-        if self.stopEarly: return
+        if self.stopEarly:
+            return
 
         predef_mask = {}
         if (self.imgmaskname is not None) and (self.imgmaskname != ""):
@@ -188,7 +185,9 @@ class CacheCreator(QtCore.QObject):
                 bad_pixel_mask = read_image(self.bad_pixels)
                 predef_mask |= bad_pixel_mask
             else:
-                print("Unsupported bad pixel mask image type. Skipping file read. Any zero-intensity pixels will automatically be masked.")
+                print(
+                    "Unsupported bad pixel mask image type. Skipping file read. Any zero-intensity pixels will automatically be masked."
+                )
         self.cache["predef_mask"] = predef_mask
 
         flatfield_image = None
@@ -196,8 +195,9 @@ class CacheCreator(QtCore.QObject):
             # flatfield_image = tf.imread(self.flatfield)
             flatfield_image = load_image(self.flatfield)
         self.cache["flatfield"] = flatfield_image
-        if self.stopEarly: return
-        
+        if self.stopEarly:
+            return
+
         # imctrlname = imctrlname.split("\\")[-1].split('/')[-1]
         # path1 =  os.path.join(pathmaps,imctrlname)
         # im = Image.fromarray(TA[0])
@@ -207,7 +207,7 @@ class CacheCreator(QtCore.QObject):
             os.path.join(
                 self.output_directory,
                 "maps",
-                os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_predef.tif"
+                os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_predef.tif",
             )
         )
         if (self.flatfield is not None) and (self.flatfield != ""):
@@ -216,7 +216,8 @@ class CacheCreator(QtCore.QObject):
                 os.path.join(
                     self.output_directory,
                     "maps",
-                    os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"
+                    os.path.splitext(os.path.split(self.imctrlname)[1])[0]
+                    + "_flatfield.tif",
                 )
             )
         self.cache["Image Controls"] = image_dict["Image Controls"]
@@ -235,26 +236,33 @@ class CacheCreator(QtCore.QObject):
         # Missing 5: size, samplechangerpos, det2theta, ImageTag, formatName
         # [2880,2880] None 0.0 None GSAS-II known TIF image
         # only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
-        if self.stopEarly: return
-        
+        if self.stopEarly:
+            return
+
         # self.cache["intMaskMap"] = MakeUseMask(
         #     image_dict["Image Controls"],image_dict["Masks"], blkSize=self.blkSize
         # )
         # cache['intTAmap'] = img.IntThetaAzMap()
-        self.cache["intTAmap"] = MakeUseTA(image_dict["Image Controls"],self.blkSize)
-        if self.stopEarly: return
+        self.cache["intTAmap"] = MakeUseTA(image_dict["Image Controls"], self.blkSize)
+        if self.stopEarly:
+            return
         # cache['FrameMask'] = img.MaskFrameMask() # calc Frame mask & T array to save for Pixel masking
         self.cache["FrameMask"] = MaskFrameMask(image_dict)
-        if self.stopEarly: return
+        if self.stopEarly:
+            return
         # cache['maskTmap'] = img.MaskThetaMap()
         self.cache["maskTmap"] = Make2ThetaAzimuthMap(
             image_dict["Image Controls"],
             (0, image_dict["Image Controls"]["size"][0]),
-            (0, image_dict["Image Controls"]["size"][1])
+            (0, image_dict["Image Controls"]["size"][1]),
         )[0]
-        if self.stopEarly: return
-        getmaps(self.cache, self.imctrlname, os.path.join(self.output_directory, "maps"))
-        if self.stopEarly: return
+        if self.stopEarly:
+            return
+        getmaps(
+            self.cache, self.imctrlname, os.path.join(self.output_directory, "maps")
+        )
+        if self.stopEarly:
+            return
         # 2th fairly linear along center; calc 2th - pixelsize conversion
         center = self.cache["Image Controls"]["center"]
         center[0] = center[0] * 1000.0 / self.cache["Image Controls"]["pixelSize"][0]
@@ -266,7 +274,8 @@ class CacheCreator(QtCore.QObject):
         image_dict["Masks"]["SpotMask"]["esdMul"] = self.esdMul
         numChansAzim = 360
         self.cache["azimband"] = get_azimbands(self.cache["pixelAzmap"], numChansAzim)
-        if self.stopEarly: return
+        if self.stopEarly:
+            return
 
         # numChans
         LUtth = np.array(self.cache["Image Controls"]["IOtth"])
@@ -277,9 +286,13 @@ class CacheCreator(QtCore.QObject):
         x1 = GetDetectorXY2(dsp1, 0.0, self.cache["Image Controls"])[0]
         if not np.any(x0) or not np.any(x1):
             raise Exception
-        numChans = int(1000 * (x1 - x0) / self.cache["Image Controls"]["pixelSize"][0]) // 2
+        numChans = (
+            int(1000 * (x1 - x0) / self.cache["Image Controls"]["pixelSize"][0]) // 2
+        )
         self.cache["numChans"] = numChans
-        self.cache["Qbins"], self.cache["QbinEdges"] = get_Qbands(self.cache["pixelQmap"], LUtth, wave, numChans)
+        self.cache["Qbins"], self.cache["QbinEdges"] = get_Qbands(
+            self.cache["pixelQmap"], LUtth, wave, numChans
+        )
 
         # pytorch integration
         (
@@ -301,7 +314,8 @@ class CacheCreator(QtCore.QObject):
         # self.cache['Previous image'] = tf.imread(self.filename)
         # self.cache['First image'] = tf.imread(self.filename)
         self.cache["First image"] = load_image(self.filename)
-        if self.stopEarly: return
+        if self.stopEarly:
+            return
 
         # gradient info
         self.cache["gradient"] = gradient_cache(
@@ -332,11 +346,11 @@ class SingleIterator(QtCore.QObject):
         number,
         ext,
         closing_method="binary_closing",
-        calc_outlier = True,
-        outChannels = 0,
-        calc_splitting = True,
-        azim_Q_shape_min = 100,
-        calc_spottiness = False,
+        calc_outlier=True,
+        outChannels=0,
+        calc_splitting=True,
+        azim_Q_shape_min=100,
+        calc_spottiness=False,
         logging=False,
     ):
         super().__init__()
@@ -366,12 +380,12 @@ class SingleIterator(QtCore.QObject):
             self.number,
             self.cache,
             self.ext,
-            return_steps = False,
-            calc_outlier = self.calc_outlier,
-            outChannels = self.outChannels,
-            calc_splitting = self.calc_splitting,
-            azim_Q_shape_min = self.azim_Q_shape_min,
-            calc_spottiness = self.calc_spottiness,
+            return_steps=False,
+            calc_outlier=self.calc_outlier,
+            outChannels=self.outChannels,
+            calc_splitting=self.calc_splitting,
+            azim_Q_shape_min=self.azim_Q_shape_min,
+            calc_spottiness=self.calc_spottiness,
         )
         self.finished.emit()
 
@@ -417,11 +431,11 @@ class SingleIterator(QtCore.QObject):
         # print(img.data)
         # print(img.data['Image Controls'])
         # print(img.data['Comments'])
-        time_checkpoints.append('Cache')
+        time_checkpoints.append("Cache")
         # print("Data after loading controls")
-        #print(img.data)
-        #print(img.data['Image Controls'])
-        #print(img.data['Comments'])
+        # print(img.data)
+        # print(img.data['Image Controls'])
+        # print(img.data['Comments'])
         print("Cache")
         # for k,v in cache.items():
         #    print(k,v)
@@ -436,7 +450,7 @@ class SingleIterator(QtCore.QObject):
             os.path.join(
                 self.directory,
                 "masks",
-                self.name + "-" + self.number + "_nonpositive.tif"
+                self.name + "-" + self.number + "_nonpositive.tif",
             )
         )
         # frame_and_predef = np.logical_or(self.cache['FrameMask'],self.cache['predef_mask'])
@@ -480,9 +494,7 @@ class SingleIterator(QtCore.QObject):
         imsave = Image.fromarray(outlier_mask)
         imsave.save(
             os.path.join(
-                self.directory,
-                "masks",
-                self.name + "-" + self.number + "_om.tif"
+                self.directory, "masks", self.name + "-" + self.number + "_om.tif"
             )
         )
         single_iter_times.append(time.time())
@@ -499,7 +511,7 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "masks",
-                    self.name + "-" + self.number + "_closedmask.tif"
+                    self.name + "-" + self.number + "_closedmask.tif",
                 )
             )
 
@@ -510,7 +522,7 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "masks",
-                    self.name + "-" + self.number + "_closedmask.tif"
+                    self.name + "-" + self.number + "_closedmask.tif",
                 )
             )
         elif (self.closing_method == None) or (self.closing_method == ""):
@@ -552,15 +564,13 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "masks",
-                    self.name + "-" + self.number + "_spots.tif"
+                    self.name + "-" + self.number + "_spots.tif",
                 )
             )
             imsave = Image.fromarray(split_arcs)
             imsave.save(
                 os.path.join(
-                    self.directory,
-                    "masks",
-                    self.name + "-" + self.number + "_arcs.tif"
+                    self.directory, "masks", self.name + "-" + self.number + "_arcs.tif"
                 )
             )
             imsave = Image.fromarray(base_arc)
@@ -568,7 +578,7 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "masks",
-                    self.name + "-" + self.number + "_qwidth_arc.tif"
+                    self.name + "-" + self.number + "_qwidth_arc.tif",
                 )
             )
             imsave = Image.fromarray(qgrad_arc)
@@ -576,7 +586,7 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "masks",
-                    self.name + "-" + self.number + "_qgrad_arc.tif"
+                    self.name + "-" + self.number + "_qgrad_arc.tif",
                 )
             )
             imsave = Image.fromarray(azim_grad_2)
@@ -584,7 +594,7 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "grads",
-                    self.name + "-" + self.number + "_azim_grad_2.tif"
+                    self.name + "-" + self.number + "_azim_grad_2.tif",
                 )
             )
             imsave = Image.fromarray(radial_grad_2)
@@ -592,7 +602,7 @@ class SingleIterator(QtCore.QObject):
                 os.path.join(
                     self.directory,
                     "grads",
-                    self.name + "-" + self.number + "_radial_grad_2.tif"
+                    self.name + "-" + self.number + "_radial_grad_2.tif",
                 )
             )
         else:
@@ -609,22 +619,20 @@ class SingleIterator(QtCore.QObject):
                 return_steps=return_steps,
                 interpolate=False,
                 predef_mask=nonpositive_mask,
-                predef_mask_extended=predef_mask_extended
+                predef_mask_extended=predef_mask_extended,
             )
             imsave = Image.fromarray(split_spots)
             imsave.save(
                 os.path.join(
                     self.directory,
                     "masks",
-                    self.name + "-" + self.number + "_spots.tif"
+                    self.name + "-" + self.number + "_spots.tif",
                 )
             )
             imsave = Image.fromarray(split_arcs)
             imsave.save(
                 os.path.join(
-                    self.directory,
-                    "masks",
-                    self.name + "-" + self.number + "_arcs.tif"
+                    self.directory, "masks", self.name + "-" + self.number + "_arcs.tif"
                 )
             )
         single_iter_times.append(time.time())
@@ -716,9 +724,7 @@ class SingleIterator(QtCore.QObject):
         time_checkpoints.append("Integration")
         # save integrals
         integral_file_base = os.path.join(
-            self.directory,
-            "integrals",
-            self.name + "-" + self.number
+            self.directory, "integrals", self.name + "-" + self.number
         )
         # print(len(hist_base), len(hist_om), len(hist_spotsmasked), len(hist_arcsmasked), len(hist_closed), len(hist_closedspotsmasked), len(hist_closedarcsmasked))
         # hist_base[0].Export(directory + '\\integrals\\' + name + '-' + number + '_base.xye','.xye')
@@ -886,9 +892,13 @@ class AdvancedSettings(QtWidgets.QWidget):
 
         # self.settings_label = QtWidgets.QLabel("Advanced Settings")
         # self.override_config_label = QtWidgets.QLabel("Override Config Values: ")
-        self.override_label = QtWidgets.QLabel("Override configuration file values by checking the box and setting the value.")
+        self.override_label = QtWidgets.QLabel(
+            "Override configuration file values by checking the box and setting the value."
+        )
 
-        self.madmult_override = QtWidgets.QCheckBox("Multiple of median absolute deviation for outlier masking:")
+        self.madmult_override = QtWidgets.QCheckBox(
+            "Multiple of median absolute deviation for outlier masking:"
+        )
         self.madmult_override_default = False
         self.madmult_override.setChecked(self.madmult_override_default)
         self.madmult = QtWidgets.QDoubleSpinBox()
@@ -899,7 +909,9 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.madmult.setValue(self.madmult_default)
         # self.madmult_label.setDisabled(True)
         # self.madmult.setDisabled(True)
-        self.nbins_om_override = QtWidgets.QCheckBox("Number of 2theta bins for outlier masking:")
+        self.nbins_om_override = QtWidgets.QCheckBox(
+            "Number of 2theta bins for outlier masking:"
+        )
         self.nbins_om_override_default = False
         self.nbins_om_override.setChecked(self.nbins_om_override_default)
         self.nbins_om = QtWidgets.QSpinBox()
@@ -919,11 +931,17 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_outlier_checkbox = QtWidgets.QCheckBox("Perform outlier masking")
         self.calc_outlier_default = True
         self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
-        self.calc_outlier_checkbox.checkStateChanged.connect(self.toggle_outlier_settings)
-        self.calc_splitting_checkbox = QtWidgets.QCheckBox("Perform spot/texture outlier mask splitting")
+        self.calc_outlier_checkbox.checkStateChanged.connect(
+            self.toggle_outlier_settings
+        )
+        self.calc_splitting_checkbox = QtWidgets.QCheckBox(
+            "Perform spot/texture outlier mask splitting"
+        )
         self.calc_splitting_default = True
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
-        self.calc_spottiness_checkbox = QtWidgets.QCheckBox("Calculate Spottiness of Rings")
+        self.calc_spottiness_checkbox = QtWidgets.QCheckBox(
+            "Calculate Spottiness of Rings"
+        )
         self.calc_spottiness_default = False
         self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
 
@@ -955,7 +973,7 @@ class AdvancedSettings(QtWidgets.QWidget):
             self.outlier_settings.show()
         else:
             self.outlier_settings.hide()
-    
+
     def restore_defaults(self):
         self.madmult_override.setChecked(self.madmult_override_default)
         self.madmult.setValue(self.madmult_default)
@@ -974,7 +992,15 @@ class main_window(QtWidgets.QWidget):
     # clear queue button
     # optional "choose existing files to run over" section
     # default: none, shortcut button for all, else choose which files
-    def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None, bad_pixels=None):
+    def __init__(
+        self,
+        input_directory=None,
+        output_directory=None,
+        imctrl=None,
+        flatfield=None,
+        imgmask=None,
+        bad_pixels=None,
+    ):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
         # self.directory_loc = QtWidgets.QLabel()
@@ -1001,7 +1027,7 @@ class main_window(QtWidgets.QWidget):
         self.flatfield_widget = file_select(
             "Flat-field file:",
             default_text=flatfield,
-            startdir=self.input_directory_widget.file_name.text()
+            startdir=self.input_directory_widget.file_name.text(),
         )
         self.predef_mask_widget = file_select(
             "Experimental Mask:",
@@ -1026,7 +1052,9 @@ class main_window(QtWidgets.QWidget):
         self.PolaVal.setMaximum(1.0)
 
         self.advanced_settings_button = QtWidgets.QPushButton("Advanced Settings")
-        self.advanced_settings_button.released.connect(self.advanced_settings_button_pressed)
+        self.advanced_settings_button.released.connect(
+            self.advanced_settings_button_pressed
+        )
         self.start_button = QtWidgets.QPushButton("Start")
         self.start_button.released.connect(self.start_button_pressed)
         self.clear_queue_button = QtWidgets.QPushButton("Clear Queue")
@@ -1147,9 +1175,9 @@ class main_window(QtWidgets.QWidget):
                                 name,
                                 number,
                                 ext,
-                                calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
-                                calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
+                                calc_outlier=self.settings_widget.calc_outlier_checkbox.isChecked(),
+                                calc_splitting=self.settings_widget.calc_splitting_checkbox.isChecked(),
+                                calc_spottiness=self.settings_widget.calc_spottiness_checkbox.isChecked(),
                             )
                         else:
                             self.iteration_worker = SingleIterator(
@@ -1162,10 +1190,10 @@ class main_window(QtWidgets.QWidget):
                                 name,
                                 number,
                                 ext,
-                                azim_Q_shape_min = self.settings_widget.azim_q.value(),
-                                calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
-                                calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
+                                azim_Q_shape_min=self.settings_widget.azim_q.value(),
+                                calc_outlier=self.settings_widget.calc_outlier_checkbox.isChecked(),
+                                calc_splitting=self.settings_widget.calc_splitting_checkbox.isChecked(),
+                                calc_spottiness=self.settings_widget.calc_spottiness_checkbox.isChecked(),
                             )
                         self.iteration_worker.moveToThread(self.iteration_thread)
                         self.iteration_thread.started.connect(self.iteration_worker.run)
@@ -1199,12 +1227,17 @@ class main_window(QtWidgets.QWidget):
                         if self.iotth_max.value() != 0.0:
                             not_in_poni_settings["IOtth"] = [
                                 self.iotth_min.value(),
-                                self.iotth_max.value()
+                                self.iotth_max.value(),
                             ]
                         if self.outChannels.value() != 0.0:
-                            not_in_poni_settings["outChannels"] = self.outChannels.value()
+                            not_in_poni_settings["outChannels"] = (
+                                self.outChannels.value()
+                            )
                         if self.PolaVal.value() != 0.0:
-                            not_in_poni_settings["PolaVal"] = [self.PolaVal.value(), False]
+                            not_in_poni_settings["PolaVal"] = [
+                                self.PolaVal.value(),
+                                False,
+                            ]
                         self.cache_worker = CacheCreator(
                             self.cache,
                             self.input_directory,
@@ -1215,8 +1248,8 @@ class main_window(QtWidgets.QWidget):
                             self.imgmask,
                             self.bad_pixels,
                             self.blkSize,
-                            esdMul = esdMul,
-                            not_in_poni_settings = not_in_poni_settings,
+                            esdMul=esdMul,
+                            not_in_poni_settings=not_in_poni_settings,
                         )
                         self.cache_worker.moveToThread(self.cache_thread)
                         self.cache_thread.started.connect(self.cache_worker.run)
@@ -1253,7 +1286,9 @@ class main_window(QtWidgets.QWidget):
         if not ((self.flatfield is None) or (self.flatfield == "")):
             newdirs.append("flatfield")
         for newdir in newdirs:
-            path = os.path.join(self.output_directory, newdir)  # store maps with the images
+            path = os.path.join(
+                self.output_directory, newdir
+            )  # store maps with the images
             if not os.path.exists(path):
                 os.mkdir(path)
 
@@ -1292,7 +1327,9 @@ class main_window(QtWidgets.QWidget):
         print("Starting queue")
 
         self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
+        self.observer.schedule(
+            self.event_handler, self.input_directory, recursive=False
+        )
         self.observer.start()
 
         # main function to cycle, calls iteration while there are new images to process
@@ -1326,7 +1363,9 @@ class main_window(QtWidgets.QWidget):
         self.input_directory = input_directory
         # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
         self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
+        self.observer.schedule(
+            self.event_handler, self.input_directory, recursive=False
+        )
         self.observer.start()
         # self.resume()
 
@@ -1341,8 +1380,14 @@ class main_window(QtWidgets.QWidget):
     def start_button_pressed(self):
         if self.start_button.text() == "Start":
             if os.path.splitext(self.config_widget.file_name.text())[1] == ".poni":
-                if ((self.iotth_max.value() == 0) or (self.outChannels.value() == 0) or (self.PolaVal.value() == 0)):
-                    print("Please specify the 2theta integration range, number of integration bins, and polarization value.")
+                if (
+                    (self.iotth_max.value() == 0)
+                    or (self.outChannels.value() == 0)
+                    or (self.PolaVal.value() == 0)
+                ):
+                    print(
+                        "Please specify the 2theta integration range, number of integration bins, and polarization value."
+                    )
                     return
             self.start_processing()
             self.start_button.setText("Pause")
@@ -1495,5 +1540,12 @@ if __name__ == "__main__":
         imgctrl = None
 
     app = QtWidgets.QApplication([])
-    window = main_window(input_directory=input_directory, output_directory=output_directory, imctrl=imgctrl, flatfield=flatfield, imgmask=imgmask, bad_pixels=bad_pixels)
+    window = main_window(
+        input_directory=input_directory,
+        output_directory=output_directory,
+        imctrl=imgctrl,
+        flatfield=flatfield,
+        imgmask=imgmask,
+        bad_pixels=bad_pixels,
+    )
     sys.exit(app.exec())
