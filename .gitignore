@@ -109,3 +109,7 @@ ENV/
 .idea/
 
 tests/data
+
+*.csv
+*.txt
+*.dblite
