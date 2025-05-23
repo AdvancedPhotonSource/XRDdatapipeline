@@ -6,9 +6,11 @@ import tifffile as tf
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
 bindist_dir = os.path.join(script_dir, "bindist")
+bin_dir = os.path.join(script_dir,'bin')
 # Add 'bindist' to the beginning of sys.path
 print(bindist_dir)
 sys.path.insert(0, bindist_dir)
+sys.path.insert(0,bin_dir)
 
 # trig functions using degrees
 # numpy versions
