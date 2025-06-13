@@ -18,10 +18,10 @@ from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
 from GSASII_imports import *
-from pipeline import run_iteration, get_Qbands, pytorch_integrate, Export_xye
+from pipeline import run_iteration, pytorch_integrate, Export_xye
 from classification import current_splitting_method
 from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
-from corrections_and_maps import flatfield_correct, nonzeromask
+from corrections_and_maps import flatfield_correct, nonzeromask, get_Qbands
 
 class image_monitor(RegexMatchingEventHandler):
     def __init__(self, queue):
@@ -338,6 +338,8 @@ class SingleIterator(QtCore.QObject):
         azim_Q_shape_min = 100,
         calc_spottiness = False,
         logging=False,
+        timing=None,
+        timing_names = None,
     ):
         super().__init__()
         self.cache = cache.copy()
@@ -356,6 +358,8 @@ class SingleIterator(QtCore.QObject):
         self.azim_Q_shape_min = azim_Q_shape_min
         self.calc_spottiness = calc_spottiness
         self.logging = logging
+        self.timing = timing
+        self.timing_names = timing_names
 
     def run(self):
         run_iteration(
@@ -372,6 +376,8 @@ class SingleIterator(QtCore.QObject):
             calc_splitting = self.calc_splitting,
             azim_Q_shape_min = self.azim_Q_shape_min,
             calc_spottiness = self.calc_spottiness,
+            timing = self.timing,
+            timing_names = self.timing_names,
         )
         self.finished.emit()
 
@@ -1072,6 +1078,9 @@ class main_window(QtWidgets.QWidget):
             "Queue is {0} items long".format(len(self.queue))
         )
 
+        self.list_of_times = []
+        self.list_of_time_names = []
+
         # self.is_running_process = False
 
         self.poni_config_options_layout = QtWidgets.QGridLayout()
@@ -1149,7 +1158,9 @@ class main_window(QtWidgets.QWidget):
                                 ext,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
+                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                timing = self.list_of_times,
+                                timing_names = self.list_of_time_names,
                             )
                         else:
                             self.iteration_worker = SingleIterator(
@@ -1165,7 +1176,9 @@ class main_window(QtWidgets.QWidget):
                                 azim_Q_shape_min = self.settings_widget.azim_q.value(),
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked()
+                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                timing = self.list_of_times,
+                                timing_names = self.list_of_time_names,
                             )
                         self.iteration_worker.moveToThread(self.iteration_thread)
                         self.iteration_thread.started.connect(self.iteration_worker.run)
@@ -1366,6 +1379,14 @@ class main_window(QtWidgets.QWidget):
 
     def stop_button_pressed(self):
         print("Stopping and clearing queue")
+        # print(f"Length of timing list: {len(self.list_of_times)}")
+        # print(f"Mean time: {np.mean(self.list_of_times):.4f} +/- {np.std(self.list_of_times):.4f}")
+        means = np.mean(self.list_of_times, axis=0)
+        std = np.std(self.list_of_times, axis=0)
+        for i in range(len(self.list_of_time_names)):
+            print(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
+        self.list_of_times = []
+        self.list_of_time_names = []
         self.stop_button.setText("Stopping...")
         # disable all
         self.advanced_settings_button.setEnabled(False)

@@ -9,7 +9,7 @@ import skimage as ski
 import torch
 from PIL import Image
 
-from classification import current_splitting_method
+from classification import current_splitting_method, old_splitting_method
 from corrections_and_maps import *
 from GSASII_imports import *
 
@@ -68,7 +68,9 @@ def run_iteration(
         outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        calc_spottiness = False
+        calc_spottiness = False,
+        timing = None,
+        timing_names = None,
     ):
     """
     Runs over each file, outputting masks and integral files.
@@ -102,6 +104,9 @@ def run_iteration(
         Default is False.
 
     """
+    if timing is not None:
+        timing_0 = time.time()
+        local_times = []
     image_dict = cache["image_dict"]
     # image_dict['image'] = tf.imread(self.filename)
     image_dict["image"] = load_image(filename)
@@ -145,6 +150,13 @@ def run_iteration(
     frame_and_predef = np.logical_or(
         predef_and_nonpositive, cache["FrameMask"]
     )
+    if timing is not None:
+        timing_1 = time.time()
+        local_times.append(timing_1-timing_0)
+        timing_name = "Initial corrections"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+        timing_0 = time.time()
     if calc_outlier:
         esdMul = cache["esdMul"]
         GeneratePixelMask(
@@ -163,6 +175,13 @@ def run_iteration(
                 name + "-" + number + "_om.tif"
             )
         )
+        if timing is not None:
+            timing_1 = time.time()
+            local_times.append(timing_1-timing_0)
+            timing_name = "Outlier mask"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+            timing_0 = time.time()
         # close holes
         if closing_method == "binary_closing":
             t0 = time.time()
@@ -178,7 +197,7 @@ def run_iteration(
                 )
             )
             t1 = time.time()
-            print(f"Binary closing time: {t1-t0}")
+            # print(f"Binary closing time: {t1-t0}")
 
         elif closing_method == "remove_small":
             closed_mask = ski.morphology.remove_small_holes(outlier_mask, 6)
@@ -195,11 +214,18 @@ def run_iteration(
         else:
             print("Unrecognized closing method: Using none")
             closed_mask = outlier_mask
+        if timing is not None:
+            timing_1 = time.time()
+            local_times.append(timing_1-timing_0)
+            timing_name = "Binary closing"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+            timing_0 = time.time()
 
         if calc_splitting:
             # return_steps = False
             returned_items = current_splitting_method(
-                image_dict["image"],
+                image_dict["image"].copy(),
                 closed_mask,
                 cache["pixelQmap"],
                 cache["pixelAzmap"],
@@ -211,46 +237,77 @@ def run_iteration(
                 calc_spottiness=calc_spottiness,
                 predef_mask=nonpositive_mask,
                 predef_mask_extended=predef_mask_extended,
+                min_arc_area=3,
+                timing = local_times,
+                timing_names = timing_names,
             )
-            if return_steps and calc_spottiness:
+            # returned_items = old_splitting_method(
+            #     image_dict["image"],
+            #     closed_mask,
+            #     cache["pixelQmap"],
+            #     cache["pixelAzmap"],
+            #     cache["gradient"],
+            #     cache["Qbins"],
+            #     return_steps=return_steps,
+            #     interpolate=False,
+            #     azim_Q_shape_min=azim_Q_shape_min,
+            #     calc_spottiness=calc_spottiness,
+            #     predef_mask=nonpositive_mask,
+            #     predef_mask_extended=predef_mask_extended,
+            #     timing = local_times,
+            #     timing_names = timing_names,
+            # )
+            # if return_steps and calc_spottiness:
+            #     (
+            #         split_spots,
+            #         split_arcs,
+            #         spots_table,
+            #         base_arc,
+            #         qgrad_arc,
+            #         azim_grad_2,
+            #         radial_grad_2,
+            #         percents,
+            #         num_spots,
+            #         num_maxima,
+            #         num_spot_maxima
+            #     ) = returned_items
+            # elif return_steps:
+            #     (
+            #         split_spots,
+            #         split_arcs,
+            #         spots_table,
+            #         base_arc,
+            #         qgrad_arc,
+            #         azim_grad_2,
+            #         radial_grad_2,
+            #     ) = returned_items
+            # elif calc_spottiness:
+            #     (
+            #         split_spots,
+            #         split_arcs,
+            #         spots_table,
+            #         percents,
+            #         num_spots,
+            #         num_maxima,
+            #         num_spot_maxima
+            #     ) = returned_items
+            # else:
+            #     (
+            #         split_spots,
+            #         split_arcs,
+            #         spots_table,
+            #     ) = returned_items
+            if calc_spottiness:
                 (
                     split_spots,
                     split_arcs,
-                    spots_table,
-                    base_arc,
-                    qgrad_arc,
-                    azim_grad_2,
-                    radial_grad_2,
-                    percents,
-                    num_spots,
-                    num_maxima,
-                    num_spot_maxima
-                ) = returned_items
-            elif return_steps:
-                (
-                    split_spots,
-                    split_arcs,
-                    spots_table,
-                    base_arc,
-                    qgrad_arc,
-                    azim_grad_2,
-                    radial_grad_2,
-                ) = returned_items
-            elif calc_spottiness:
-                (
-                    split_spots,
-                    split_arcs,
-                    spots_table,
-                    percents,
-                    num_spots,
-                    num_maxima,
-                    num_spot_maxima
+                    spots_table_df,
+                    spots_table_grad,
                 ) = returned_items
             else:
                 (
                     split_spots,
                     split_arcs,
-                    spots_table,
                 ) = returned_items
             imsave = Image.fromarray(split_spots)
             imsave.save(
@@ -268,39 +325,46 @@ def run_iteration(
                     name + "-" + number + "_arcs.tif"
                 )
             )
-            if return_steps:
-                imsave = Image.fromarray(base_arc)
-                imsave.save(
-                    os.path.join(
-                        output_directory,
-                        "masks",
-                        name + "-" + number + "_qwidth_arc.tif"
-                    )
-                )
-                imsave = Image.fromarray(qgrad_arc)
-                imsave.save(
-                    os.path.join(
-                        output_directory,
-                        "masks",
-                        name + "-" + number + "_qgrad_arc.tif"
-                    )
-                )
-                imsave = Image.fromarray(azim_grad_2)
-                imsave.save(
-                    os.path.join(
-                        output_directory,
-                        "grads",
-                        name + "-" + number + "_azim_grad_2.tif"
-                    )
-                )
-                imsave = Image.fromarray(radial_grad_2)
-                imsave.save(
-                    os.path.join(
-                        output_directory,
-                        "grads",
-                        name + "-" + number + "_radial_grad_2.tif"
-                    )
-                )
+            # if return_steps:
+            #     imsave = Image.fromarray(base_arc)
+            #     imsave.save(
+            #         os.path.join(
+            #             output_directory,
+            #             "masks",
+            #             name + "-" + number + "_qwidth_arc.tif"
+            #         )
+            #     )
+            #     imsave = Image.fromarray(qgrad_arc)
+            #     imsave.save(
+            #         os.path.join(
+            #             output_directory,
+            #             "masks",
+            #             name + "-" + number + "_qgrad_arc.tif"
+            #         )
+            #     )
+            #     imsave = Image.fromarray(azim_grad_2)
+            #     imsave.save(
+            #         os.path.join(
+            #             output_directory,
+            #             "grads",
+            #             name + "-" + number + "_azim_grad_2.tif"
+            #         )
+            #     )
+            #     imsave = Image.fromarray(radial_grad_2)
+            #     imsave.save(
+            #         os.path.join(
+            #             output_directory,
+            #             "grads",
+            #             name + "-" + number + "_radial_grad_2.tif"
+            #         )
+            #     )
+            if timing is not None:
+                timing_1 = time.time()
+                local_times.append(timing_1-timing_0)
+                timing_name = "Total mask splitting"
+                if timing_name not in timing_names:
+                    timing_names.append(timing_name)
+                timing_0 = time.time()
 
 
     # integrate
@@ -374,36 +438,60 @@ def run_iteration(
                 integral_file_base + "_closedarcsmasked.xye",
                 error=False,
             )
+    if timing is not None:
+        timing_1 = time.time()
+        local_times.append(timing_1-timing_0)
+        timing_name = "Integrations"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+        timing_0 = time.time()
     
     stats_prefix = os.path.join(output_directory, "stats", name)
     if calc_outlier:
-        if calc_splitting:
+        # if calc_splitting:
             # spots stats
-            spots_table.to_csv(stats_prefix + "-" + number + "_spots_stats.csv")
+            # spots_table.to_csv(stats_prefix + "-" + number + "_spots_stats.csv")
+            
             # ~ 950 KB for table
             # 2d histogram: area, Q position
             # ~7800 KB for 1000x1000 bin histogram
             # 81 KB for 100x100 bin histogram
-            hist, x_edges, y_edges = np.histogram2d(
-                spots_table["area"].values, spots_table["intensity_mean"].values, 100
-            )
-            with open(
-                stats_prefix + "-" + number + "_spots_hist.npy", "wb"
-            ) as outfile:
-                np.save(outfile, hist)
-                np.save(outfile, x_edges)
-                np.save(outfile, y_edges)
+
+            # cutting this out for now
+            # hist, x_edges, y_edges = np.histogram2d(
+            #     spots_table["area"].values, spots_table["intensity_mean"].values, 100
+            # )
+            # with open(
+            #     stats_prefix + "-" + number + "_spots_hist.npy", "wb"
+            # ) as outfile:
+            #     np.save(outfile, hist)
+            #     np.save(outfile, x_edges)
+            #     np.save(outfile, y_edges)
 
         # spottiness
         if calc_spottiness:
-            with open(
-                stats_prefix + "-" + number + "_spottiness.npy", "wb"
-            ) as outfile:
-                np.save(outfile, percents)
-                np.save(outfile, num_spots)
-                np.save(outfile, num_maxima)
-                np.save(outfile, num_spot_maxima)
-                np.save(outfile, cache["QbinEdges"])
+            # with open(
+            #     stats_prefix + "-" + number + "_spottiness.npy", "wb"
+            # ) as outfile:
+            #     np.save(outfile, percents)
+            #     np.save(outfile, num_spots)
+            #     np.save(outfile, num_maxima)
+            #     np.save(outfile, num_spot_maxima)
+            #     np.save(outfile, cache["QbinEdges"])
+            spots_table_df.to_csv(stats_prefix + "-" + number + "_spots_stats_df.csv")
+            spots_table_grad.to_csv(stats_prefix + "-" + number + "_spots_stats_grad.csv")
+            qbins_filename = stats_prefix + "_qbinedges.npy"
+            if not os.path.exists(qbins_filename):
+                # print(cache["QbinEdges"])
+                with open(qbins_filename, "wb") as outfile:
+                    np.save(outfile, cache["QbinEdges"])
+        if timing is not None:
+            timing_1 = time.time()
+            local_times.append(timing_1-timing_0)
+            timing_name = "Save stats"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+            timing_0 = time.time()
 
     # Calculate comparisons between images
     # Find and read in previous image given current image number
@@ -416,8 +504,10 @@ def run_iteration(
         # turn int back to '00001' format, padded to 5 digits
         prev_number = f"{number_int_prev:05}"
     try:
+        previous_image_name = os.path.join(input_directory, name + "-" + prev_number + ext)
+        # print(previous_image_name)
         previous_image = ski.io.imread(
-            os.path.join(input_directory, name + "-" + prev_number + ext)
+            previous_image_name
         ).astype(np.float32)
     except:
         print("Cannot find previous image for cosine similarity; using current instead.")
@@ -432,10 +522,16 @@ def run_iteration(
     )
     with open(stats_prefix + "-" + number + "_csim.txt", "w") as outfile:
         outfile.write(
-            "{first:0.4f}\t{prev:0.4f}\n".format(first=csim_f, prev=csim_p)
+            "{first:0.9f}\t{prev:0.9f}\n".format(first=csim_f, prev=csim_p)
         )
-
     # Also not safe for multiprocessing. Need to grab number-1 when it exists
-    cache["Previous image"] = image_dict["image"]
+    # cache["Previous image"] = image_dict["image"]
 
+    if timing is not None:
+        timing_1 = time.time()
+        local_times.append(timing_1-timing_0)
+        timing_name = "Cosine Similarity"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+        timing.append(local_times)
     

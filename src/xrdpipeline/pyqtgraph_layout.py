@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
+import pandas as pd
 import PySide6
 import pyqtgraph as pg
 import tifffile as tf
@@ -381,7 +382,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settingsmenu = self.menubar.addMenu("&Settings")
         self.settingsmenu.addAction("Open Settings...", self.show_settings)
         self.imageview = MainImageView(self.settings, parent=self)
-        self.csimview = CSimView(self, self.settings)
+        # self.csimview = CSimView(self, self.settings)
+        self.contourview = ContourView(self, self.settings)
         self.integral_widget = IntegralView(self, self.settings)
         self.tabbed_area = TabbedArea(self, self.settings)
 
@@ -409,12 +411,21 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.contour_widget.view.scene().sigMouseMoved.connect(
             self.mouseMovedContour
         )
+        self.contourview.view.scene().sigMouseMoved.connect(
+            self.mouseMovedLeftContour
+        )
         # self.tabbed_area.stats_widget.stats_view.scene().sigMouseMoved.connect(self.mouseMovedStats)
         self.tabbed_area.contour_widget.view.scene().sigMouseClicked.connect(
             self.mouseClickedContourChangeImage
         )
+        self.contourview.view.scene().sigMouseClicked.connect(
+            self.mouseClickedLeftContourChangeImage
+        )
         self.tabbed_area.spottiness_widget.view.scene().sigMouseMoved.connect(
             self.mouseMovedSpottiness
+        )
+        self.tabbed_area.stats_widget.stats_view.scene().sigMouseMoved.connect(
+            self.mouseMovedStats
         )
         # checkboxes for the vertical line and circle
         self.vLineCheckbox = QtWidgets.QCheckBox("2Th Line")
@@ -455,11 +466,34 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.layout.addWidget(self.circleCheckbox, 10, 0)
         self.layout.addWidget(self.imageview.mask_opacity_label, 10, 1)
         self.layout.addWidget(self.imageview.mask_opacity_box, 10, 2)
-        self.layout.addWidget(self.csimview, 11, 0, 3, 5)
+        # self.layout.addWidget(self.csimview, 11, 0, 3, 5)
+        # self.layout.addWidget(self.contourview, 11, 0, 3, 5)
+        self.contour_layout = QtWidgets.QGridLayout()
+        self.contour_widget = QtWidgets.QWidget()
+        self.contour_widget.setLayout(self.contour_layout)
+        self.contour_layout.addWidget(self.contourview, 0, 0, 5, 6)
+        self.contour_layout.addWidget(self.contourview.live_update_checkbox, 5, 0)
+        self.contour_layout.addWidget(self.contourview.tth_line_checkbox, 5, 1)
+        self.contour_layout.addWidget(self.contourview.integral_select, 5, 2)
+        self.contour_layout.addWidget(self.contourview.live_integral_min_label, 6, 0)
+        self.contour_layout.addWidget(self.contourview.live_integral_min, 6, 1)
+        self.contour_layout.addWidget(self.contourview.live_integral_max_label, 6, 2)
+        self.contour_layout.addWidget(self.contourview.live_integral_max, 6, 3)
+        self.contour_layout.addWidget(
+            self.contourview.live_integral_step_label, 6, 4
+        )
+        self.contour_layout.addWidget(self.contourview.live_integral_step, 6, 5)
+        self.contour_layout.addWidget(self.contourview.integral_min_label, 7, 0)
+        self.contour_layout.addWidget(self.contourview.integral_min, 7, 1)
+        self.contour_layout.addWidget(self.contourview.integral_max_label, 7, 2)
+        self.contour_layout.addWidget(self.contourview.integral_max, 7, 3)
+        self.contour_layout.addWidget(self.contourview.integral_step_label, 7, 4)
+        self.contour_layout.addWidget(self.contourview.integral_step, 7, 5)
+        self.layout.addWidget(self.contour_widget, 11, 0, 3, 5)
         # blank space to help ameliorate formatting... should set sizes for other widgets
-        # self.layout.addWidget(QtWidgets.QWidget(), 13, 0)
+        # self.layout.addWidget(QtWidgets.QWidget(), 11, 0)
 
-        self.layout.addWidget(self.integral_widget, 1, 5, 2, 6)
+        self.layout.addWidget(self.integral_widget, 1, 5, 2, 7)
         self.layout.addWidget(self.integral_widget.base_integral_checkbox, 3, 5)
         self.layout.addWidget(self.integral_widget.masked_integral_checkbox, 3, 6)
         self.layout.addWidget(self.integral_widget.spotmasked_integral_checkbox, 3, 7)
@@ -516,7 +550,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.update_tiflist()
         self.update_num()
         self.imageview.update_dir()
-        self.csimview.update_dir()
+        # self.csimview.update_dir()
+        self.contourview.update_dir()
         self.integral_widget.update_dir()
         self.tabbed_area.update_dir()
         # self.name_label.setText(
@@ -588,6 +623,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         # Check integral list against tiflist
         self.update_tiflist()
         self.tabbed_area.contour_widget.update_integral_list()
+        self.contourview.update_integral_list()
         last_completed = self.tabbed_area.contour_widget.integral_filelist[-1]
         # print(last_completed.split("\\")[1].split(self.tabbed_area.contour_widget.integral_extension)[0])
         last_completed = os.path.splitext(os.path.split(last_completed)[1])[0]
@@ -614,6 +650,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.imageview.update_masks_data()
         self.integral_widget.update_integral_data()
         self.tabbed_area.contour_widget.horiz_line.setValue(self.settings.curr_pos)
+        self.contourview.horiz_line.setValue(self.settings.curr_pos)
         self.tabbed_area.stats_widget.update_stats_data()
         self.tabbed_area.spottiness_widget.update_data()
 
@@ -668,8 +705,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.update_num()
         self.updateImages(z_reset=True)
         self.tabbed_area.contour_widget.reset_integral_data(reset_z=True)
-        # self.tabbed_area.csim_widget.update_data()
-        self.csimview.update_data()
+        self.contourview.reset_integral_data(reset_z = True)
+        self.tabbed_area.csim_widget.update_data()
+        # self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def nextkey(self):
@@ -680,8 +718,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.update_num()
         self.updateImages(z_reset=True)
         self.tabbed_area.contour_widget.reset_integral_data(reset_z=True)
-        # self.tabbed_area.csim_widget.update_data()
-        self.csimview.update_data()
+        self.contourview.reset_integral_data(reset_z = True)
+        self.tabbed_area.csim_widget.update_data()
+        # self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def mouseMovedImage(self, evt):
@@ -722,20 +761,29 @@ class KeyPressWindow(QtWidgets.QWidget):
                         integral_point.setX(tth)
                         self.integral_cursor_label.setPos(integral_point)
                         self.tabbed_area.spottiness_widget.vLine.setPos(tth)
+                        self.tabbed_area.contour_widget.tth_line.setPos(tth)
+                        self.tabbed_area.stats_widget.vLine.setPos(tth)
+                        self.contourview.tth_line.setPos(tth)
                     elif self.x_axis_choice.currentIndex() == 1:
                         Q = tth_to_q(tth, self.settings.wavelength)
                         self.integral_widget.vLine.setPos(Q)
                         self.tabbed_area.spottiness_widget.vLine.setPos(Q)
+                        self.tabbed_area.contour_widget.tth_line.setPos(Q)
+                        self.tabbed_area.stats_widget.vLine.setPos(Q)
+                        self.contourview.tth_line.setPos(Q)
                         integral_point.setX(Q)
                         self.integral_cursor_label.setPos(integral_point)
+                    self.integral_cursor_label.setText(
+                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                    )
                 if self.circleCheckbox.isChecked():
                     self.imageview.update_tth_circle(tth)
-                if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-                    if self.x_axis_choice.currentIndex() == 0:
-                        self.tabbed_area.contour_widget.tth_line.setPos(tth)
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        Q = tth_to_q(tth, self.settings.wavelength)
-                        self.tabbed_area.contour_widget.tth_line.setPos(Q)
+                # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+                #     if self.x_axis_choice.currentIndex() == 0:
+                #         self.tabbed_area.contour_widget.tth_line.setPos(tth)
+                #     elif self.x_axis_choice.currentIndex() == 1:
+                #         Q = tth_to_q(tth, self.settings.wavelength)
+                #         self.tabbed_area.contour_widget.tth_line.setPos(Q)
                 # if self.tabbed_area.stats_line_checkbox.isChecked():
                 #    self.tabbed_area.stats_widget.stats_line.setPos(tth)
 
@@ -752,6 +800,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                     tth = mousePoint.x()
                     self.integral_widget.vLine.setPos(tth)
                     self.tabbed_area.spottiness_widget.vLine.setPos(tth)
+                    self.tabbed_area.stats_widget.vLine.setPos(tth)
                     # Q = 4*np.pi*np.sin(tth/2 * np.pi/180) / self.wavelength
                     # d = self.wavelength / (2 * np.sin(tth/2 * np.pi/180))
                     Q = tth_to_q(tth, self.settings.wavelength)
@@ -759,7 +808,11 @@ class KeyPressWindow(QtWidgets.QWidget):
                     Q = mousePoint.x()
                     self.integral_widget.vLine.setPos(Q)
                     self.tabbed_area.spottiness_widget.vLine.setPos(Q)
+                    self.tabbed_area.stats_widget.vLine.setPos(Q)
                     tth = q_to_tth(Q, self.settings.wavelength)
+                # axes for both are swapped at the same time, so it can still use mousePoint.x()
+                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+                self.contourview.tth_line.setPos(mousePoint.x())
                 d = tth_to_d(tth, self.settings.wavelength)
                 self.integral_cursor_label.setText(
                     "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
@@ -771,9 +824,9 @@ class KeyPressWindow(QtWidgets.QWidget):
                     self.imageview.update_tth_circle(
                         q_to_tth(mousePoint.x(), self.settings.wavelength)
                     )
-            if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-                # axes for both are swapped at the same time, so it can still use mousePoint.x()
-                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+            # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+            #     # axes for both are swapped at the same time, so it can still use mousePoint.x()
+            #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
             # if self.tabbed_area.stats_line_checkbox.isChecked():
             #    self.tabbed_area.stats_widget.stats_line.setPos(mousePoint.x())
             # self.tooltip.showText(mousePoint,"test")
@@ -810,6 +863,8 @@ class KeyPressWindow(QtWidgets.QWidget):
                 if self.vLineCheckbox.isChecked():
                     self.integral_widget.vLine.setPos(mousePoint.x())
                     self.tabbed_area.spottiness_widget.vLine.setPos(mousePoint.x())
+                    self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+                    self.contourview.tth_line.setPos(mousePoint.x())
                     if self.x_axis_choice.currentIndex() == 0:
                         tth = mousePoint.x()
                         Q = tth_to_q(tth, self.settings.wavelength)
@@ -828,8 +883,53 @@ class KeyPressWindow(QtWidgets.QWidget):
                         self.imageview.update_tth_circle(
                             q_to_tth(mousePoint.x(), self.settings.wavelength)
                         )
-                if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+                # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+                #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+    
+    def mouseMovedLeftContour(self, evt):
+        if (
+            self.vLineCheckbox.isChecked()
+            or self.circleCheckbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+        ):
+            pos = evt
+            if self.contourview.view.sceneBoundingRect().contains(pos):
+                mousePoint = self.contourview.view.vb.mapSceneToView(pos)
+                integral_point = mousePoint
+                # integral_point.setY(self.integral_widget.integral_view.getAxis("left").range[1]*.85) #near top
+                # integral_point.setY(0)
+                # axis = self.integral_widget.integral_view.getAxis("left")
+                # integral_point.setY(axis.range[0] + (axis.range[1]-axis.range[0])*.05)
+                integral_point.setY(
+                    self.integral_widget.integral_view.getAxis("left").range[0]
+                )
+                self.integral_cursor_label.setPos(integral_point)
+                if self.vLineCheckbox.isChecked():
+                    self.integral_widget.vLine.setPos(mousePoint.x())
+                    self.tabbed_area.spottiness_widget.vLine.setPos(mousePoint.x())
                     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+                    self.tabbed_area.stats_widget.vLine.setPos(mousePoint.x())
+                    self.contourview.tth_line.setPos(mousePoint.x())
+                    if self.x_axis_choice.currentIndex() == 0:
+                        tth = mousePoint.x()
+                        Q = tth_to_q(tth, self.settings.wavelength)
+                        d = tth_to_d(tth, self.settings.wavelength)
+                    elif self.x_axis_choice.currentIndex() == 1:
+                        Q = mousePoint.x()
+                        tth = q_to_tth(Q, self.settings.wavelength)
+                        d = tth_to_d(tth, self.settings.wavelength)
+                    self.integral_cursor_label.setText(
+                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                    )
+                if self.circleCheckbox.isChecked():
+                    if self.x_axis_choice.currentIndex() == 0:
+                        self.imageview.update_tth_circle(mousePoint.x())
+                    elif self.x_axis_choice.currentIndex() == 1:
+                        self.imageview.update_tth_circle(
+                            q_to_tth(mousePoint.x(), self.settings.wavelength)
+                        )
+                # if self.contourview.tth_line_checkbox.isChecked():
+                #     self.contourview.tth_line.setPos(mousePoint.x())
     
     def mouseMovedSpottiness(self, evt):
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
@@ -860,6 +960,9 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.integral_cursor_label.setText(
                     "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
                 )
+                # axes for both are swapped at the same time, so it can still use mousePoint.x()
+                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+                self.contourview.tth_line.setPos(mousePoint.x())
             if self.circleCheckbox.isChecked():
                 if self.x_axis_choice.currentIndex() == 0:
                     self.imageview.update_tth_circle(mousePoint.x())
@@ -867,21 +970,42 @@ class KeyPressWindow(QtWidgets.QWidget):
                     self.imageview.update_tth_circle(
                         q_to_tth(mousePoint.x(), self.settings.wavelength)
                     )
-            if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-                # axes for both are swapped at the same time, so it can still use mousePoint.x()
-                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+            # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+            #     # axes for both are swapped at the same time, so it can still use mousePoint.x()
+            #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
 
-    # def mouseMovedStats(self,evt):
-    #    if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
-    #        pos = evt
-    #        if self.tabbed_area.stats_widget.stats_view.sceneBoundingRect().contains(pos):
-    #            mousePoint = self.tabbed_area.stats_widget.stats_view.vb.mapSceneToView(pos)
-    #            if self.vLineCheckbox.isChecked():
-    #                self.integral_widget.vLine.setPos(mousePoint.x())
-    #            if self.circleCheckbox.isChecked():
-    #                self.imageview.update_tth_circle(mousePoint.x())
-    #            if self.tabbed_area.stats_line_checkbox.isChecked():
-    #                self.tabbed_area.stats_widget.stats_line.setPos(mousePoint.x())
+    def mouseMovedStats(self,evt):
+        if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
+            pos = evt
+            if self.tabbed_area.stats_widget.stats_view.sceneBoundingRect().contains(pos):
+                mousePoint = self.tabbed_area.stats_widget.stats_view.vb.mapSceneToView(pos)
+                integral_point = mousePoint
+                integral_point.setY(
+                    self.integral_widget.integral_view.getAxis("left").range[0]
+                )
+                if self.x_axis_choice.currentIndex() == 0:
+                    tth = mousePoint.x()
+                    Q = tth_to_q(tth, self.settings.wavelength)
+                elif self.x_axis_choice.currentIndex() == 1:
+                    Q = mousePoint.x()
+                    tth = q_to_tth(Q, self.settings.wavelength)
+                d = tth_to_d(tth, self.settings.wavelength)
+                if self.vLineCheckbox.isChecked():
+                    if self.x_axis_choice.currentIndex() == 0:
+                        self.integral_cursor_label.setPos(integral_point)
+                        self.integral_widget.vLine.setPos(tth)
+                        self.tabbed_area.stats_widget.vLine.setPos(tth)
+                        self.contourview.tth_line.setPos(tth)
+                    elif self.x_axis_choice.currentIndex() == 1:
+                        self.integral_cursor_label.setPos(integral_point)
+                        self.integral_widget.vLine.setPos(Q)
+                        self.tabbed_area.stats_widget.vLine.setPos(Q)
+                        self.contourview.tth_line.setPos(Q)
+                    self.integral_cursor_label.setText(
+                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                    )
+                if self.circleCheckbox.isChecked():
+                    self.imageview.update_tth_circle(tth)
 
     def mouseClickedContourChangeImage(self, evt):
         # global tiflist, keylist, curr_key, curr_pos
@@ -924,6 +1048,35 @@ class KeyPressWindow(QtWidgets.QWidget):
                     self.pause()
                 self.settings.curr_pos = pos
                 self.tabbed_area.contour_widget.horiz_line.setValue(pos)
+                self.contourview.horiz_line.setValue(pos)
+                self.updateImages()
+    
+    def mouseClickedLeftContourChangeImage(self, evt):
+        if evt.button() == pg.QtCore.Qt.MouseButton.LeftButton:
+            pos = int(
+                self.contourview.view.vb.mapSceneToView(
+                    evt.scenePos()
+                ).y()
+            )
+            if (
+                (pos >= 0)
+                and (
+                    pos >= self.contourview.view.getAxis("left").range[0]
+                )
+                and (
+                    pos
+                    < len(
+                        self.settings.tiflist[
+                            self.settings.keylist[self.settings.curr_key]
+                        ]
+                    )
+                )
+            ):
+                if self.timer.isActive():
+                    self.pause()
+                self.settings.curr_pos = pos
+                self.tabbed_area.contour_widget.horiz_line.setValue(pos)
+                self.contourview.horiz_line.setValue(pos)
                 self.updateImages()
 
     def vLineCheckbox_changed(self, evt):
@@ -953,10 +1106,14 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.tabbed_area.spottiness_widget.view.setXLink(
                 self.integral_widget.integral_view.getViewBox()
             )
+            self.tabbed_area.stats_widget.stats_view.setXLink(
+                self.integral_widget.integral_view.getViewBox()
+            )
         else:
             # self.tabbed_area.contour_widget.view.getViewBox().linkView(pg.ViewBox.XAxis,None)
             self.tabbed_area.contour_widget.view.setXLink(None)
             self.tabbed_area.spottiness_widget.view.setXLink(None)
+            self.tabbed_area.stats_widget.stats_view.setXLink(None)
 
     def x_axis_changed(self, evt):
         # Update integrals, contour graph
@@ -966,7 +1123,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         # self.tabbed_area.contour_widget.change_x_axis_type(evt,self.settings.wavelength)
         self.integral_widget.change_x_axis_type(evt)
         self.tabbed_area.contour_widget.change_x_axis_type(evt)
+        self.contourview.change_x_axis_type(evt)
         self.tabbed_area.spottiness_widget.change_x_axis_type(evt)
+        self.tabbed_area.stats_widget.change_x_axis_type(evt)
 
     def live_view_image_checkbox_changed(self, evt):
         if self.live_view_image_checkbox.isChecked():
@@ -1775,8 +1934,16 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.spots_stats_hist = None
         self.spots_histogram_area = None
         self.spots_histogram_Q = None
+        self.spots_count_data = None
+        self.spots_area_data = None
+        self.spots_intensitymax_data = None
+        self.spots_intensitymean_data = None
+        self.spots_intensitysum_data = None
+        self.scatter_q_bins = None
+        self.scatter_tth_bins = None
         self.x_bins = None
         self.y_bins = None
+        self.x_axis_type = "tth"
 
         self.spots_histogram_area_curve = pg.PlotCurveItem(
             fillLevel=0, brush=(0, 0, 255, 80)
@@ -1785,14 +1952,23 @@ class StatsView(pg.GraphicsLayoutWidget):
             fillLevel=0, brush=(0, 255, 0, 80)
         )
         self.spots_histogram_area_Q = pg.ImageItem()
+        self.spots_scatter_area = pg.ScatterPlotItem()
+        self.spots_scatter_intensitymax = pg.ScatterPlotItem()
+        self.spots_scatter_intensitymean = pg.ScatterPlotItem()
+        self.spots_scatter_intensitysum = pg.ScatterPlotItem()
         self.spots_area_contour = pg.ImageItem()
         self.spots_Q_contour = pg.ImageItem()
+        self.spots_count = self.stats_view.plot()
+        self.spots_count.setPen("g")
 
         self.stats_view.addItem(self.spots_histogram_area_curve)
         # self.stats_view.addItem(self.spots_histogram_Q_curve)
         self.legend = self.stats_view.addLegend(offset=(-1, 1))
         self.legend.addItem(self.spots_histogram_area_curve, "Spot Area")
         # self.legend.addItem(self.spots_histogram_Q_curve,"Q Position of Spots")
+
+        self.vLine = pg.InfiniteLine(angle=90, movable=False)
+        self.stats_view.addItem(self.vLine, ignoreBounds=True)
 
         # UI
         self.histogram_type_select = QtWidgets.QComboBox()
@@ -1802,6 +1978,7 @@ class StatsView(pg.GraphicsLayoutWidget):
             "Area vs Q": self.spots_histogram_area_Q,
             "Spot Area vs Time": self.spots_area_contour,
             "Spot Q Position vs Time": self.spots_Q_contour,
+            "Area vs Q Scatter": self.spots_scatter_area,
         }
         self.histogram_types = list(self.histogram_type_dict.keys())
         # print(self.histogram_types)
@@ -1820,8 +1997,71 @@ class StatsView(pg.GraphicsLayoutWidget):
                 self.histogram_type_dict[self.histogram_types[evt]],
                 self.histogram_types[evt],
             )
+            self.stats_view.addItem(self.vLine, ignoreBounds = True)
+        if evt == 5:
+            self.legend.addItem(self.spots_scatter_intensitymax, "Max Intensity")
+            self.legend.addItem(self.spots_scatter_intensitymean, "Mean Intensity")
+            self.legend.addItem(self.spots_scatter_intensitysum, "Summed Intensity")
+            self.legend.addItem(self.spots_count, "Spot Count")
+            self.stats_view.addItem(self.spots_scatter_intensitymax)
+            self.stats_view.addItem(self.spots_scatter_intensitymean)
+            self.stats_view.addItem(self.spots_scatter_intensitysum)
+            self.stats_view.addItem(self.spots_count)
+
+    def change_x_axis_type(self, evt):
+        # tth = 0, Q = 1
+        # define a struct for reading that
+        if evt == 0:
+            self.x_axis_type = "tth"
+            self.update_tth()
+        elif evt == 1:
+            self.x_axis_type = "Q"
+            self.update_q()
 
     def update_stats_data(self):
+        stats_infile = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_stats_df.csv"
+        )
+        stats_df = pd.read_csv(stats_infile)
+        # spot_stat_label, area, medianQ, Qbin, on_arc
+        stats_df.drop(index = 0, inplace = True)
+        self.spots_histogram_Q = stats_df["Qbin"].value_counts().sort_index()
+        self.spots_stats_hist, self.area_bins, self.Q_bins = np.histogram2d(stats_df["area"].values, stats_df["medianQ"].values, bins=[50,self.q_bins])
+        self.spots_histogram_area = np.sum(self.spots_stats_hist, axis=1)
+        # self.spots_histogram_Q = np.sum(self.spots_stats_hist, axis=0)
+        self.spots_histogram_area_curve.setData(
+            self.area_bins, self.spots_histogram_area, stepMode="center"
+        )
+        # self.spots_histogram_Q_curve.setData(
+        #     self.Q_bins, self.spots_histogram_Q, stepMode="center"
+        # )
+        # print(self.q_bins[self.spots_histogram_Q.index])
+        # print(self.spots_histogram_Q.values)
+        self.spots_count_data = self.spots_histogram_Q.values
+        self.spots_area_data = stats_df["area"].values
+        self.spots_intensitymax_data = stats_df["intensity_max"].values
+        self.spots_intensitymean_data = stats_df["intensity_mean"].values
+        self.spots_intensitysum_data = stats_df["intensity_sum"].values
+        self.scatter_q_bins = stats_df["medianQ"].values
+        self.scatter_tth_bins = q_to_tth(self.scatter_q_bins, self.settings.wavelength)
+        if self.x_axis_type == "tth":
+            self.spots_count.setData(self.tth_bins[self.spots_histogram_Q.index], self.spots_count_data)
+            self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
+            self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
+            self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
+            self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
+        elif self.x_axis_type == "Q":
+            self.spots_count.setData(self.q_bins[self.spots_histogram_Q.index], self.spots_count_data)
+            self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
+            self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
+            self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
+            self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
+        self.spots_histogram_area_Q.setImage(self.spots_stats_hist)
+        
+
+    def update_stats_data_old(self):
         stats_infile = os.path.join(
             self.settings.output_directory,
             "stats",
@@ -1847,7 +2087,8 @@ class StatsView(pg.GraphicsLayoutWidget):
                 self.settings.output_directory,
                 "stats",
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
-                ) + "*_spots_hist.npy",
+                # ) + "*_spots_hist.npy",
+                ) + "*_spots_stats_df.csv",
             key = lambda x: (len(x), x)
         )
         print(stats_infiles)
@@ -1866,8 +2107,51 @@ class StatsView(pg.GraphicsLayoutWidget):
     #     self.arcs_histogram_curve.setData(x,y,stepMode="center")
 
     def update_dir(self):
+        qbins_filename = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key][:-1] + "_qbinedges.npy"
+        )
+        qbins_alt1 = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key][:-1] + "-00000_qbinedges.npy"
+        )
+        qbins_alt2 = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key][:-6] + "_qbinedges.npy"
+        )
+        # print(qbins_filename)
+        if os.path.exists(qbins_filename):
+            with open(qbins_filename, 'rb') as infile:
+                self.q_bins = np.load(infile)
+        elif os.path.exists(qbins_alt1):
+            with open(qbins_alt1, 'rb') as infile:
+                self.q_bins = np.load(infile)
+        elif os.path.exists(qbins_alt2):
+            with open(qbins_alt2, 'rb') as infile:
+                self.q_bins = np.load(infile)
+        else:
+            print("Missing q bins file.")
+        # print(self.q_bins)
+        self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
         self.update_stats_data()
         return
+    
+    def update_tth(self):
+        self.spots_count.setData(self.tth_bins[self.spots_histogram_Q.index], self.spots_count_data)
+        self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
+        self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
+        self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
+        self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
+
+    def update_q(self):
+        self.spots_count.setData(self.q_bins[self.spots_histogram_Q.index], self.spots_count_data)
+        self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
+        self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
+        self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
+        self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
 
 
 class CSimView(pg.GraphicsLayoutWidget):
@@ -1983,6 +2267,8 @@ class ContourView(pg.GraphicsLayoutWidget):
             "Base": "_base.xye",
             # "Outlier Masked":"_om.xye",
             "Outlier Mask": "_closed.xye",
+            "Spot Mask": "_closedspotsmasked.xye",
+            "Texture Mask": "closedarcsmasked.xye",
         }
         self.integral_types = list(self.integral_type_dict.keys())
         self.integral_select.addItems(self.integral_types)
@@ -2316,9 +2602,16 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         # self.max = 100
         # self.spacing = 1
         self.methods = {
-            "Percentage": 0,
+            # "Percentage": 0,
             # "Unique Spots": 1,
-            "Spot Maxima": 1,
+            # "Spot Maxima": 1,
+            # "DF Q": 2,
+            "Grad median": 0,
+            "Grad MAD": 1,
+            "Grad mean": 2,
+            "Grad STD": 3,
+            "Grad MAD-STD": 4,
+            "Grad STD/MAD": 5,
         }
         self.line = {}
         self.line_data = {}
@@ -2330,14 +2623,51 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.line[k] = self.view.plot()
             self.line_data[k] = []
             self.legend.addItem(self.line[k], k)
-        self.line["Percentage"].setPen("r")
+        # self.line["Percentage"].setPen("r")
         # self.line["Unique Spots"].setPen("g")
-        self.line["Spot Maxima"].setPen("b")
+        # self.line["Spot Maxima"].setPen("b")
+        # self.line["DF Q"].setPen("g")
+        self.line["Grad median"].setPen("hotpink")
+        self.line["Grad MAD"].setPen("cyan")
+        self.line["Grad mean"].setPen("r")
+        self.line["Grad STD"].setPen("g")
+        self.line["Grad MAD-STD"].setPen("b")
+        self.line["Grad STD/MAD"].setPen("b")
 
         self.vLine = pg.InfiniteLine(angle=90, movable=False)
         self.view.addItem(self.vLine, ignoreBounds=True)
     
     def update_dir(self):
+        qbins_filename = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key][:-1] + "_qbinedges.npy"
+        )
+        qbins_alt1 = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key][:-1] + "-00000_qbinedges.npy"
+        )
+        qbins_alt2 = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key][:-6] + "_qbinedges.npy"
+        )
+        # print(qbins_filename)
+        if os.path.exists(qbins_filename):
+            with open(qbins_filename, 'rb') as infile:
+                self.q_bins = np.load(infile)
+        elif os.path.exists(qbins_alt1):
+            with open(qbins_alt1, 'rb') as infile:
+                self.q_bins = np.load(infile)
+        elif os.path.exists(qbins_alt2):
+            with open(qbins_alt2, 'rb') as infile:
+                self.q_bins = np.load(infile)
+        else:
+            print("Missing q bins file.")
+        # print(self.q_bins)
+        self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
+        # print(self.q_bins)
         self.update_data()
     
     def update_data(self):
@@ -2352,14 +2682,37 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             _ = np.load(infile)
             self.line_data["Spot Maxima"] = np.load(infile)
             self.bins = np.load(infile)
+        filename_df = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spots_stats_df.csv"
+        )
+        filename_grad = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spots_stats_grad.csv"
+        )
+        df_stats = pd.read_csv(filename_df)
+        df_counts = df_stats["Qbin"].value_counts().sort_index()
+        # self.line_data["DF Q"] = df_counts
+        grad_stats = pd.read_csv(filename_grad)
+        grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] < 0].index, inplace=True)
+        grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] >= len(self.q_bins)].index, inplace=True)
+        self.line_data["Grad median"] = grad_stats["median"]
+        self.line_data["Grad MAD"] = grad_stats["mad"]
+        self.line_data["Grad mean"] = grad_stats["mean"]
+        self.line_data["Grad STD"] = grad_stats["std"]
+        self.line_data["Grad MAD-STD"] = grad_stats["mad"] - grad_stats["std"]
+        self.line_data["Grad STD/MAD"] = grad_stats["std"] / grad_stats["mad"]
+        
         # print(f"bins len: {len(self.bins)}")
         # print(f"{np.min(self.bins)}, {np.max(self.bins)}")
-        dQ = (np.max(self.bins) - np.min(self.bins))/len(self.bins)
+        # dQ = (np.max(self.bins) - np.min(self.bins))/len(self.bins)
         # print(f"{dQ = }")
-        start = np.min(self.bins)/dQ
+        # start = np.min(self.bins)/dQ
         # print(f"{start = }")
-        self.q_bins = np.arange(0, 1010*dQ, dQ)
-        self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
+        # self.q_bins = np.arange(0, 1010*dQ, dQ)
+        # self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
         # for k, v in self.methods.items():
         #     print(f"{k} len: {len(self.line_data[k])}")
         # for k, v in self.methods.items():
@@ -2373,12 +2726,26 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.update_tth()
 
     def update_tth(self):
-        self.line["Percentage"].setData(self.tth_bins[1:], self.line_data["Percentage"][1:])
-        self.line["Spot Maxima"].setData(self.tth_bins[1:], self.line_data["Spot Maxima"][1:])
+        # self.line["Percentage"].setData(self.tth_bins[1:], self.line_data["Percentage"][1:])
+        # self.line["Spot Maxima"].setData(self.tth_bins[1:], self.line_data["Spot Maxima"][1:])
+        # self.line["DF Q"].setData(self.tth_bins[self.line_data["DF Q"].index], self.line_data["DF Q"].values)
+        self.line["Grad median"].setData(self.tth_bins, self.line_data["Grad median"].values)
+        self.line["Grad MAD"].setData(self.tth_bins, self.line_data["Grad MAD"].values)
+        self.line["Grad mean"].setData(self.tth_bins, self.line_data["Grad mean"].values)
+        self.line["Grad STD"].setData(self.tth_bins, self.line_data["Grad STD"].values)
+        self.line["Grad MAD-STD"].setData(self.tth_bins, self.line_data["Grad MAD-STD"].values)
+        self.line["Grad STD/MAD"].setData(self.tth_bins, self.line_data["Grad STD/MAD"].values)
 
     def update_q(self):
-        self.line["Percentage"].setData(self.q_bins[1:], self.line_data["Percentage"][1:])
-        self.line["Spot Maxima"].setData(self.q_bins[1:], self.line_data["Spot Maxima"][1:])
+        # self.line["Percentage"].setData(self.q_bins[1:], self.line_data["Percentage"][1:])
+        # self.line["Spot Maxima"].setData(self.q_bins[1:], self.line_data["Spot Maxima"][1:])
+        # self.line["DF Q"].setData(self.q_bins[self.line_data["DF Q"].index], self.line_data["DF Q"].values)
+        self.line["Grad median"].setData(self.q_bins, self.line_data["Grad median"].values)
+        self.line["Grad MAD"].setData(self.q_bins, self.line_data["Grad MAD"].values)
+        self.line["Grad mean"].setData(self.q_bins, self.line_data["Grad mean"].values)
+        self.line["Grad STD"].setData(self.q_bins, self.line_data["Grad STD"].values)
+        self.line["Grad MAD-STD"].setData(self.q_bins, self.line_data["Grad MAD-STD"].values)
+        self.line["Grad STD/MAD"].setData(self.q_bins, self.line_data["Grad STD/MAD"].values)
 
     def change_x_axis_type(self, axis_type):
         if axis_type == 0:
@@ -2399,17 +2766,17 @@ class TabbedArea(QtWidgets.QTabWidget):
 
         self.stats_page = QtWidgets.QWidget()
         self.contour_page = QtWidgets.QWidget()
-        # self.csim_page = QtWidgets.QWidget()
+        self.csim_page = QtWidgets.QWidget()
         self.spottiness_page = QtWidgets.QWidget()
 
         self.stats_widget = StatsView(self.stats_page, self.settings)
         self.contour_widget = ContourView(self.contour_page, self.settings)
-        # self.csim_widget = CSimView(self.csim_page, self.settings)
+        self.csim_widget = CSimView(self.csim_page, self.settings)
         self.spottiness_widget = SpottinessView(self.spottiness_page, self.settings)
 
         self.stats_layout = QtWidgets.QGridLayout()
         self.contour_layout = QtWidgets.QGridLayout()
-        # self.csim_layout = QtWidgets.QGridLayout()
+        self.csim_layout = QtWidgets.QGridLayout()
         self.spottiness_layout = QtWidgets.QGridLayout()
 
         # self.skew_checkbox = QtWidgets.QCheckBox("Skew")
@@ -2468,21 +2835,21 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.contour_layout.addWidget(self.contour_widget.integral_step, 7, 5)
         self.contour_page.setLayout(self.contour_layout)
 
-        # self.csim_layout.addWidget(self.csim_widget)
-        # self.csim_page.setLayout(self.csim_layout)
+        self.csim_layout.addWidget(self.csim_widget)
+        self.csim_page.setLayout(self.csim_layout)
 
         self.spottiness_layout.addWidget(self.spottiness_widget)
         self.spottiness_page.setLayout(self.spottiness_layout)
 
         self.addTab(self.contour_page, "Contour")
         self.addTab(self.stats_page, "Stats")
-        # self.addTab(self.csim_page, "Similarity")
         self.addTab(self.spottiness_page, "Spottiness")
+        self.addTab(self.csim_page, "Similarity")
 
     def update_dir(self):
         self.contour_widget.update_dir()
         self.stats_widget.update_dir()
-        # self.csim_widget.update_dir()
+        self.csim_widget.update_dir()
         self.spottiness_widget.update_dir()
 
     """

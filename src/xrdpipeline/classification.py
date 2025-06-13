@@ -1,9 +1,11 @@
 import numpy as np
+import scipy
 import skimage as ski
 import pandas as pd
 import time
+from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
 
-from spottiness import spottiness, h_maxima_calc
+from spottiness import spottiness, h_maxima_calc, spottiness_azim_grad, spottiness_df_stats
 
 
 def remove_overlaps(labeled_cuts, predef_mask):
@@ -33,7 +35,7 @@ def modulo_range(array, center, range):
 
 
 def radial_and_azim_gradient(
-    image, r_hat, phi_hat, kernel_x, kernel_y, azim_only=False
+    image, r_hat, phi_hat, kernel_x, kernel_y, r=True, azim=True
 ):
     # footprint = footprint.astype(np.uint)
 
@@ -44,12 +46,12 @@ def radial_and_azim_gradient(
     # print("Convolutions done")
 
     grad = np.stack([grad_y, grad_x], axis=0)
-    azim_grad = np.einsum("ijk,ijk -> jk", grad, phi_hat)
-    if azim_only:
-        return azim_grad
-    else:
-        radial_grad = np.einsum("ijk,ijk -> jk", grad, r_hat)
-        return radial_grad, azim_grad
+    to_return = []
+    if r:
+        to_return.append(np.einsum("ijk,ijk -> jk", grad, r_hat))
+    if azim:
+        to_return.append(np.einsum("ijk,ijk -> jk", grad, phi_hat))
+    return to_return
 
 
 def split_grad_with_Q(
@@ -86,20 +88,21 @@ def split_grad_with_Q(
                 gradient_dict["kernel_x"],
                 gradient_dict["kernel_y"],
             )
-            azim_grad_2 = radial_and_azim_gradient(
+            azim_grad_2, = radial_and_azim_gradient(
                 azim_grad,
                 gradient_dict["r_hat"],
                 gradient_dict["phi_hat"],
                 gradient_dict["kernel_x"],
                 gradient_dict["kernel_y"],
-                azim_only=True,
+                r=False,
             )
-            radial_grad_2, _ = radial_and_azim_gradient(
+            radial_grad_2, = radial_and_azim_gradient(
                 radial_grad,
                 gradient_dict["r_hat"],
                 gradient_dict["phi_hat"],
                 gradient_dict["kernel_x"],
                 gradient_dict["kernel_y"],
+                azim=False,
             )
     else:
         radial_grad, azim_grad = radial_and_azim_gradient(
@@ -109,20 +112,21 @@ def split_grad_with_Q(
             gradient_dict["kernel_x"],
             gradient_dict["kernel_y"],
         )
-        azim_grad_2 = radial_and_azim_gradient(
+        azim_grad_2, = radial_and_azim_gradient(
             azim_grad,
             gradient_dict["r_hat"],
             gradient_dict["phi_hat"],
             gradient_dict["kernel_x"],
             gradient_dict["kernel_y"],
-            azim_only=True,
+            r=False,
         )
-        radial_grad_2, _ = radial_and_azim_gradient(
+        radial_grad_2, = radial_and_azim_gradient(
             radial_grad,
             gradient_dict["r_hat"],
             gradient_dict["phi_hat"],
             gradient_dict["kernel_x"],
             gradient_dict["kernel_y"],
+            azim=False
         )
     time1 = time.time()
     print(f"Grad calc time: {time1-time0}")
@@ -263,7 +267,7 @@ def split_grad_with_Q(
         time_3 = time.time()
         print(f"Centroid off mask: {time_3-time_2}")
 
-        gradient_props_table.to_csv("gradient_props_table.csv")
+        # gradient_props_table.to_csv("gradient_props_table.csv")
         # cut azim section of labeled_mask from centroid-azim_width to centroid+azim_width
         gradient_props_table["cuts"] = [
             np.logical_and(
@@ -355,6 +359,241 @@ def split_grad_with_Q(
         to_return.append(num_spot_maxima)
 
     return to_return
+
+
+def qwidth_area_classification_groupby(
+    om,
+    image,
+    Qmap,
+    azmap,
+    min_arc_area=100,
+    Q_max=0.1, # 0.08
+    azim_min=3.5,
+    compare_shape=True,
+    area_Q_shape_min=150000,
+    azim_Q_shape_min=100,
+    return_time=False,
+):
+    flipped_azmap = np.fliplr(azmap)
+    labeled_mask, num_features = scipy.ndimage.label(om)
+    raveled_labels = labeled_mask.ravel()
+    raveled_mask = om.ravel()
+    raveled_image = image.ravel()
+    raveled_Qmap = Qmap.ravel()
+    raveled_azmap = azmap.ravel()
+    raveled_flipped_azmap = flipped_azmap.ravel()
+    df = pd.DataFrame({
+        'label': raveled_labels[raveled_mask],
+        'intensity': raveled_image[raveled_mask],
+        'Qvalue': raveled_Qmap[raveled_mask],
+        'azimvalue': raveled_azmap[raveled_mask],
+        'flipped_azimvalue': raveled_flipped_azmap[raveled_mask],
+    })
+    areas = df['label'].value_counts()
+    valid_labels = areas[areas > min_arc_area].index
+    max_azim_a = df[df['label'].isin(valid_labels)].groupby('label')['azimvalue'].max()
+    min_azim_a = df[df['label'].isin(valid_labels)].groupby('label')['azimvalue'].min()
+    diff_azim_a = max_azim_a - min_azim_a
+    # print(diff_azim_a)
+    max_azim_b = df[df['label'].isin(valid_labels)].groupby('label')['flipped_azimvalue'].max()
+    min_azim_b = df[df['label'].isin(valid_labels)].groupby('label')['flipped_azimvalue'].min()
+    diff_azim_b = max_azim_b - min_azim_b
+    # print(diff_azim_b)
+    # diff_azim = pd.concat([diff_azim_a, diff_azim_b], axis=1).min(axis=1)
+    diff_azim = pd.concat([diff_azim_a, diff_azim_b]).groupby(level=0).min()
+    # print(diff_azim)
+
+    max90Q = df[df['label'].isin(valid_labels)].groupby('label')['Qvalue'].agg(lambda x: np.percentile(x, 90))
+    min10Q = df[df['label'].isin(valid_labels)].groupby('label')['Qvalue'].agg(lambda x: np.percentile(x, 10))
+    # print(max90Q)
+    diff_Q = max90Q - min10Q
+
+    azim_vs_Q = diff_azim / diff_Q
+
+    maxQ_bool = diff_Q < Q_max
+    minazim_bool = diff_azim > azim_min
+    azim_Q_bool = azim_vs_Q > azim_Q_shape_min
+    arcs_bool = maxQ_bool & minazim_bool & azim_Q_bool
+    # print(arcs_bool)
+    # print(~arcs_bool)
+
+    df['classifier'] = np.zeros(len(raveled_labels[raveled_mask]))
+    # df['classifier'][df['label'].isin(arcs_bool[arcs_bool].index)] = 2
+    df.loc[df['label'].isin(arcs_bool[arcs_bool].index), 'classifier'] = 2
+    # df['classifier'][df['label'].isin(arcs_bool[~arcs_bool].index)] = 1
+    df.loc[df['label'].isin(arcs_bool[~arcs_bool].index), 'classifier'] = 1
+    # print(df['classifier'][df['label'] == 22714])
+
+    # raveled_copy = raveled_mask.astype(int)
+    # raveled_copy[raveled_mask] = df['classifier'].values
+    # spot_mask = raveled_copy == 1
+    # arc_mask = raveled_copy == 2
+    # spot_mask = spot_mask.reshape((2880,2880))
+    # arc_mask = arc_mask.reshape((2880,2880))
+    
+    # return spot_mask, arc_mask, df, valid_labels, raveled_mask
+    return df, valid_labels, raveled_mask
+
+
+def split_grad_with_Q_groupby(
+    image,
+    raveled_mask,
+    df,
+    valid_labels,
+    gradient_dict,
+    predef,
+    predef_extended,
+    threshold_percentile = 0.1,
+    report_times = True,
+):
+    if report_times: t0 = time.time()
+    from classification import radial_and_azim_gradient
+    from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
+    if report_times:
+        t1 = time.time()
+        print(f"Import time: {t1-t0}")
+
+    if report_times: t0 = time.time()
+    kernel = Gaussian2DKernel(x_stddev=1)
+    image[predef] = np.nan
+    interpolated_image = interpolate_replace_nans(image, kernel)
+    if report_times:
+        t1 = time.time()
+        print(f"Interpolation time: {t1-t0}")
+
+    if report_times: t0 = time.time()
+    radial_grad, azim_grad = radial_and_azim_gradient(
+        interpolated_image,
+        gradient_dict["r_hat"],
+        gradient_dict["phi_hat"],
+        gradient_dict["kernel_x"],
+        gradient_dict["kernel_y"],
+    )
+    azim_grad_2, = radial_and_azim_gradient(
+        azim_grad,
+        gradient_dict["r_hat"],
+        gradient_dict["phi_hat"],
+        gradient_dict["kernel_x"],
+        gradient_dict["kernel_y"],
+        r=False,
+    )
+    radial_grad_2, = radial_and_azim_gradient(
+        radial_grad,
+        gradient_dict["r_hat"],
+        gradient_dict["phi_hat"],
+        gradient_dict["kernel_x"],
+        gradient_dict["kernel_y"],
+        azim=False,
+    )
+    if report_times:
+        t1 = time.time()
+        print(f"Gradient calc time: {t1-t0}")
+
+    if report_times: t0 = time.time()
+    threshold = np.percentile(radial_grad_2, threshold_percentile)
+    on_arc_threshold = np.percentile(radial_grad_2, 10)
+    if report_times:
+        t1 = time.time()
+        print(f"Threshold calc time: {t1-t0}")
+
+    if report_times: t0 = time.time()
+    # now want full (not 90th percentile) max, min, as well as median
+    maxQ = df[df['label'].isin(valid_labels)].groupby('label')['Qvalue'].max()
+    minQ = df[df['label'].isin(valid_labels)].groupby('label')['Qvalue'].min()
+    medianQ = df[df['label'].isin(valid_labels)].groupby('label')['Qvalue'].median()
+    diffQ = maxQ - minQ
+    if report_times:
+        t1 = time.time()
+        print(f"Min/max/median/diff times: {t1-t0}")
+
+    # find the values of the second radial grad for pixels within 0.02 of the Q median
+    # find the 20th percentile of those values
+    # find clusters where that percentile is less than the cutoff
+    if report_times: t0 = time.time()
+    raveled_second_radial = radial_grad_2.ravel()
+    df["second_radial"] = raveled_second_radial[raveled_mask]
+    if report_times:
+        t1 = time.time()
+        print(f"Raveling and adding second radial: {t1-t0}")
+    if report_times: t0 = time.time()
+    df.loc[df['label'].isin(valid_labels),"medianQ"] = medianQ.loc[df.loc[df['label'].isin(valid_labels),'label']].values
+    if report_times:
+        t1 = time.time()
+        print(f"Assigning the median Q values to the table: {t1-t0}")
+
+    if report_times: t0 = time.time()
+    high_values = df[df["Qvalue"] > df["medianQ"] - 0.02].index
+    low_values = df[df["Qvalue"] < df["medianQ"] + 0.02].index
+    central_values = high_values.intersection(low_values)
+    df["central_values"] = False # else can't groupby
+    df.loc[central_values,"central_values"] = True
+    if report_times:
+        t1 = time.time()
+        print(f"Finding central values: {t1-t0}")
+
+    # on arc by radial grad consideration
+    radial_grad_percentile = df[df["central_values"]].groupby("label")["second_radial"].agg(lambda x: np.percentile(x, 20))
+    df["on_arc"] = -1
+    on_arc = radial_grad_percentile < on_arc_threshold
+    # need to extrapolate that info out to all valid_labels, not just central_values
+    df.loc[df["label"].isin(valid_labels),"on_arc"] = (on_arc.loc[df.loc[df["label"].isin(valid_labels),"label"]].values) * 1
+    
+    # azimuthal gradient sections
+    azim_gradient_mask = azim_grad_2 < threshold
+    # &and this with those labeled as on arc
+    azim_gradient_mask = azim_gradient_mask.ravel()
+    # df has the raveled_mask applied
+    azim_gradient_mask_shortened = azim_gradient_mask[raveled_mask]
+    azim_gradient_mask_shortened &= (df["on_arc"].values == 1)
+    azim_gradient_mask[raveled_mask] = azim_gradient_mask_shortened
+
+    # if there aren't any clusters, just skip this part entirely. Maximum will be False if nothing is there.
+    if np.max(azim_gradient_mask) > 0:
+        azim_gradient_mask = azim_gradient_mask.reshape((2880,2880)) # need to undo ravel before labeling
+        labeled_gradient_mask, _ = scipy.ndimage.label(azim_gradient_mask)
+        azim_gradient_mask = azim_gradient_mask.ravel()
+        labeled_gradient_mask = labeled_gradient_mask.ravel()
+        df["newlabel"] = labeled_gradient_mask[raveled_mask]
+        medianAzim = pd.DataFrame()
+        medianAzim["azim"] = df[df["newlabel"] != 0].groupby("newlabel")["azimvalue"].median()
+        # using median instead of mean -> will be the value occupied by a masked pixel
+        # if median close to 0/360, use flipped axis value
+        medianAzim["flipped"] = df[df["newlabel"] != 0].groupby("newlabel")["flipped_azimvalue"].median()
+        medianAzim["label"] = df[df["newlabel"] != 0].groupby("newlabel")["label"].median() # should be only value
+        medianAzim["Qwidth"] = diffQ.loc(axis=0)[medianAzim["label"]].values
+        # putting in a for loop because I am stuck
+        df["close_to_median_azim"] = False
+        df["close_to_median_azim_flipped"] = False
+        for i in medianAzim.index:
+            # print(i, medianAzim.loc[i,"label"])
+            df.loc[(df["label"]==medianAzim.loc[i,"label"]) 
+                   & (np.abs(df["azimvalue"] - medianAzim.loc[i,"azim"]) 
+                      < (5 * medianAzim.loc[i,"Qwidth"]))
+                    , "close_to_median_azim"] = True
+            df.loc[(df["label"]==medianAzim.loc[i,"label"]) 
+                   & (np.abs(df["flipped_azimvalue"] - medianAzim.loc[i,"flipped"]) 
+                      < (5 * medianAzim.loc[i,"Qwidth"]))
+                    , "close_to_median_azim_flipped"] = True
+        df["new_arc"] = (df["on_arc"] == 1) & (df["classifier"] == 2)
+        swap = ((df["close_to_median_azim"] & (df["azimvalue"] > 10) & (df["azimvalue"] < 350)) | df["close_to_median_azim_flipped"])
+        df.loc[swap, "new_arc"] = False
+        # df["new_spot"] = (~df["on_arc"] & df["classifier"] == 2) | (df["classifier"] == 1)
+        # df["new_spot"] = ~df["on_arc"] | (df["classifier"] == 1)
+        df["new_spot"] = (df["on_arc"] == 0) | (df["classifier"] == 1)
+        df.loc[swap, "new_spot"] = True
+    else:
+        df["new_arc"] = (df["on_arc"] == 1) & (df["classifier"] == 2)
+        # df["new_spot"] = ~df["on_arc"] | (df["classifier"] == 1)
+        df["new_spot"] = (df["on_arc"] == 0) | (df["classifier"] == 1)
+
+    raveled_new_spot = np.zeros_like(raveled_mask)
+    raveled_new_spot[raveled_mask] = df["new_spot"].values
+    raveled_new_arc = np.zeros_like(raveled_mask)
+    raveled_new_arc[raveled_mask] = df["new_arc"].values
+    spot_mask = raveled_new_spot.reshape((2880,2880))
+    arc_mask = raveled_new_arc.reshape((2880,2880))
+
+    return spot_mask, arc_mask, df, azim_grad_2
 
 
 def qwidth_area_classification_2(
@@ -586,9 +825,97 @@ def current_splitting_method(
     return_steps=False,
     interpolate=False,
     calc_spottiness=False,
+    azim_Q_shape_min=100,
+    predef_mask=None,
+    predef_mask_extended=None,
+    min_arc_area=100,
+    timing = None,
+    timing_names = None,
+):
+    if timing is not None:
+        time0 = time.time()
+    df, valid_labels, raveled_mask = qwidth_area_classification_groupby(
+        om,
+        image,
+        qmap,
+        azmap,
+        min_arc_area=min_arc_area,
+        Q_max=0.1,
+        azim_min=3.5,
+        compare_shape=True,
+        azim_Q_shape_min=azim_Q_shape_min,
+        return_time=False,
+    )
+    if timing is not None:
+        time1 = time.time()
+        # print(f"Time for qwidth area classification: {time1-time0}")
+        timing.append(time1 - time0)
+        timing_name = "Shape classification"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+        time0 = time.time()
+    spot_mask, arc_mask, df, azim_grad_2 = split_grad_with_Q_groupby(
+        image,
+        raveled_mask,
+        df,
+        valid_labels,
+        gradient_dict,
+        predef=predef_mask,
+        predef_extended=predef_mask_extended,
+        threshold_percentile=threshold_percentile,
+        report_times=False,
+    )
+    if timing is not None:
+        time1 = time.time()
+        # print(f"Time for grad splitting: {time2-time1}")
+        timing.append(time1 - time0)
+        timing_name = "Gradient classification"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+        time0 = time.time()
+    # expecting a table of spot stats for the last return value
+    # to_return = [spot_mask, arc_mask, df["classifier"]]
+    to_return = [spot_mask, arc_mask]
+
+    if calc_spottiness:
+        spot_table_df = spottiness_df_stats(df, raveled_mask, spot_mask, Qbins)
+        to_return.append(spot_table_df)
+        if timing is not None:
+            time1 = time.time()
+            # print(f"Time for grad splitting: {time2-time1}")
+            timing.append(time1 - time0)
+            timing_name = "Spottiness calculation: stats DF"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+        spot_table_grad = spottiness_azim_grad(azim_grad_2, Qbins)
+        to_return.append(spot_table_grad)
+        if timing is not None:
+            time1 = time.time()
+            # print(f"Time for grad splitting: {time2-time1}")
+            timing.append(time1 - time0)
+            timing_name = "Spottiness calculation: 2nd azim grad info"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+
+    return to_return
+
+
+def old_splitting_method(
+    image,
+    om,
+    qmap,
+    azmap,
+    gradient_dict,
+    Qbins,
+    threshold_percentile=0.1,
+    return_steps=False,
+    interpolate=False,
+    calc_spottiness=False,
     azim_Q_shape_min = 100,
     predef_mask=None,
     predef_mask_extended=None,
+    timing = None,
+    timing_names = None,
 ):
     # t0 = time.time()
     # base_spot, base_arc = qwidth_area_classification(om, qmap, min_arc_area=100, max_width=0.2, compare_shape=True, shape_max = 0.00001)
@@ -598,8 +925,13 @@ def current_splitting_method(
         om, qmap, azmap, min_arc_area=100, Q_max=0.08, azim_min=3.5, azim_Q_shape_min=azim_Q_shape_min, compare_shape=True
     )
     time1 = time.time()
-    print(f"Time for qwidth area classification: {time1-time0}")
-    print(f"{return_steps=}")
+    if timing is not None:
+        timing.append(time1-time0)
+        timing_name = "Shape classification"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+    # print(f"Time for qwidth area classification: {time1-time0}")
+    # print(f"{return_steps=}")
     # t1 = time.time()
     # print("Time to do initial q width / area classification: {0:.2f}s".format(t1-t0))
     # spot_mask, arc_mask = split_grad(image,om,base_arc,gradient_dict,threshold_percentile=threshold_percentile)
@@ -629,8 +961,14 @@ def current_splitting_method(
     else:
         spot_mask, arc_mask, spots_table = returned_values
     time2 = time.time()
-    print(f"Time for grad splitting: {time2-time1}")
-    to_return = [spot_mask, arc_mask, spots_table]
+    # print(f"Time for grad splitting: {time2-time1}")
+    if timing is not None:
+        timing.append(time2-time1)
+        timing_name = "Gradient classification"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+    # to_return = [spot_mask, arc_mask, spots_table]
+    to_return = [spot_mask, arc_mask]
     if return_steps:
         to_return.append(base_arc)
         to_return.append(qgrad_arc_mask)
