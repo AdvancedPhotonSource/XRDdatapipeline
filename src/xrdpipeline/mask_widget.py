@@ -724,7 +724,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
     def __init__(self):
         super().__init__()
         self.setMinimumSize(1000,600)
-        self.main_image = MainImage()
+        self.image_file_name = choose_file()
+        self.main_image = MainImage(self.image_file_name)
         # Read/Write buttons
         self.load_immask_button = QtWidgets.QPushButton(
             "Load immask"
@@ -856,6 +857,12 @@ class MainWindow(pg.GraphicsLayoutWidget):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","imctrl files (*.imctrl)")[0]
         self.cache = {}
         self.cache['size'] = self.main_image.image_data.shape
+        # with tf.TiffFile(self.image_file_name) as tif:
+        #     for page in tif.pages:
+        #         for tag in page.tags:
+        #             print(f"{tag.name}: {tag.value}")
+        _,data,_,_ = GetTifData(self.image_file_name)
+        self.cache = data
         getmaps(self.cache, imctrl_file_name,".", save=False) # use os path
         Arc.tthmap = self.cache['pixelTAmap']
         Arc.azmap = self.cache['pixelAzmap']
@@ -1415,13 +1422,15 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
 
 class MainImage(pg.GraphicsLayoutWidget):
-    def __init__(self):
+    def __init__(self, image_file):
         super().__init__()
         self.view = self.addPlot()
         self.view.setAspectLocked(True)
         self.cmap = pg.colormap.get("gist_earth", source="matplotlib", skipCache=True)
         # self.image_data = np.zeros((2880,2880))
-        self.image_data = tf.imread(choose_file())
+        self.image_file_name = image_file
+        self.image_data = tf.imread(self.image_file_name)
+        self.image_size = self.image_data.shape
         self.image = pg.ImageItem(self.image_data)
         self.predef_mask_data = np.zeros(
             (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
