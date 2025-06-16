@@ -254,8 +254,9 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
     cache["Image Controls"] = image_dict["Image Controls"]
     # TODO: Look at image size?
     # img.setControl('pixelSize',[150.0,150.0])
-    image_dict["Image Controls"]["pixelSize"] = [150.0, 150.0]
-    cache["Image Controls"]["pixelSize"] = [150.0, 150.0]
+    _, tifdata, _, _ = GetTifData(filename)
+    image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
+    cache["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
     # cache['Masks'] = img.getMasks()
     # self.cache['Masks'] = image_dict['Masks']
     # cache['intMaskMap'] = img.IntMaskMap() # calc mask & TA arrays to save for integrations

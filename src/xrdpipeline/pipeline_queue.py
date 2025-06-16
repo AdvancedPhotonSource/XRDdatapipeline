@@ -222,8 +222,9 @@ class CacheCreator(QtCore.QObject):
         self.cache["Image Controls"] = image_dict["Image Controls"]
         # TODO: Look at image size?
         # img.setControl('pixelSize',[150.0,150.0])
-        image_dict["Image Controls"]["pixelSize"] = [150.0, 150.0]
-        self.cache["Image Controls"]["pixelSize"] = [150.0, 150.0]
+        _, tifdata, _, _ = GetTifData(self.filename)
+        image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
+        self.cache["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
         # cache['Masks'] = img.getMasks()
         # self.cache['Masks'] = image_dict['Masks']
         # cache['intMaskMap'] = img.IntMaskMap() # calc mask & TA arrays to save for integrations
@@ -930,7 +931,7 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_splitting_default = True
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
         self.calc_spottiness_checkbox = QtWidgets.QCheckBox("Calculate Spottiness of Rings")
-        self.calc_spottiness_default = False
+        self.calc_spottiness_default = True
         self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
 
         self.defaults_button = QtWidgets.QPushButton("Restore Defaults")

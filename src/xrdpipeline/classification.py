@@ -549,7 +549,8 @@ def split_grad_with_Q_groupby(
 
     # if there aren't any clusters, just skip this part entirely. Maximum will be False if nothing is there.
     if np.max(azim_gradient_mask) > 0:
-        azim_gradient_mask = azim_gradient_mask.reshape((2880,2880)) # need to undo ravel before labeling
+        # azim_gradient_mask = azim_gradient_mask.reshape((2880,2880)) # need to undo ravel before labeling
+        azim_gradient_mask = azim_gradient_mask.reshape(image.shape) # need to undo ravel before labeling
         labeled_gradient_mask, _ = scipy.ndimage.label(azim_gradient_mask)
         azim_gradient_mask = azim_gradient_mask.ravel()
         labeled_gradient_mask = labeled_gradient_mask.ravel()
@@ -590,8 +591,10 @@ def split_grad_with_Q_groupby(
     raveled_new_spot[raveled_mask] = df["new_spot"].values
     raveled_new_arc = np.zeros_like(raveled_mask)
     raveled_new_arc[raveled_mask] = df["new_arc"].values
-    spot_mask = raveled_new_spot.reshape((2880,2880))
-    arc_mask = raveled_new_arc.reshape((2880,2880))
+    # spot_mask = raveled_new_spot.reshape((2880,2880))
+    # arc_mask = raveled_new_arc.reshape((2880,2880))
+    spot_mask = raveled_new_spot.reshape(image.shape)
+    arc_mask = raveled_new_arc.reshape(image.shape)
 
     return spot_mask, arc_mask, df, azim_grad_2
 
