@@ -1523,10 +1523,10 @@ class IntegralView(pg.GraphicsLayoutWidget):
         # self.masked_integral_data = np.loadtxt(integral_infile_piece+"_closed.xye",skiprows=3)
         # self.spotmasked_integral_data = np.loadtxt(integral_infile_piece+"_closedspotsmasked.xye",skiprows=3)
         # self.texturemasked_integral_data = np.loadtxt(integral_infile_piece+"_closedarcsmasked.xye",skiprows=3)
-        self.integral_data = np.empty((self.settings.outChannels, 3))
-        self.masked_integral_data = np.empty((self.settings.outChannels, 3))
-        self.spotmasked_integral_data = np.empty((self.settings.outChannels, 3))
-        self.texturemasked_integral_data = np.empty((self.settings.outChannels, 3))
+        self.integral_data = np.empty((self.settings.outChannels, 2))
+        self.masked_integral_data = np.empty((self.settings.outChannels, 2))
+        self.spotmasked_integral_data = np.empty((self.settings.outChannels, 2))
+        self.texturemasked_integral_data = np.empty((self.settings.outChannels, 2))
 
         # self.base_integral = self.integral_view.plot(self.integral_data[:,0],self.integral_data[:,1],pen="black")
         # self.masked_integral = self.integral_view.plot(self.masked_integral_data[:,0],self.masked_integral_data[:,1] + self.integral_offset.value(),pen="green")
@@ -1615,10 +1615,10 @@ class IntegralView(pg.GraphicsLayoutWidget):
 
     def update_dir(self):
         # print("Integrals: updating directory")
-        self.integral_data = np.empty((self.settings.outChannels, 3))
-        self.masked_integral_data = np.empty((self.settings.outChannels, 3))
-        self.spotmasked_integral_data = np.empty((self.settings.outChannels, 3))
-        self.texturemasked_integral_data = np.empty((self.settings.outChannels, 3))
+        self.integral_data = np.empty((self.settings.outChannels, 2))
+        self.masked_integral_data = np.empty((self.settings.outChannels, 2))
+        self.spotmasked_integral_data = np.empty((self.settings.outChannels, 2))
+        self.texturemasked_integral_data = np.empty((self.settings.outChannels, 2))
         self.base_integral.setPen(self.settings.colors["base_line"].color)
         self.masked_integral.setPen(self.settings.colors["outlier_line"].color)
         self.spotmasked_integral.setPen(self.settings.colors["spot_line"].color)
@@ -1636,10 +1636,10 @@ class IntegralView(pg.GraphicsLayoutWidget):
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
         )
         integrals_dict = {
-            "_base.xye": self.integral_data,
-            "_closed.xye": self.masked_integral_data,
-            "_closedspotsmasked.xye": self.spotmasked_integral_data,
-            "_closedarcsmasked.xye": self.texturemasked_integral_data,
+            "_base.chi": self.integral_data,
+            "_closed.chi": self.masked_integral_data,
+            "_closedspotsmasked.chi": self.spotmasked_integral_data,
+            "_closedarcsmasked.chi": self.texturemasked_integral_data,
             # "_closed.xye": self.closed_integral_data,
             # "_closedarcsmasked.xye": self.closedarcs_integral_data,
             # "_closedspotsmasked.xye": self.closedspots_integral_data,
@@ -1648,7 +1648,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
         for ext, vals in integrals_dict.items():
             # print("Integrals: loading data for {0}".format(ext))
             try:
-                new_vals = np.loadtxt(integral_infile_piece + ext, skiprows=3)
+                new_vals = np.loadtxt(integral_infile_piece + ext, skiprows=4)
             except:
                 print(
                     "Exception reading in integral data for {0}. Setting to 0.".format(
@@ -2221,7 +2221,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_min = 0
         self.manual_max = 100
         self.manual_spacing = 1
-        self.integral_extension = "_closed.xye"
+        self.integral_extension = "_closed.chi"
         self.integral_data = []
         self.automatically_set_spacing = True
         # Intended to be "Should this zoom out (change step size) when more images appear than the max, or should it start scrolling?" Not yet implemented.
@@ -2264,11 +2264,11 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.integral_select = QtWidgets.QComboBox()
         # self.integral_types = ["Base","Outlier Masked","Closed Mask"]
         self.integral_type_dict = {
-            "Base": "_base.xye",
+            "Base": "_base.chi",
             # "Outlier Masked":"_om.xye",
-            "Outlier Mask": "_closed.xye",
-            "Spot Mask": "_closedspotsmasked.xye",
-            "Texture Mask": "closedarcsmasked.xye",
+            "Outlier Mask": "_closed.chi",
+            "Spot Mask": "_closedspotsmasked.chi",
+            "Texture Mask": "closedarcsmasked.chi",
         }
         self.integral_types = list(self.integral_type_dict.keys())
         self.integral_select.addItems(self.integral_types)
@@ -2376,7 +2376,7 @@ class ContourView(pg.GraphicsLayoutWidget):
                 self.live_min : max : self.live_spacing
             ]
         for i in range(cur_len, len(file_subset)):
-            data = np.loadtxt(file_subset[i], skiprows=3)
+            data = np.loadtxt(file_subset[i], skiprows=4)
             if len(self.tthvals) == 0:
                 self.tthvals = data[:, 0]
                 if self.settings.wavelength != 0:

@@ -17,6 +17,7 @@ from GSASII_imports import *
 # recreating xye export function
 # TODO: use numpy or the like to write this faster
 def Export_xye(name, data, location, error=True):
+    location += ".xye"
     with open(location, "w") as outfile:
         outfile.write("/*\n")
         outfile.write("# {0}\n".format(name))
@@ -29,6 +30,17 @@ def Export_xye(name, data, location, error=True):
                 )
             else:
                 outfile.write("{x}\t{y}\t{e}\n".format(x=data[0][i], y=data[1][i], e=0))
+
+
+def Export_chi(name, data, location):
+    location += ".chi"
+    data_len = len(data[0])
+    with open(location,"w") as outfile:
+        outfile.write(f"{name} Azm= 0.00\n")
+        outfile.write("2-Theta Angle (Degrees)\nIntensity\n")
+        outfile.write(f"       {data_len}\n")
+        for i in range(data_len):
+            outfile.write(f" {data[0][i]:.7e}   {data[1][i]:.7e}\n")
 
 
 def pytorch_integrate(
@@ -412,31 +424,35 @@ def run_iteration(
         "integrals",
         name + "-" + number
     )
-    Export_xye(
-        name + "-" + number + "_base",
+    Export_chi(
+        # name + "-" + number + "_base",
+        name + "-" + number + ".tif",
         hist_base.T,
-        integral_file_base + "_base.xye",
-        error=False,
+        integral_file_base + "_base",
+        # error=False,
     )
     if calc_outlier:
-        Export_xye(
-            name + "-" + number + "_closed",
+        Export_chi(
+            # name + "-" + number + "_closed",
+            name + "-" + number + ".tif",
             hist_closed.T,
-            integral_file_base + "_closed.xye",
-            error=False,
+            integral_file_base + "_closed",
+            # error=False,
         )
         if calc_splitting:
-            Export_xye(
-                name + "-" + number + "_closedspotsmasked",
+            Export_chi(
+                # name + "-" + number + "_closedspotsmasked",
+                name + "-" + number + ".tif",
                 hist_closedspotsmasked.T,
-                integral_file_base + "_closedspotsmasked.xye",
-                error=False,
+                integral_file_base + "_closedspotsmasked",
+                # error=False,
             )
-            Export_xye(
-                name + "-" + number + "_closedarcsmasked",
+            Export_chi(
+                # name + "-" + number + "_closedarcsmasked",
+                name + "-" + number + ".tif",
                 hist_closedarcsmasked.T,
-                integral_file_base + "_closedarcsmasked.xye",
-                error=False,
+                integral_file_base + "_closedarcsmasked",
+                # error=False,
             )
     if timing is not None:
         timing_1 = time.time()
