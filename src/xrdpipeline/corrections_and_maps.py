@@ -16,7 +16,7 @@ def nonzeromask(image, mask_negative=True):
 def pol_correct(image, polmap):
     image_p = np.array(image)
     image_p = np.array(
-        image_p / polmap, dtype=np.int32
+        image_p / polmap
     )  # polmap showing high values in center column dropping to low values at right/left edges
     return image_p
 
@@ -24,7 +24,7 @@ def pol_correct(image, polmap):
 # flat-field correction
 def flatfield_correct(image, flatfield):
     image_f = np.array(image)
-    image_f = np.array(image_f * flatfield, dtype=np.int32)
+    image_f = np.array(image_f * flatfield)
     return image_f
 
 

@@ -1376,9 +1376,11 @@ class MainImageView(pg.GraphicsLayoutWidget):
             )
         ):
             self.image_data = tf.imread(
-                self.settings.output_directory,
-                "flatfield",
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
+                os.path.join(
+                    self.settings.output_directory,
+                    "flatfield",
+                    self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
+                )
             )
         else:
             self.image_data = tf.imread(
