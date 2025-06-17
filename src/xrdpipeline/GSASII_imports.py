@@ -1071,6 +1071,7 @@ def GetTifData(filename, DEBUG=False):
     samplechangerpos = None
     xpixelsize = None
     ypixelsize = None
+    pixy = None
     try:
         Meta = open(filename+'.metadata','r')
         head = Meta.readlines()
@@ -1375,11 +1376,13 @@ def GetTifData(filename, DEBUG=False):
     polarization = (not polarization) and 0.99 or polarization
     samplechangerpos = (not samplechangerpos) and 0.0 or samplechangerpos
     if xpixelsize is not None and ypixelsize is not None:
-        pixy = [xpixelsize,ypixelsize]
+        pixy_meta = [xpixelsize,ypixelsize]
         # if GSASIIpath.GetConfigValue('debug'):
         if DEBUG:
-            print ('pixel size from metadata: '+str(pixy))
-    data = {'pixelSize':pixy,'wavelength':wavelength,'distance':distance,'center':center,'size':sizexy,
+            print ('pixel size from metadata: '+str(pixy_meta))
+        if pixy is None:
+            pixy = pixy_meta
+    data = {'pixelSize':pixy,'pixelSize_metadata':pixy_meta,'wavelength':wavelength,'distance':distance,'center':center,'size':sizexy,
             'setdist':distance,'PolaVal':[polarization,False],'samplechangerpos':samplechangerpos,'det2theta':0.0}
-    File.close()    
+    File.close()
     return head,data,Npix,image
