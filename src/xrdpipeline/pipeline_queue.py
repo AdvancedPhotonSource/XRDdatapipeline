@@ -255,6 +255,7 @@ class CacheCreator(QtCore.QObject):
         )[0]
         if self.stopEarly: return
         getmaps(self.cache, self.imctrlname, os.path.join(self.output_directory, "maps"))
+        self.cache["AzimMask"] = np.logical_or(self.cache["pixelAzmap"] < self.cache["Image Controls"]["LRazimuth"][0], self.cache["pixelAzmap"] > self.cache["Image Controls"]["LRazimuth"][1])
         if self.stopEarly: return
         # 2th fairly linear along center; calc 2th - pixelsize conversion
         center = self.cache["Image Controls"]["center"]
@@ -1025,6 +1026,12 @@ class main_window(QtWidgets.QWidget):
         self.iotth_label = QtWidgets.QLabel("2theta Integration Range:")
         self.iotth_min = QtWidgets.QDoubleSpinBox()
         self.iotth_max = QtWidgets.QDoubleSpinBox()
+        self.azim_label = QtWidgets.QLabel("Azimuthal Integration Range:")
+        self.azim_min = QtWidgets.QDoubleSpinBox()
+        self.azim_min.setMaximum(360)
+        self.azim_max = QtWidgets.QDoubleSpinBox()
+        self.azim_max.setMaximum(360)
+        self.azim_max.setValue(360)
         self.outChannels_label = QtWidgets.QLabel("Number of Integration Bins:")
         self.outChannels = QtWidgets.QSpinBox()
         self.outChannels.setMaximum(10000)
@@ -1089,10 +1096,13 @@ class main_window(QtWidgets.QWidget):
         self.poni_config_options_layout.addWidget(self.iotth_label, 0, 0)
         self.poni_config_options_layout.addWidget(self.iotth_min, 0, 1)
         self.poni_config_options_layout.addWidget(self.iotth_max, 0, 2)
-        self.poni_config_options_layout.addWidget(self.outChannels_label, 1, 0)
-        self.poni_config_options_layout.addWidget(self.outChannels, 1, 1)
-        self.poni_config_options_layout.addWidget(self.PolaVal_label, 2, 0)
-        self.poni_config_options_layout.addWidget(self.PolaVal, 2, 1)
+        self.poni_config_options_layout.addWidget(self.azim_label, 1, 0)
+        self.poni_config_options_layout.addWidget(self.azim_min, 1, 1)
+        self.poni_config_options_layout.addWidget(self.azim_max, 1, 2)
+        self.poni_config_options_layout.addWidget(self.outChannels_label, 2, 0)
+        self.poni_config_options_layout.addWidget(self.outChannels, 2, 1)
+        self.poni_config_options_layout.addWidget(self.PolaVal_label, 3, 0)
+        self.poni_config_options_layout.addWidget(self.PolaVal, 3, 1)
 
         self.window_layout = QtWidgets.QGridLayout()
         self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
@@ -1215,6 +1225,12 @@ class main_window(QtWidgets.QWidget):
                                 self.iotth_min.value(),
                                 self.iotth_max.value()
                             ]
+                        if (self.azim_min.value() != 0.0) or (os.path.splitext(self.imgctrl)[1] == ".poni"):
+                            not_in_poni_settings["LRazimuth"] = [
+                                self.azim_min.value(),
+                                self.azim_max.value()
+                            ]
+                            print(f"azim range: {not_in_poni_settings['LRazimuth']}")
                         if self.outChannels.value() != 0.0:
                             not_in_poni_settings["outChannels"] = self.outChannels.value()
                         if self.PolaVal.value() != 0.0:
@@ -1356,7 +1372,7 @@ class main_window(QtWidgets.QWidget):
         if self.start_button.text() == "Start":
             if os.path.splitext(self.config_widget.file_name.text())[1] == ".poni":
                 if ((self.iotth_max.value() == 0) or (self.outChannels.value() == 0) or (self.PolaVal.value() == 0)):
-                    print("Please specify the 2theta integration range, number of integration bins, and polarization value.")
+                    print("Please specify the 2theta and azimuthal integration range, number of integration bins, and polarization value.")
                     return
             self.start_processing()
             self.start_button.setText("Pause")

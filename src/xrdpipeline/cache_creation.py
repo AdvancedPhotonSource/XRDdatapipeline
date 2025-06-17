@@ -283,6 +283,7 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
         (0, image_dict["Image Controls"]["size"][1])
     )[0]
     getmaps(cache, imctrlname, os.path.join(output_directory, "maps"))
+    cache["AzimMask"] = np.logical_or(cache["pixelAzmap"] < cache["Image Controls"]["LRazimuth"][0], cache["pixelAzmap"] > cache["Image Controls"]["LRazimuth"][1])
     # 2th fairly linear along center; calc 2th - pixelsize conversion
     center = cache["Image Controls"]["center"]
     center[0] = center[0] * 1000.0 / cache["Image Controls"]["pixelSize"][0]

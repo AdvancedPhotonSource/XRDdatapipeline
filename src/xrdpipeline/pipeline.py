@@ -380,9 +380,10 @@ def run_iteration(
 
 
     # integrate
+    base_mask = frame_and_predef | cache["AzimMask"]
     hist_base = pytorch_integrate(
         image_dict["image"],
-        frame_and_predef,
+        base_mask,
         cache["tth_idx"],
         cache["tth_val"],
         cache["raveled_pol"],
@@ -392,7 +393,7 @@ def run_iteration(
     if calc_outlier:
         hist_closed = pytorch_integrate(
             image_dict["image"],
-            np.logical_or(closed_mask, frame_and_predef),
+            np.logical_or(closed_mask, base_mask),
             cache["tth_idx"],
             cache["tth_val"],
             cache["raveled_pol"],
@@ -402,7 +403,7 @@ def run_iteration(
         if calc_splitting:
             hist_closedspotsmasked = pytorch_integrate(
                 image_dict["image"],
-                np.logical_or(split_spots, frame_and_predef),
+                np.logical_or(split_spots, base_mask),
                 cache["tth_idx"],
                 cache["tth_val"],
                 cache["raveled_pol"],
@@ -411,7 +412,7 @@ def run_iteration(
             )
             hist_closedarcsmasked = pytorch_integrate(
                 image_dict["image"],
-                np.logical_or(split_arcs, frame_and_predef),
+                np.logical_or(split_arcs, base_mask),
                 cache["tth_idx"],
                 cache["tth_val"],
                 cache["raveled_pol"],
