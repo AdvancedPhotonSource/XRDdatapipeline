@@ -18,7 +18,7 @@ def prepare_qmaps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans):
     tth_val = ((tth_list[1:] + tth_list[:-1]) / 2.0).astype(np.float32)
 
     tth_idx = np.zeros_like(tth, dtype=np.int32)
-    roi_1 = np.zeros_like(tth, dtype=bool)
+    roi_1 = tth < tth_list[0]
 
     for idx, val in enumerate(tth_list[1:]):
         roi_2 = tth < val
