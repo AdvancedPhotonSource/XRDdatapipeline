@@ -107,6 +107,20 @@ class file_select(QtWidgets.QWidget):
             self.file_name.setText(location[0])
 
 
+class imctrl_file_select(file_select):
+    imctrl_set = QtCore.Signal()
+
+    def __init__(self, label, default_text=None, startdir=".", ext=None):
+        super().__init__(label=label, default_text=default_text, isdir=False, startdir=startdir, ext=ext)
+
+    def select_file(self):
+        location = QtWidgets.QFileDialog.getOpenFileName(
+            None, "Select File", self.startdir, self.ext
+        )
+        self.file_name.setText(location[0])
+        self.imctrl_set.emit()
+
+
 class CacheCreator(QtCore.QObject):
     finished = QtCore.Signal()
 
@@ -998,12 +1012,13 @@ class main_window(QtWidgets.QWidget):
         )
         # self.config_text = QtWidgets.QPushButton("Config file:")
         # self.config_loc = QtWidgets.QLabel()
-        self.config_widget = file_select(
+        self.config_widget = imctrl_file_select(
             "Config file:",
             default_text=imctrl,
             startdir=self.input_directory_widget.file_name.text(),
             ext="Imctrl and PONI files (*.imctrl *.poni)",
         )
+        self.config_widget.imctrl_set.connect(self.update_imctrl_data)
         # self.predef_mask_text = QtWidgets.QPushButton("Predefined Mask:")
         # self.predef_mask_loc = QtWidgets.QLabel()
         self.flatfield_widget = file_select(
@@ -1023,6 +1038,11 @@ class main_window(QtWidgets.QWidget):
         )
 
         self.poni_config_options = QtWidgets.QWidget()
+        self.restore_default_config_options_button = QtWidgets.QPushButton("No config loaded")
+        self.restore_default_config_options_button.setDisabled(True)
+        self.restore_default_config_options_button.released.connect(self.update_imctrl_data)
+        self.poni_default_text = QtWidgets.QLabel()
+        self.poni_default_text.setWordWrap(True)
         self.iotth_label = QtWidgets.QLabel("2theta Integration Range:")
         self.iotth_min = QtWidgets.QDoubleSpinBox()
         self.iotth_max = QtWidgets.QDoubleSpinBox()
@@ -1031,13 +1051,24 @@ class main_window(QtWidgets.QWidget):
         self.azim_min.setMaximum(360)
         self.azim_max = QtWidgets.QDoubleSpinBox()
         self.azim_max.setMaximum(360)
-        self.azim_max.setValue(360)
         self.outChannels_label = QtWidgets.QLabel("Number of Integration Bins:")
         self.outChannels = QtWidgets.QSpinBox()
         self.outChannels.setMaximum(10000)
+        self.outChannels.setSingleStep(100)
         self.PolaVal_label = QtWidgets.QLabel("Polarization:")
         self.PolaVal = QtWidgets.QDoubleSpinBox()
         self.PolaVal.setMaximum(1.0)
+        self.PolaVal.setSingleStep(0.1)
+        self.poni_config_defaults = {
+            self.iotth_min: 0.0,
+            self.iotth_max: 10.0,
+            self.azim_min: 0.0,
+            self.azim_max: 360.0,
+            self.outChannels: 2000,
+            self.PolaVal: 1.0
+        }
+        for k, v in self.poni_config_defaults.items():
+            k.setValue(v)
 
         self.advanced_settings_button = QtWidgets.QPushButton("Advanced Settings")
         self.advanced_settings_button.released.connect(self.advanced_settings_button_pressed)
@@ -1093,16 +1124,18 @@ class main_window(QtWidgets.QWidget):
 
         self.poni_config_options_layout = QtWidgets.QGridLayout()
         self.poni_config_options.setLayout(self.poni_config_options_layout)
-        self.poni_config_options_layout.addWidget(self.iotth_label, 0, 0)
-        self.poni_config_options_layout.addWidget(self.iotth_min, 0, 1)
-        self.poni_config_options_layout.addWidget(self.iotth_max, 0, 2)
-        self.poni_config_options_layout.addWidget(self.azim_label, 1, 0)
-        self.poni_config_options_layout.addWidget(self.azim_min, 1, 1)
-        self.poni_config_options_layout.addWidget(self.azim_max, 1, 2)
-        self.poni_config_options_layout.addWidget(self.outChannels_label, 2, 0)
-        self.poni_config_options_layout.addWidget(self.outChannels, 2, 1)
-        self.poni_config_options_layout.addWidget(self.PolaVal_label, 3, 0)
-        self.poni_config_options_layout.addWidget(self.PolaVal, 3, 1)
+        self.poni_config_options_layout.addWidget(self.restore_default_config_options_button, 0, 0)
+        self.poni_config_options_layout.addWidget(self.poni_default_text, 1, 0, 3, 1)
+        self.poni_config_options_layout.addWidget(self.iotth_label, 0, 1)
+        self.poni_config_options_layout.addWidget(self.iotth_min, 0, 2)
+        self.poni_config_options_layout.addWidget(self.iotth_max, 0, 3)
+        self.poni_config_options_layout.addWidget(self.azim_label, 1, 1)
+        self.poni_config_options_layout.addWidget(self.azim_min, 1, 2)
+        self.poni_config_options_layout.addWidget(self.azim_max, 1, 3)
+        self.poni_config_options_layout.addWidget(self.outChannels_label, 2, 1)
+        self.poni_config_options_layout.addWidget(self.outChannels, 2, 2)
+        self.poni_config_options_layout.addWidget(self.PolaVal_label, 3, 1)
+        self.poni_config_options_layout.addWidget(self.PolaVal, 3, 2)
 
         self.window_layout = QtWidgets.QGridLayout()
         self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
@@ -1125,6 +1158,36 @@ class main_window(QtWidgets.QWidget):
 
         self.setLayout(self.window_layout)
         self.show()
+
+    def update_imctrl_data(self):
+        self.restore_default_config_options_button.setEnabled(True)
+        local_controls = {}
+        imctrl = self.config_widget.file_name.text()
+        ext = os.path.splitext(imctrl)[1]
+        if ext == ".imctrl":
+            self.restore_default_config_options_button.setText("Restore Config Values")
+            self.poni_default_text.setText("")
+            with open(imctrl, "r") as imctrlfile:
+                lines = imctrlfile.readlines()
+                LoadControls(lines, local_controls)
+            self.iotth_min.setValue(local_controls["IOtth"][0])
+            self.iotth_max.setValue(local_controls["IOtth"][1])
+            self.azim_min.setValue(local_controls["LRazimuth"][0])
+            self.azim_max.setValue(local_controls["LRazimuth"][1])
+            self.outChannels.setValue(local_controls["outChannels"])
+            self.PolaVal.setValue(local_controls["PolaVal"][0])
+        # reset to 0 if swapping to poni
+        # may want ability to set values before loading in
+        elif ext == ".poni":
+            self.restore_default_config_options_button.setText("Restore Defaults")
+            self.poni_default_text.setText("Poni files do not contain this information. Please adjust the defaults as appropriate.")
+            for k, v in self.poni_config_defaults.items():
+                k.setValue(v)
+        elif imctrl == "":
+            self.restore_default_config_options_button.setText("No config loaded")
+            self.restore_default_config_options_button.setDisabled(True)
+            for k, v in self.poni_config_defaults.items():
+                k.setValue(v)
 
     def cache_thread_finished(self):
         self.has_made_cache = True
