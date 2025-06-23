@@ -1963,11 +1963,7 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.spots_count = self.stats_view.plot()
         self.spots_count.setPen("g")
 
-        self.stats_view.addItem(self.spots_histogram_area_curve)
-        # self.stats_view.addItem(self.spots_histogram_Q_curve)
         self.legend = self.stats_view.addLegend(offset=(-1, 1))
-        self.legend.addItem(self.spots_histogram_area_curve, "Spot Area")
-        # self.legend.addItem(self.spots_histogram_Q_curve,"Q Position of Spots")
 
         self.vLine = pg.InfiniteLine(angle=90, movable=False)
         self.stats_view.addItem(self.vLine, ignoreBounds=True)
@@ -1985,10 +1981,10 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.histogram_types = list(self.histogram_type_dict.keys())
         # print(self.histogram_types)
         self.histogram_type_select.addItems(self.histogram_types)
-        self.histogram_type_select.setCurrentIndex(0)
         self.histogram_type_select.currentIndexChanged.connect(
             self.histogram_type_changed
         )
+        self.histogram_type_select.setCurrentIndex(5)
 
     def histogram_type_changed(self, evt):
         self.stats_view.clear()
