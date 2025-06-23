@@ -2600,14 +2600,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         self.setMinimumHeight(150)
         self.settings = settings
         self.view = self.addPlot(title="")
-        # self.min = 0
-        # self.max = 100
-        # self.spacing = 1
         self.methods = {
-            # "Percentage": 0,
-            # "Unique Spots": 1,
-            # "Spot Maxima": 1,
-            # "DF Q": 2,
             "Grad median": 0,
             "Grad MAD": 1,
             "Grad mean": 2,
@@ -2625,10 +2618,6 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.line[k] = self.view.plot()
             self.line_data[k] = []
             self.legend.addItem(self.line[k], k)
-        # self.line["Percentage"].setPen("r")
-        # self.line["Unique Spots"].setPen("g")
-        # self.line["Spot Maxima"].setPen("b")
-        # self.line["DF Q"].setPen("g")
         self.line["Grad median"].setPen("hotpink")
         self.line["Grad MAD"].setPen("cyan")
         self.line["Grad mean"].setPen("r")
@@ -2667,23 +2656,10 @@ class SpottinessView(pg.GraphicsLayoutWidget):
                 self.q_bins = np.load(infile)
         else:
             print("Missing q bins file.")
-        # print(self.q_bins)
         self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
-        # print(self.q_bins)
         self.update_data()
     
     def update_data(self):
-        filename = os.path.join(
-            self.settings.output_directory,
-            "stats",
-            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spottiness.npy"
-        )
-        with open(filename, 'rb') as infile:
-            self.line_data["Percentage"] = np.load(infile) * 100
-            _ = np.load(infile)
-            _ = np.load(infile)
-            self.line_data["Spot Maxima"] = np.load(infile)
-            self.bins = np.load(infile)
         filename_df = os.path.join(
             self.settings.output_directory,
             "stats",
@@ -2696,7 +2672,6 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         )
         df_stats = pd.read_csv(filename_df)
         df_counts = df_stats["Qbin"].value_counts().sort_index()
-        # self.line_data["DF Q"] = df_counts
         grad_stats = pd.read_csv(filename_grad)
         grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] < 0].index, inplace=True)
         grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] >= len(self.q_bins)].index, inplace=True)
@@ -2707,18 +2682,6 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         self.line_data["Grad MAD-STD"] = grad_stats["mad"] - grad_stats["std"]
         self.line_data["Grad STD/MAD"] = grad_stats["std"] / grad_stats["mad"]
         
-        # print(f"bins len: {len(self.bins)}")
-        # print(f"{np.min(self.bins)}, {np.max(self.bins)}")
-        # dQ = (np.max(self.bins) - np.min(self.bins))/len(self.bins)
-        # print(f"{dQ = }")
-        # start = np.min(self.bins)/dQ
-        # print(f"{start = }")
-        # self.q_bins = np.arange(0, 1010*dQ, dQ)
-        # self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
-        # for k, v in self.methods.items():
-        #     print(f"{k} len: {len(self.line_data[k])}")
-        # for k, v in self.methods.items():
-        #     self.line[k].setData(self.line_data[k])
         if self.axis_type == "tth":
             self.update_tth()
         elif self.axis_type == "q":
@@ -2728,9 +2691,6 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.update_tth()
 
     def update_tth(self):
-        # self.line["Percentage"].setData(self.tth_bins[1:], self.line_data["Percentage"][1:])
-        # self.line["Spot Maxima"].setData(self.tth_bins[1:], self.line_data["Spot Maxima"][1:])
-        # self.line["DF Q"].setData(self.tth_bins[self.line_data["DF Q"].index], self.line_data["DF Q"].values)
         self.line["Grad median"].setData(self.tth_bins, self.line_data["Grad median"].values)
         self.line["Grad MAD"].setData(self.tth_bins, self.line_data["Grad MAD"].values)
         self.line["Grad mean"].setData(self.tth_bins, self.line_data["Grad mean"].values)
@@ -2739,9 +2699,6 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         self.line["Grad STD/MAD"].setData(self.tth_bins, self.line_data["Grad STD/MAD"].values)
 
     def update_q(self):
-        # self.line["Percentage"].setData(self.q_bins[1:], self.line_data["Percentage"][1:])
-        # self.line["Spot Maxima"].setData(self.q_bins[1:], self.line_data["Spot Maxima"][1:])
-        # self.line["DF Q"].setData(self.q_bins[self.line_data["DF Q"].index], self.line_data["DF Q"].values)
         self.line["Grad median"].setData(self.q_bins, self.line_data["Grad median"].values)
         self.line["Grad MAD"].setData(self.q_bins, self.line_data["Grad MAD"].values)
         self.line["Grad mean"].setData(self.q_bins, self.line_data["Grad mean"].values)
