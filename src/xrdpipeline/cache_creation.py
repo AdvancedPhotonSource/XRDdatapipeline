@@ -324,11 +324,6 @@ def run_cache(filename, input_directory, output_directory, imctrlname, blkSize, 
         cache["Image Controls"]["outChannels"], # could use numchans as calc'd by gsasii
     )
 
-    # comparisons
-    # self.cache['Previous image'] = tf.imread(self.filename)
-    # self.cache['First image'] = tf.imread(self.filename)
-    cache["First image"] = load_image(filename)
-
     # gradient info
     cache["gradient"] = gradient_cache(
         predef_mask["image"].shape, center, np.ones((3, 3), dtype=np.uint)

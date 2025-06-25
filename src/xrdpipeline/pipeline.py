@@ -529,9 +529,30 @@ def run_iteration(
     except:
         print("Cannot find previous image for cosine similarity; using current instead.")
         previous_image = image_dict["image"].astype(np.float32)
+    if os.path.exists(
+        os.path.join(input_directory, name + "-00000" + ext)
+    ):
+        first_image = ski.io.imread(
+            os.path.join(input_directory, name + "-00000" + ext)
+        ).astype(np.float32)
+    elif os.path.exists(
+        os.path.join(input_directory, name + "-00000-00000" + ext)
+    ):
+        first_image = ski.io.imread(
+            os.path.join(input_directory, name + "-00000-00000" + ext)
+        ).astype(np.float32)
+    elif os.path.exists(
+        os.path.join(input_directory, name[:-6] + "-00000" + ext)
+    ):
+        first_image = ski.io.imread(
+            os.path.join(input_directory, name[:-6] + "-00000" + ext)
+        ).astype(np.float32)
+    else:
+        print("Cannot find first image for cosine similarity; using current instead.")
+        first_image = image_dict["image"].astype(np.float32)
     csim_f = 1 - spatial.distance.cosine(
         np.array(image_dict["image"], dtype=np.float32).ravel(),
-        cache["First image"].ravel(),
+        first_image.ravel(),
     )
     csim_p = 1 - spatial.distance.cosine(
         np.array(image_dict["image"], dtype=np.float32).ravel(),

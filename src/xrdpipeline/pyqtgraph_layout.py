@@ -2164,43 +2164,40 @@ class CSimView(pg.GraphicsLayoutWidget):
         self.min = 0
         self.max = 100
         self.spacing = 1
-        self.methods = {
-            "Cosine Similarity": "_csim.txt",
-            # "Normalized Mutual Information": "_nmi.txt",
-            # "Structural Similarity": "_ssim.txt",
-        }
+        self.methods = (
+            "Compared to First",
+            "Compared to Previous",
+        )
         self.similarity_line = {}
-        self.similarity_line_data = {}
+        self.similarity_line_data = []
         self.legend = self.view.addLegend(offset=(-1, 1))
-        for k, v in self.methods.items():
+        for k in self.methods:
             # check if addPlot.plot() is a shortcut for create PlotItem, add PlotItem
             self.similarity_line[k] = self.view.plot()
-            self.similarity_line_data[k] = []
             self.legend.addItem(self.similarity_line[k], k)
-        self.similarity_line["Cosine Similarity"].setPen("r")
-        # self.similarity_line["Normalized Mutual Information"].setPen('g')
-        # self.similarity_line["Structural Similarity"].setPen('b')
+        self.similarity_line["Compared to Previous"].setPen("r")
+        self.similarity_line["Compared to First"].setPen('b')
 
     def update_dir(self):
         self.update_data()
 
     def update_data(self):
-        for k, v in self.methods.items():
-            filename_piece = os.path.join(
-                self.settings.output_directory,
-                "stats",
-                self.settings.keylist[self.settings.curr_key] + "*" + v
-            )
-            # print(f"{filename_piece = }")
-            filenames = glob.glob(
-                filename_piece
-            )
-            # print(f"CSim filenames: {filenames}")
-            filenames.sort(key = lambda x: (len(x), x))
-            arrays = [np.loadtxt(filename) for filename in filenames]
-            self.similarity_line_data[k] = np.vstack(arrays)
+        filename_piece = os.path.join(
+            self.settings.output_directory,
+            "stats",
+            self.settings.keylist[self.settings.curr_key] + "*_csim.txt"
+        )
+        # print(f"{filename_piece = }")
+        filenames = glob.glob(
+            filename_piece
+        )
+        # print(f"CSim filenames: {filenames}")
+        filenames.sort(key = lambda x: (len(x), x))
+        arrays = [np.loadtxt(filename) for filename in filenames]
+        self.similarity_line_data = np.vstack(arrays)
+        for i, k in enumerate(self.methods):
             # [:,0] for comparison to first, [:,1] for comparison to previous
-            self.similarity_line[k].setData(self.similarity_line_data[k][:, 0])
+            self.similarity_line[k].setData(self.similarity_line_data[:, i])
 
 
 class ContourView(pg.GraphicsLayoutWidget):
