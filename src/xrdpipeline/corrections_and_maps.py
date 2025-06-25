@@ -32,6 +32,14 @@ def tth_to_q(tth, wavelength):
     return 4 * np.pi * np.sin(tth / 2 * np.pi / 180) / wavelength
 
 
+def q_to_tth(q, wavelength):
+    return np.arcsin(q * wavelength / (4 * np.pi)) * (360 / np.pi)
+
+
+def tth_to_d(tth, wavelength):
+    return wavelength / (2 * np.sin(tth / 2 * np.pi / 180))
+
+
 def get_Qbands(Qmap, LUtth, wavelength, numChans):
     Qmin = tth_to_q(LUtth[0], wavelength)
     Qmax = tth_to_q(LUtth[1], wavelength)
