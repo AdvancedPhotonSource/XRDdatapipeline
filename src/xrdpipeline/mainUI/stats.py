@@ -17,6 +17,13 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.settings = settings
         self.setBackground("w")
         self.stats_view = self.addPlot(title="")
+        self.spots_count_vb = pg.ViewBox()
+        self.stats_view.scene().addItem(self.spots_count_vb)
+        self.stats_view.showAxis('right')
+        self.stats_view.getAxis('right').linkToView(self.spots_count_vb)
+        self.spots_count_vb.setXLink(self.stats_view)
+        self.stats_view.getAxis('right').setLabel('Spot Count')
+
         self.spots_count_data = None
         self.spots_area_data = None
         self.spots_intensitymax_data = None
@@ -30,7 +37,7 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.spots_scatter_intensitymax = pg.ScatterPlotItem()
         self.spots_scatter_intensitymean = pg.ScatterPlotItem()
         self.spots_scatter_intensitysum = pg.ScatterPlotItem()
-        self.spots_count = self.stats_view.plot()
+        self.spots_count = pg.PlotDataItem()
         self.spots_count.setPen("r")
 
         self.legend = self.stats_view.addLegend(offset=(-1, 1))
@@ -53,6 +60,12 @@ class StatsView(pg.GraphicsLayoutWidget):
             self.histogram_type_changed
         )
         self.histogram_type_select.setCurrentIndex(0)
+        self.updateViews()
+        self.stats_view.vb.sigResized.connect(self.updateViews)
+
+    def updateViews(self):
+        self.spots_count_vb.setGeometry(self.stats_view.vb.sceneBoundingRect())
+        self.spots_count_vb.linkedViewChanged(self.stats_view.vb, self.spots_count_vb.XAxis)
 
     def histogram_type_changed(self, evt):
         self.stats_view.clear()
@@ -62,9 +75,13 @@ class StatsView(pg.GraphicsLayoutWidget):
             self.histogram_type_dict[self.histogram_types[evt]],
             self.histogram_types[evt],
         )
+        if evt == 0:
+            self.stats_view.getAxis('left').setLabel('Area')
+        else:
+            self.stats_view.getAxis('left').setLabel('Intensity')
         self.stats_view.addItem(self.vLine, ignoreBounds = True)
         self.legend.addItem(self.spots_count, "Spot Count")
-        self.stats_view.addItem(self.spots_count)
+        self.spots_count_vb.addItem(self.spots_count)
 
     def change_x_axis_type(self, evt):
         # tth = 0, Q = 1
