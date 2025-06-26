@@ -221,6 +221,8 @@ class MainImageView(pg.GraphicsLayoutWidget):
         self.arcs_mask_data.set_color(self.settings.colors["arcs_mask"].color)
         self.spot_mask_data.set_color(self.settings.colors["spot_mask"].color)
         self.tth_circle_data.set_color(self.settings.colors["tth_circle_mask"].color)
+        self.tth_circle_data.set_shape(self.settings.image_size)
+        self.tth_circle.updateImage(self.tth_circle_data.full_data)
         self.update_image_data(xy_reset=True, z_reset=True)
         self.update_masks_data()
 
