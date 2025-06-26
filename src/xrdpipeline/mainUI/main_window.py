@@ -22,7 +22,7 @@ class KeyPressWindow(QtWidgets.QWidget):
     def __init__(self, image_directory=".", output_directory = ".", imagecontrol=""):
         super().__init__()
         self.settings = Settings(
-            image_directory, output_directory, imagecontrol, (2880, 2880), 0, 0, [], {}, 0, 0
+            image_directory, output_directory, imagecontrol, (10, 10), 0, 0, [], {}, 0, 0
         )
         self.file_select_widget = FileSelectWindow(self.settings)
         self.file_select_widget.file_selected.connect(self.update_dir)
