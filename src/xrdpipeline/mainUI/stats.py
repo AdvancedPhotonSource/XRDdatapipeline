@@ -103,7 +103,8 @@ class StatsView(pg.GraphicsLayoutWidget):
         # spot_stat_label, area, medianQ, Qbin, on_arc
         stats_df.drop(index = 0, inplace = True)
         self.spots_histogram_Q = stats_df["Qbin"].value_counts().sort_index()
-        self.spots_count_data = self.spots_histogram_Q.values
+        self.spots_count_data = np.zeros_like(self.tth_bins)
+        self.spots_count_data[self.spots_histogram_Q.index] = self.spots_histogram_Q.values
         self.spots_area_data = stats_df["area"].values
         self.spots_intensitymax_data = stats_df["intensity_max"].values
         self.spots_intensitymean_data = stats_df["intensity_mean"].values
@@ -111,13 +112,13 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.scatter_q_bins = stats_df["medianQ"].values
         self.scatter_tth_bins = q_to_tth(self.scatter_q_bins, self.settings.wavelength)
         if self.x_axis_type == "tth":
-            self.spots_count.setData(self.tth_bins[self.spots_histogram_Q.index], self.spots_count_data)
+            self.spots_count.setData(self.tth_bins, self.spots_count_data)
             self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
             self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
             self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
             self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
         elif self.x_axis_type == "Q":
-            self.spots_count.setData(self.q_bins[self.spots_histogram_Q.index], self.spots_count_data)
+            self.spots_count.setData(self.q_bins, self.spots_count_data)
             self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
             self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
             self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
@@ -160,14 +161,14 @@ class StatsView(pg.GraphicsLayoutWidget):
         return
     
     def update_tth(self):
-        self.spots_count.setData(self.tth_bins[self.spots_histogram_Q.index], self.spots_count_data)
+        self.spots_count.setData(self.tth_bins, self.spots_count_data)
         self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
         self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
         self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
         self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
 
     def update_q(self):
-        self.spots_count.setData(self.q_bins[self.spots_histogram_Q.index], self.spots_count_data)
+        self.spots_count.setData(self.q_bins, self.spots_count_data)
         self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
         self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
         self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
