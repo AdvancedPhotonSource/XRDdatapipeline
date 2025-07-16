@@ -6,6 +6,15 @@ import os
 from mainUI.UI_settings import Settings
 from corrections_and_maps import tth_to_q
 
+from dataclasses import dataclass
+import warnings
+
+@dataclass
+class Integral:
+    line: pg.PlotDataItem
+    data: np.ndarray
+    offset_mult: int
+
 
 class IntegralView(pg.GraphicsLayoutWidget):
     def __init__(self, parent, settings: Settings):
@@ -24,7 +33,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
         self.integral_offset.setMaximum(1000000)
         self.integral_offset.setSingleStep(100)
         self.integral_offset.setValue(0)
-        self.integral_offset.valueChanged.connect(self.update_integral_offset)
+        self.integral_offset.valueChanged.connect(self.set_integral_plot_data)
 
         self.integral_view = self.addPlot(title="")
         self.axis_type = 0
@@ -186,62 +195,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
                     )
                 )
 
-        if self.axis_type == 0:
-            self.base_integral.setData(
-                self.integral_data[:, 0], self.integral_data[:, 1]
-            )
-            self.masked_integral.setData(
-                self.masked_integral_data[:, 0],
-                self.masked_integral_data[:, 1] + self.integral_offset.value(),
-            )
-            self.spotmasked_integral.setData(
-                self.spotmasked_integral_data[:, 0],
-                self.spotmasked_integral_data[:, 1] + 2 * self.integral_offset.value(),
-            )
-            self.texturemasked_integral.setData(
-                self.texturemasked_integral_data[:, 0],
-                self.texturemasked_integral_data[:, 1]
-                + 3 * self.integral_offset.value(),
-            )
-            self.spots_diff_integral.setData(
-                self.spotmasked_integral_data[:, 0],
-                self.spotmasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
-            )
-            self.arcs_diff_integral.setData(
-                self.texturemasked_integral_data[:, 0],
-                self.texturemasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
-            )
-
-        elif self.axis_type == 1:
-            self.base_integral.setData(
-                tth_to_q(self.integral_data[:, 0], self.settings.wavelength),
-                self.integral_data[:, 1],
-            )
-            self.masked_integral.setData(
-                tth_to_q(self.masked_integral_data[:, 0], self.settings.wavelength),
-                self.masked_integral_data[:, 1] + self.integral_offset.value(),
-            )
-            self.spotmasked_integral.setData(
-                tth_to_q(self.spotmasked_integral_data[:, 0], self.settings.wavelength),
-                self.spotmasked_integral_data[:, 1] + 2 * self.integral_offset.value(),
-            )
-            self.texturemasked_integral.setData(
-                tth_to_q(
-                    self.texturemasked_integral_data[:, 0], self.settings.wavelength
-                ),
-                self.texturemasked_integral_data[:, 1]
-                + 3 * self.integral_offset.value(),
-            )
-            self.spots_diff_integral.setData(
-                tth_to_q(self.spotmasked_integral_data[:, 0], self.settings.wavelength),
-                self.spotmasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
-            )
-            self.arcs_diff_integral.setData(
-                tth_to_q(
-                    self.texturemasked_integral_data[:, 0], self.settings.wavelength
-                ),
-                self.texturemasked_integral_data[:, 1] - self.masked_integral_data[:, 1],
-            )
+        self.set_integral_plot_data()        
 
     def sqrt_toggle(self, evt):
         if self.sqrt_checkbox.isChecked():
@@ -254,23 +208,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
             # self.integral_offset.valueChanged.connect(self.update_integral_offset)
             self.integral_offset.setSingleStep(10)
             # Toggle data. Diff integrals have some negative values.
-            self.base_integral.setData(
-                self.integral_data[:, 0], np.sqrt(self.integral_data[:, 1])
-            )
-            self.masked_integral.setData(
-                self.masked_integral_data[:, 0],
-                np.sqrt(self.masked_integral_data[:, 1]) + self.integral_offset.value(),
-            )
-            self.spotmasked_integral.setData(
-                self.spotmasked_integral_data[:, 0],
-                np.sqrt(self.spotmasked_integral_data[:, 1])
-                + 2 * self.integral_offset.value(),
-            )
-            self.texturemasked_integral.setData(
-                self.texturemasked_integral_data[:, 0],
-                np.sqrt(self.texturemasked_integral_data[:, 1])
-                + 3 * self.integral_offset.value(),
-            )
+            self.set_integral_plot_data()
             # self.spots_diff_integral.setData(self.spotmasked_integral_data[:,0],np.sqrt(self.integral_data[:,1]-self.spotmasked_integral_data[:,1]))
             # self.arcs_diff_integral.setData(self.texturemasked_integral_data[:,0],np.sqrt(self.integral_data[:,1]-self.texturemasked_integral_data[:,1]))
 
@@ -282,22 +220,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
             )
             self.integral_offset.setSingleStep(100)
             # Toggle data. Diff integrals have some negative values.
-            self.base_integral.setData(
-                self.integral_data[:, 0], self.integral_data[:, 1]
-            )
-            self.masked_integral.setData(
-                self.masked_integral_data[:, 0],
-                self.masked_integral_data[:, 1] + self.integral_offset.value(),
-            )
-            self.spotmasked_integral.setData(
-                self.spotmasked_integral_data[:, 0],
-                self.spotmasked_integral_data[:, 1] + 2 * self.integral_offset.value(),
-            )
-            self.texturemasked_integral.setData(
-                self.texturemasked_integral_data[:, 0],
-                self.texturemasked_integral_data[:, 1]
-                + 3 * self.integral_offset.value(),
-            )
+            self.set_integral_plot_data()
             # self.spots_diff_integral.setData(self.spotmasked_integral_data[:,0],self.integral_data[:,1]-self.spotmasked_integral_data[:,1])
             # self.arcs_diff_integral.setData(self.texturemasked_integral_data[:,0],self.integral_data[:,1]-self.texturemasked_integral_data[:,1])
 
@@ -308,46 +231,92 @@ class IntegralView(pg.GraphicsLayoutWidget):
         # self.wavelength = wavelength
         self.update_integral_data()
 
-    def update_integral_offset(self):
-        if self.sqrt_checkbox.isChecked():
-            self.masked_integral.setData(
-                self.masked_integral_data[:, 0],
-                np.sqrt(self.masked_integral_data[:, 1]) + self.integral_offset.value(),
-            )
-            self.spotmasked_integral.setData(
-                self.spotmasked_integral_data[:, 0],
-                np.sqrt(self.spotmasked_integral_data[:, 1])
-                + 2 * self.integral_offset.value(),
-            )
-            self.texturemasked_integral.setData(
-                self.texturemasked_integral_data[:, 0],
-                np.sqrt(self.texturemasked_integral_data[:, 1])
-                + 3 * self.integral_offset.value(),
-            )
-            # self.spots_diff_integral.setData(self.spots_diff_data[:,0],self.spots_diff_data[:,1])
-            # self.arcs_diff_integral.setData(self.arcs_diff_data[:,0],self.arcs_diff_data[:,1])
-            # self.closed_integral.setData(self.closed_integral_data[:,0],np.sqrt(self.closed_integral_data[:,1]) + self.integral_offset.value())
-            # self.closedspots_integral.setData(self.closedspots_integral_data[:,0],np.sqrt(self.closedspots_integral_data[:,1]) + 2*self.integral_offset.value())
-            # self.closedarcs_integral.setData(self.closedarcs_integral_data[:,0],np.sqrt(self.closedarcs_integral_data[:,1]) + 3*self.integral_offset.value())
-        else:
-            self.masked_integral.setData(
-                self.masked_integral_data[:, 0],
-                self.masked_integral_data[:, 1] + self.integral_offset.value(),
-            )
-            self.spotmasked_integral.setData(
-                self.spotmasked_integral_data[:, 0],
-                self.spotmasked_integral_data[:, 1] + 2 * self.integral_offset.value(),
-            )
-            self.texturemasked_integral.setData(
-                self.texturemasked_integral_data[:, 0],
-                self.texturemasked_integral_data[:, 1]
-                + 3 * self.integral_offset.value(),
-            )
-            # self.spots_diff_integral.setData(self.spots_diff_data[:,0],self.spots_diff_data[:,1])
-            # self.arcs_diff_integral.setData(self.arcs_diff_data[:,0],self.arcs_diff_data[:,1])
-            # self.closed_integral.setData(self.closed_integral_data[:,0],self.closed_integral_data[:,1] + self.integral_offset.value())
-            # self.closedspots_integral.setData(self.closedspots_integral_data[:,0],self.closedspots_integral_data[:,1] + 2*self.integral_offset.value())
-            # self.closedarcs_integral.setData(self.closedarcs_integral_data[:,0],self.closedarcs_integral_data[:,1] + 3*self.integral_offset.value())
+    def set_integral_plot_data(self):
+        base = Integral(self.base_integral, self.integral_data, 0)
+        masked = Integral(self.masked_integral, self.masked_integral_data, 1)
+        spot = Integral(self.spotmasked_integral, self.spotmasked_integral_data, 2)
+        texture = Integral(self.texturemasked_integral, self.texturemasked_integral_data, 3)
+
+        normal_integrals = [base, masked, spot, texture]
+        if self.axis_type == 0:
+            if self.sqrt_checkbox.isChecked():
+                for integral in normal_integrals:
+                    integral.line.setData(
+                        integral.data[:,0],
+                        np.sqrt(integral.data[:,1]) + integral.offset_mult * self.integral_offset.value()
+                    )
+                # Difference integrals have some negative values
+                # Still outputs a RuntimeWarning
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    self.spots_diff_integral.setData(
+                        self.texturemasked_integral_data[:, 0],
+                        np.where(self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1] > 0,
+                                np.sqrt(self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1]),
+                                -np.sqrt(self.texturemasked_integral_data[:, 1] - self.integral_data[:, 1])),
+                    )
+                    self.arcs_diff_integral.setData(
+                        self.spotmasked_integral_data[:, 0],
+                        np.where(self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1] > 0,
+                                np.sqrt(self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1]),
+                                -np.sqrt(self.spotmasked_integral_data[:, 1] - self.integral_data[:, 1])),
+                    )
+            else:
+                for integral in normal_integrals:
+                    integral.line.setData(
+                        integral.data[:,0],
+                        integral.data[:,1] + integral.offset_mult * self.integral_offset.value()
+                    )
+                self.spots_diff_integral.setData(
+                    self.texturemasked_integral_data[:, 0],
+                    self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1],
+                )
+                self.arcs_diff_integral.setData(
+                    self.spotmasked_integral_data[:, 0],
+                    self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1],
+                )
+
+        elif self.axis_type == 1:
+            if self.sqrt_checkbox.isChecked():
+                for integral in normal_integrals:
+                    integral.line.setData(
+                        tth_to_q(integral.data[:,0], self.settings.wavelength),
+                        np.sqrt(integral.data[:,1]) + integral.offset_mult * self.integral_offset.value()
+                    )
+                # Difference integrals have some negative values
+                # Still outputs a RuntimeWarning
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    self.spots_diff_integral.setData(
+                        tth_to_q(self.texturemasked_integral_data[:, 0], self.settings.wavelength),
+                        np.where(self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1] > 0,
+                                np.sqrt(self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1]),
+                                -np.sqrt(self.texturemasked_integral_data[:, 1] - self.integral_data[:, 1])),
+                    )
+                    self.arcs_diff_integral.setData(
+                        tth_to_q(
+                            self.spotmasked_integral_data[:, 0], self.settings.wavelength
+                        ),
+                        np.where(self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1] > 0,
+                                np.sqrt(self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1]),
+                                -np.sqrt(self.spotmasked_integral_data[:, 1] - self.integral_data[:, 1])),
+                    )
+            else:
+                for integral in normal_integrals:
+                    integral.line.setData(
+                        tth_to_q(integral.data[:,0], self.settings.wavelength),
+                        integral.data[:,1] + integral.offset_mult * self.integral_offset.value()
+                    )
+                self.spots_diff_integral.setData(
+                    tth_to_q(self.texturemasked_integral_data[:, 0], self.settings.wavelength),
+                    self.integral_data[:, 1] - self.texturemasked_integral_data[:, 1],
+                )
+                self.arcs_diff_integral.setData(
+                    tth_to_q(
+                        self.spotmasked_integral_data[:, 0], self.settings.wavelength
+                    ),
+                    self.integral_data[:, 1] - self.spotmasked_integral_data[:, 1],
+                )
 
     def base_integral_checkbox_changed(self):
         if self.base_integral_checkbox.isChecked():
