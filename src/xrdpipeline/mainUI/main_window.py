@@ -43,6 +43,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview = ContourView(self, self.settings)
         self.integral_widget = IntegralView(self, self.settings)
         self.tabbed_area = TabbedArea(self, self.settings)
+        self.tabbed_area.user_data_widget.update_userdata_signal.connect(self.update_user_data)
+        self.tabbed_area.user_data_widget.remove_deleted_userdata_from_plot.connect(self.remove_user_data)
 
         # Show name of image
         # self.name_label = QtWidgets.QLabel("<span style='font-size: 12pt'>{0}</span>".format(tiflist[keylist[curr_key]][curr_pos]))
@@ -310,6 +312,30 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.horiz_line.setValue(self.settings.curr_pos)
         self.tabbed_area.stats_widget.update_stats_data()
         self.tabbed_area.spottiness_widget.update_data()
+
+    def update_user_data(self, data, location):
+        integral_plot = self.integral_widget.integral_view
+        stats_plot = self.tabbed_area.stats_widget.stats_view
+        if location != "Integral":
+            if data.plotitem in integral_plot.listDataItems():
+                integral_plot.removeItem(data.plotitem)
+        if location != "Stats":
+            if data.plotitem in stats_plot.listDataItems():
+                stats_plot.removeItem(data.plotitem)
+        if location == "Integral":
+            if data.plotitem not in integral_plot.listDataItems():
+                self.integral_widget.integral_view.addItem(data.plotitem)
+        elif location == "Stats":
+            if data.plotitem not in stats_plot.listDataItems():
+                stats_plot.addItem(data.plotitem)
+
+    def remove_user_data(self, data):
+        integral_plot = self.integral_widget.integral_view
+        stats_plot = self.tabbed_area.stats_widget.stats_view
+        if data.plotitem in integral_plot.listDataItems():
+            integral_plot.removeItem(data.plotitem)
+        if data.plotitem in stats_plot.listDataItems():
+            stats_plot.removeItem(data.plotitem)
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Right:
