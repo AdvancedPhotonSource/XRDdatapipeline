@@ -125,9 +125,9 @@ class MainImageView(pg.GraphicsLayoutWidget):
         # self.closed_arcs = pg.ImageItem(self.closed_arcs_RGBA,levels=None)
 
         self.masks = {
-            self.predef_mask: [self.predef_mask_data, "_predef.tif"],
+            self.predef_mask: [self.predef_mask_data, "_base.tif"],
             # self.nonzero_mask: [self.nonzero_mask_RGBA,self.nonzero_mask_vals,"_om.tif"],
-            self.outlier_mask: [self.outlier_mask_data, "_closedmask.tif"],
+            self.outlier_mask: [self.outlier_mask_data, "_outliermask.tif"],
             self.spot_mask: [self.spot_mask_data, "_spots.tif"],
             self.arcs_mask: [self.arcs_mask_data, "_arcs.tif"],
             # self.closed_mask: [self.closed_mask_RGBA,self.closed_mask_vals,"_closedmask.tif"],

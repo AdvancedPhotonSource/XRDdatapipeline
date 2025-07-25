@@ -25,7 +25,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_min = 0
         self.manual_max = 100
         self.manual_spacing = 1
-        self.integral_extension = "_closed.chi"
+        self.integral_extension = "_om.chi"
         self.integral_data = []
         self.automatically_set_spacing = True
         # Intended to be "Should this zoom out (change step size) when more images appear than the max, or should it start scrolling?" Not yet implemented.
@@ -69,10 +69,9 @@ class ContourView(pg.GraphicsLayoutWidget):
         # self.integral_types = ["Base","Outlier Masked","Closed Mask"]
         self.integral_type_dict = {
             "Base": "_base.chi",
-            # "Outlier Masked":"_om.xye",
-            "Outlier Mask": "_closed.chi",
-            "Spot Mask": "_closedspotsmasked.chi",
-            "Texture Mask": "closedarcsmasked.chi",
+            "Outlier Mask": "_om.chi",
+            "Spot Mask": "_spotsmasked.chi",
+            "Texture Mask": "_arcsmasked.chi",
         }
         self.integral_types = list(self.integral_type_dict.keys())
         self.integral_select.addItems(self.integral_types)

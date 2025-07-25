@@ -137,14 +137,6 @@ def run_iteration(
         )
     image_dict["corrected_image"] = None
     nonpositive_mask = ~nonzeromask(image_dict["image"], mask_negative=True)
-    imsave = Image.fromarray(nonpositive_mask)
-    imsave.save(
-        os.path.join(
-            output_directory,
-            "masks",
-            name + "-" + number + "_nonpositive.tif"
-        )
-    )
     predef_and_nonpositive = np.logical_or(
         nonpositive_mask, cache["predef_mask"]["image"]
     )
@@ -153,7 +145,7 @@ def run_iteration(
         os.path.join(
             output_directory,
             "masks",
-            name + "-" + number + "_predef.tif"
+            name + "-" + number + "_base.tif"
         )
     )
     predef_mask_extended = ski.morphology.binary_dilation(
@@ -179,14 +171,6 @@ def run_iteration(
         )
         # outlier_mask = img.data['Masks']['SpotMask']['spotMask']
         outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]
-        imsave = Image.fromarray(outlier_mask)
-        imsave.save(
-            os.path.join(
-                output_directory,
-                "masks",
-                name + "-" + number + "_om.tif"
-            )
-        )
         if timing is not None:
             timing_1 = time.time()
             local_times.append(timing_1-timing_0)
@@ -205,7 +189,7 @@ def run_iteration(
                 os.path.join(
                     output_directory,
                     "masks",
-                    name + "-" + number + "_closedmask.tif"
+                    name + "-" + number + "_outliermask.tif"
                 )
             )
             t1 = time.time()
@@ -218,7 +202,7 @@ def run_iteration(
                 os.path.join(
                     output_directory,
                     "masks",
-                    name + "-" + number + "_closedmask.tif"
+                    name + "-" + number + "_outliermask.tif"
                 )
             )
         elif (closing_method == None) or (closing_method == ""):
@@ -437,7 +421,7 @@ def run_iteration(
             # name + "-" + number + "_closed",
             name + "-" + number + ".tif",
             hist_closed.T,
-            integral_file_base + "_closed",
+            integral_file_base + "_om",
             # error=False,
         )
         if calc_splitting:
@@ -445,14 +429,14 @@ def run_iteration(
                 # name + "-" + number + "_closedspotsmasked",
                 name + "-" + number + ".tif",
                 hist_closedspotsmasked.T,
-                integral_file_base + "_closedspotsmasked",
+                integral_file_base + "_spotsmasked",
                 # error=False,
             )
             Export_chi(
                 # name + "-" + number + "_closedarcsmasked",
                 name + "-" + number + ".tif",
                 hist_closedarcsmasked.T,
-                integral_file_base + "_closedarcsmasked",
+                integral_file_base + "_arcsmasked",
                 # error=False,
             )
     if timing is not None:

@@ -157,9 +157,9 @@ class IntegralView(pg.GraphicsLayoutWidget):
         )
         integrals_dict = {
             "_base.chi": self.integral_data,
-            "_closed.chi": self.masked_integral_data,
-            "_closedspotsmasked.chi": self.spotmasked_integral_data,
-            "_closedarcsmasked.chi": self.texturemasked_integral_data,
+            "_om.chi": self.masked_integral_data,
+            "_spotsmasked.chi": self.spotmasked_integral_data,
+            "_arcsmasked.chi": self.texturemasked_integral_data,
             # "_closed.xye": self.closed_integral_data,
             # "_closedarcsmasked.xye": self.closedarcs_integral_data,
             # "_closedspotsmasked.xye": self.closedspots_integral_data,
@@ -365,41 +365,4 @@ class IntegralView(pg.GraphicsLayoutWidget):
         else:
             # self.arcs_diff_integral.setPen(0,0,0,0)
             self.arcs_diff_integral.setVisible(False)
-
-    # def closedmasked_integral_checkbox_changed(self):
-    #     if self.closedmasked_integral_checkbox.isChecked():
-    #         #self.closed_integral.setPen("lime")
-    #         self.closed_integral.setVisible(True)
-    #     else:
-    #         #self.closed_integral.setPen((200,100,0,0))
-    #         self.closed_integral.setVisible(False)
-
-    # def closedspots_integral_checkbox_changed(self):
-    #     if self.closedspots_integral_checkbox.isChecked():
-    #         #self.closedspots_integral.setPen("cyan")
-    #         self.closedspots_integral.setVisible(True)
-    #     else:
-    #         #self.closedspots_integral.setPen((0,255,0,0))
-    #         self.closedspots_integral.setVisible(False)
-
-    # def closedarcs_integral_checkbox_changed(self):
-    #     if self.closedarcs_integral_checkbox.isChecked():
-    #         #self.closedarcs_integral.setPen("red")
-    #         self.closedarcs_integral.setVisible(True)
-    #     else:
-    #         #self.closedarcs_integral.setPen((0,0,255,0))
-    #         self.closedarcs_integral.setVisible(False)
-
-    # def closedspots_diff_integral_checkbox_changed(self):
-    #     if self.closedspots_diff_integral_checkbox.isChecked():
-    #         self.closedspots_diff_integral.setPen('k')
-    #     else:
-    #         self.closedspots_diff_integral.setPen(0,0,0,0)
-
-    # def closedarcs_diff_integral_checkbox_changed(self):
-    #     if self.closedarcs_diff_integral_checkbox.isChecked():
-    #         self.closedarcs_diff_integral.setPen('k')
-    #     else:
-    #         self.closedarcs_diff_integral.setPen(0,0,0,0)
-
 
