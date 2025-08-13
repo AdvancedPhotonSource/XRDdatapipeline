@@ -18,10 +18,9 @@ from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
 from GSASII_imports import *
-from pipeline import run_iteration, pytorch_integrate, Export_xye
-from classification import current_splitting_method
+from pipeline import run_iteration
 from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
-from corrections_and_maps import flatfield_correct, nonzeromask, get_Qbands
+from corrections_and_maps import get_Qbands
 
 class image_monitor(RegexMatchingEventHandler):
     def __init__(self, queue):
