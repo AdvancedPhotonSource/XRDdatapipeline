@@ -49,9 +49,9 @@ class UserAddedDataInstanceWidget(QtWidgets.QWidget):
         self.offset = data_instance.offset
         self.multiplier = data_instance.multiplier
         
-        self.name_field = QtWidgets.QTextEdit(self.data_instance.name)
+        self.name_field = QtWidgets.QLineEdit(self.data_instance.name)
         self.filename_field = QtWidgets.QLabel(self.data_instance.file_name)
-        self.color_field = QtWidgets.QTextEdit(self.color.color)
+        self.color_field = QtWidgets.QLineEdit(self.color.color)
         self.offset_field = QtWidgets.QSpinBox()
         self.multiplier_field = QtWidgets.QSpinBox()
         self.multiplier_field.setValue(self.multiplier)
