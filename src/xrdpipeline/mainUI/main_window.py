@@ -134,6 +134,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contour_layout.addWidget(self.contourview.live_update_checkbox, 5, 0)
         self.contour_layout.addWidget(self.contourview.tth_line_checkbox, 5, 1)
         self.contour_layout.addWidget(self.contourview.integral_select, 5, 2)
+        self.contour_layout.addWidget(self.contourview.viewtype_select, 5, 3)
+        self.contour_layout.addWidget(self.contourview.offset, 5, 4)
         self.contour_layout.addWidget(self.contourview.live_integral_min_label, 6, 0)
         self.contour_layout.addWidget(self.contourview.live_integral_min, 6, 1)
         self.contour_layout.addWidget(self.contourview.live_integral_max_label, 6, 2)
@@ -175,6 +177,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.show()
 
         self.timer = QtCore.QTimer()
+
+        self.choose_dir()
 
     # def start_cycling(self,tick=100):
     #    self.timer.start(tick) #interval in ms

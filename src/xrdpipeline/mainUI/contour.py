@@ -4,15 +4,22 @@ import os
 import glob
 import numpy as np
 import time
+from enum import Enum
 
 from mainUI.UI_settings import Settings
 from corrections_and_maps import tth_to_q
 
+Viewtype = Enum('Viewtype', names=[('Contour',0),('Waterfall',1)])
+viewtypes = [
+    "Contour",
+    "Waterfall",
+]
 
 class ContourView(pg.GraphicsLayoutWidget):
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         self.setMinimumHeight(150)
+        self.setBackground("w")
         # self.directory = directory
         self.settings = settings
         self.live_max_lines_visible = 100
@@ -44,6 +51,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.cmap = pg.colormap.get("gist_earth", source="matplotlib", skipCache=True)
         # self.image_data = tf.imread(tiflist[keylist[curr_key]][curr_pos] + ".tif")
         self.contour_image = pg.ImageItem()
+        self.contour_waterfall = []
         self.view.addItem(self.contour_image)
         self.intensityBar = pg.HistogramLUTItem()
         self.intensityBar.setImageItem(self.contour_image)
@@ -77,6 +85,17 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.integral_select.addItems(self.integral_types)
         self.integral_select.setCurrentIndex(1)
         self.integral_select.currentIndexChanged.connect(self.integral_type_changed)
+
+        self.viewtype_select = QtWidgets.QComboBox()
+        self.viewtype_select.addItems(viewtypes)
+        self.viewtype_select.setCurrentIndex(0)
+        self.viewtype_select.currentIndexChanged.connect(self.viewtype_changed)
+
+        self.offset = QtWidgets.QSpinBox()
+        self.offset.setMaximum(1000000)
+        self.offset.setValue(1000)
+        self.offset.setSingleStep(1000)
+        self.offset.valueChanged.connect(self.offset_changed)
 
         self.live_controls_list = []
         self.live_integral_min_label = QtWidgets.QLabel()
@@ -246,9 +265,30 @@ class ContourView(pg.GraphicsLayoutWidget):
                 self.append_integral_data()
                 if not reset_z: self.intensityBar.setLevels(min=min_z, max=max_z)
 
+        if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+            self.update_waterfall_data()
+
+    def update_waterfall_data(self):
+        for i in self.contour_waterfall:
+                self.view.removeItem(i)
+        self.contour_waterfall.clear()
+        if self.x_axis_type == 0:
+            xvals = self.tthvals
+        elif self.x_axis_type == 1:
+            xvals = self.qvals
+        for i in range(len(self.integral_data)):
+            self.contour_waterfall.append(pg.PlotDataItem())
+            self.contour_waterfall[i].setData(
+                xvals,
+                self.integral_data[i] + i * self.offset.value()
+            )
+        if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+            # see if there's an addItems
+            [self.view.addItem(i) for i in self.contour_waterfall]
+
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
-        self.axis_type = axis_type
+        self.x_axis_type = axis_type
         # self.wavelength = wavelength
         if axis_type == 0:
             self.contour_image.setRect(
@@ -266,6 +306,8 @@ class ContourView(pg.GraphicsLayoutWidget):
                 self.qvals[-1] - self.qvals[0],
                 self.yvals[-1] + self.live_spacing - self.yvals[0],
             )
+        if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+            self.update_waterfall_data()
 
     def update_integral_data_manual(self):
         self.live_spacing = self.integral_step.value()
@@ -293,11 +335,25 @@ class ContourView(pg.GraphicsLayoutWidget):
                 self.live_integral_step_changed
             )
             self.update_integral_list(reset_z=reset_z)
+        if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+            self.update_waterfall_data()
 
     def integral_type_changed(self, evt):
         self.integral_extension = self.integral_type_dict[self.integral_types[evt]]
         # TODO: only reset list/data; keep settings
         self.reset_integral_data()
+
+    def viewtype_changed(self, evt):
+        if evt == Viewtype.Contour.value:
+            for i in self.contour_waterfall:
+                self.view.removeItem(i)
+            self.view.addItem(self.contour_image)
+        elif evt == Viewtype.Waterfall.value:
+            self.view.removeItem(self.contour_image)
+            self.update_waterfall_data()
+
+    def offset_changed(self):
+        self.update_integral_data()
 
     def update_integral_live(self):
         reset = False

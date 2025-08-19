@@ -40,6 +40,8 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.contour_layout.addWidget(self.contour_widget.live_update_checkbox, 5, 0)
         self.contour_layout.addWidget(self.contour_widget.tth_line_checkbox, 5, 1)
         self.contour_layout.addWidget(self.contour_widget.integral_select, 5, 2)
+        self.contour_layout.addWidget(self.contour_widget.viewtype_select, 5, 3)
+        self.contour_layout.addWidget(self.contour_widget.offset, 5, 4)
         self.contour_layout.addWidget(self.contour_widget.live_integral_min_label, 6, 0)
         self.contour_layout.addWidget(self.contour_widget.live_integral_min, 6, 1)
         self.contour_layout.addWidget(self.contour_widget.live_integral_max_label, 6, 2)
