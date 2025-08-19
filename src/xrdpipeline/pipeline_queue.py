@@ -23,7 +23,7 @@ from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
 from corrections_and_maps import get_Qbands
 
 class image_monitor(RegexMatchingEventHandler):
-    def __init__(self, queue):
+    def __init__(self, queue, include=None, exclude=None):
         # dir\name_number_ext.tif or dir\name-number_ext.tif
         #'number' may be 00000 or xxxxx_xxxxx or xxxxx-xxxxx
         #'_ext' not on base images
@@ -32,9 +32,16 @@ class image_monitor(RegexMatchingEventHandler):
         reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
         # reg for integral data files
 
-        ###
-        regs = [reg_image]
-        RegexMatchingEventHandler.__init__(self, regexes=regs)
+        # RegexMatchingEventHandler uses the OR of all passed entries, not AND, so it must be built into the string
+        if (include is not None) and (include.strip() != ""):
+            reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(include) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+            regs = [reg_include]
+        else:
+            regs = [reg_image]
+        ignore_regs = None
+        if (exclude is not None) and (exclude.strip() != ""):
+            ignore_regs = [r".*" + re.escape(exclude) + r".*"]
+        RegexMatchingEventHandler.__init__(self, regexes=regs, ignore_regexes=ignore_regs)
         self.queue = queue
 
     def on_created(self, event):
@@ -442,6 +449,11 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_spottiness_default = True
         self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
 
+        self.regex_include_label = QtWidgets.QLabel("Only include filenames with:")
+        self.regex_include_text = QtWidgets.QLineEdit()
+        self.regex_exclude_label = QtWidgets.QLabel("Exclude filenames with:")
+        self.regex_exclude_text = QtWidgets.QLineEdit()
+
         self.defaults_button = QtWidgets.QPushButton("Restore Defaults")
         self.defaults_button.released.connect(self.restore_defaults)
 
@@ -450,7 +462,11 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_settings.setLayout(self.outlier_layout)
         self.settings_layout = QtWidgets.QGridLayout()
         # self.settings_layout.addWidget(self.settings_label, 0, 0, 1, 2)
-        self.settings_layout.addWidget(self.calc_outlier_checkbox, 0, 0, 1, 2)
+        self.settings_layout.addWidget(self.regex_include_label, 0, 0)
+        self.settings_layout.addWidget(self.regex_include_text, 0, 1)
+        self.settings_layout.addWidget(self.regex_exclude_label, 1, 0)
+        self.settings_layout.addWidget(self.regex_exclude_text, 1, 1)
+        self.settings_layout.addWidget(self.calc_outlier_checkbox, 2, 0, 1, 2)
         self.outlier_layout.addWidget(self.override_label, 0, 0, 1, 2)
         self.outlier_layout.addWidget(self.madmult_override, 1, 0)
         self.outlier_layout.addWidget(self.madmult, 1, 1)
@@ -460,8 +476,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.azim_q_override, 4, 0)
         self.outlier_layout.addWidget(self.azim_q, 4, 1)
         self.outlier_layout.addWidget(self.calc_spottiness_checkbox, 5, 0, 1, 2)
-        self.settings_layout.addWidget(self.outlier_settings, 1, 0, 6, 2)
-        self.settings_layout.addWidget(self.defaults_button, 7, 0)
+        self.settings_layout.addWidget(self.outlier_settings, 3, 0, 6, 2)
+        self.settings_layout.addWidget(self.defaults_button, 9, 0)
 
         self.setLayout(self.settings_layout)
 
@@ -595,7 +611,7 @@ class main_window(QtWidgets.QWidget):
         self.cache = {}  # place to save intermediate computations
 
         self.queue = deque()
-        self.event_handler = image_monitor(self.queue)
+        # self.event_handler = image_monitor(self.queue)
         self.stop_event = threading.Event()
         # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
 
@@ -830,6 +846,8 @@ class main_window(QtWidgets.QWidget):
         self.imgmask = self.predef_mask_widget.file_name.text()
         self.flatfield = self.flatfield_widget.file_name.text()
         self.bad_pixels = self.bad_pixel_mask_widget.file_name.text()
+        self.include_regex = self.settings_widget.regex_include_text.text()
+        self.exclude_regex = self.settings_widget.regex_exclude_text.text()
         self.cache = {}
         self.has_made_cache = False
         # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
@@ -853,11 +871,22 @@ class main_window(QtWidgets.QWidget):
             # number -> actual int
             # number_int = results[0].group("number").remove("-").remove("_")
             # number_int = int(number_int)
+            if (self.include_regex is not None) and (self.include_regex.strip() != ""):
+                reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(self.include_regex) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+                regs = reg_include
+            else:
+                regs = reg_image
+            ignore_regs = None
+            if (self.exclude_regex is not None) and (self.exclude_regex.strip() != ""):
+                ignore_regs = r".*" + re.escape(self.exclude_regex) + r".*"
             for filename in existing_files:
                 # Add file path to queue, stripping ".metadata"
-                results = re.match(reg_image, filename)
+                results = re.match(regs, filename)
                 # Regex observer uses re.findall(), so it needs results[0].
                 # self.queue.append([filename[:-9],results.group("name"),results.group("number")])
+                if results is not None and ignore_regs is not None:
+                    if re.match(ignore_regs, filename):
+                        continue
                 if results is not None:
                     self.queue.append(
                         [
@@ -878,6 +907,7 @@ class main_window(QtWidgets.QWidget):
         print("Starting queue")
 
         self.observer = Observer()
+        self.event_handler = image_monitor(self.queue, include = self.include_regex, exclude = self.exclude_regex)
         self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
         self.observer.start()
 
