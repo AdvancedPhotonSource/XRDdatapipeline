@@ -162,12 +162,18 @@ class KeyPressWindow(QtWidgets.QMainWindow):
         # bookkeeping
         self.w = QtWidgets.QWidget()
         self.setCentralWidget(self.w)
-        self.directory_widget = FileSelect(
-            "Directory:",
+        self.image_directory_widget = FileSelect(
+            "Image Directory:",
             default_text=".",
             isdir=True,
         )
-        self.directory = "."
+        self.image_directory = "."
+        self.output_directory_widget = FileSelect(
+            "Output Directory:",
+            default_text=".",
+            isdir=True,
+        )
+        self.output_directory = "."
         self.hide_config_button = QtWidgets.QPushButton("Hide Config")
         self.image_name = QtWidgets.QLabel("")
         self.tiflist = []
@@ -193,16 +199,20 @@ class KeyPressWindow(QtWidgets.QMainWindow):
         # layout
         self.win_layout = QtWidgets.QGridLayout()
         self.w.setLayout(self.win_layout)
-        self.win_layout.addWidget(self.directory_widget, 0, 0, 1, 3)
-        self.win_layout.addWidget(self.image_name, 0, 3, 1, 2)
-        self.win_layout.addWidget(self.hide_config_button, 0, 5, 1, 2)
+        self.topbar_layout = QtWidgets.QHBoxLayout()
+        self.topbar_layout.addWidget(self.image_directory_widget, 2)
+        self.topbar_layout.addWidget(self.output_directory_widget, 2)
+        self.topbar_layout.addWidget(self.image_name, 2)
+        self.topbar_layout.addWidget(self.hide_config_button, 2)
+        self.win_layout.addLayout(self.topbar_layout, 0, 0, 1, 10)
         self.win_layout.addWidget(self.image_1, 1, 0, 5, 5)
         self.win_layout.addWidget(self.image_2, 6, 0, 5, 5)
         self.win_layout.addWidget(self.image_3, 1, 5, 5, 5)
         self.win_layout.addWidget(self.image_4, 6, 5, 5, 5)
 
         # signals
-        self.directory_widget.file_selected.connect(self.directory_changed)
+        self.image_directory_widget.file_selected.connect(self.image_directory_changed)
+        self.output_directory_widget.file_selected.connect(self.output_directory_changed)
         self.hide_config_button.released.connect(self.config_button_pressed)
 
         self.image_1.image_dir.editingFinished.connect(self.updateImages)
@@ -248,8 +258,8 @@ class KeyPressWindow(QtWidgets.QMainWindow):
             self.update_tiflist()
 
     def update_tiflist(self, reset=False):
-        print(self.directory)
-        self.fulltiflist = glob.glob(self.directory + os.sep + "*.tif")
+        print(self.image_directory)
+        self.fulltiflist = glob.glob(self.image_directory + os.sep + "*.tif")
         self.keylist = []
         self.tiflist = {}
         for tif in self.fulltiflist:
@@ -348,16 +358,28 @@ class KeyPressWindow(QtWidgets.QMainWindow):
             self.image_4.resetHistoRange(maxval)
 
     def findImage(self, subdir=".", ext="", except_shape=(2880, 2880)):
-        try:
-            im = imread(
-                os.path.join(
-                    self.directory,
-                    subdir,
-                    self.tiflist[self.keylist[self.curr_key]][self.curr_pos] + ext + ".tif"
+        if (subdir == ".") or (subdir == ""):
+            try:
+                im = imread(
+                    os.path.join(
+                        self.image_directory,
+                        subdir,
+                        self.tiflist[self.keylist[self.curr_key]][self.curr_pos] + ext + ".tif"
+                    )
                 )
-            )
-        except:
-            im = np.zeros(except_shape)
+            except:
+                im = np.zeros(except_shape)
+        else:
+            try:
+                im = imread(
+                    os.path.join(
+                        self.output_directory,
+                        subdir,
+                        self.tiflist[self.keylist[self.curr_key]][self.curr_pos] + ext + ".tif"
+                    )
+                )
+            except:
+                im = np.zeros(except_shape)
         return im
 
     def addMaskImage(self, ext, image_item, subdir="masks" + os.sep, alpha=175):
@@ -444,9 +466,15 @@ class KeyPressWindow(QtWidgets.QMainWindow):
         else:
             self.image_4.imview.getHistogramWidget().vb.setYLink(None)
 
-    def directory_changed(self, directory):
-        self.directory = directory
+    def image_directory_changed(self, directory):
+        self.image_directory = directory
         self.update_tiflist(reset=True)
+
+    def output_directory_changed(self, directory):
+        self.output_directory = directory
+        # self.curr_key = 0
+        # self.curr_pos = 0
+        self.updateImages()
 
     def config_button_pressed(self):
         if self.hide_config_button.text() == "Hide Config":

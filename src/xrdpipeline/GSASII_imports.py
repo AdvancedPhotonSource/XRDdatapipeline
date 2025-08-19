@@ -2,6 +2,7 @@ import os, sys
 import numpy as np
 import skimage as ski
 import tifffile as tf
+import time
 
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -216,6 +217,106 @@ def LoadControls(Slines, data):
         elif key in cntlList:
             save[key] = eval(val)
     data.update(save)
+
+
+# recreate for poni files
+def LoadControlsPONI(Slines, data):
+    "Read values from a .poni image control file."
+    cntlList = [
+        "Detector_config",
+        "Distance",
+        "Poni1",
+        "Poni2",
+        "Rot1",
+        "Rot2",
+        "Rot3",
+        "Wavelength"
+    ]
+    initial_data = {}
+    for S in Slines:
+        if S[0] == "#":
+            continue
+        [key, val] = S.strip().split(":", 1)
+        if key in [
+            "Detector_config"
+        ]:
+            initial_data[key] = eval(val) # dictionary
+        elif key in [
+            "Distance",
+            "Poni1",
+            "Poni2",
+            "Rot1",
+            "Rot2",
+            "Rot3",
+            "Wavelength"
+        ]:
+            initial_data[key] = float(val)
+    # now convert
+    save = poni_to_gsasii(initial_data)
+    # add info for number of outchannels, iotth
+    # save["outChannels"] = 2500 # seems a default in the imctrl files
+    # save["IOtth"] = [0.8, 16.8] # needs to be adjusted/determined
+    # save["PolaVal"] = [0.9, False] # boolean unclear; should probably set to 1.0 and tell people to provide polarization correction file or number if needed
+    # temporarily overwrite with what they should be in case this is incorrectly converting:
+    # save["distance"] = 689.5465510332797
+    # save["tilt"] = -0.16803895763020923
+    # save["rotation"] = 327.8798449443938
+    # save["center"] = [214.78748452404744, 216.55137107349705]
+    # save["wavelength"] = 0.24087
+
+    data.update(save)
+
+# from pyfai.geometry.fit2d.convert_to_Fit2d
+def poni_to_gsasii(controls):
+    cos_tilt = np.cos(controls["Rot1"]) * np.cos(controls["Rot2"])
+    sin_tilt = np.sqrt(1.0 - cos_tilt * cos_tilt)
+    tan_tilt = sin_tilt / cos_tilt
+
+    # PyFai's 'tilt plane rotation'
+    if sin_tilt == 0:
+        # tilt plane rotation undefined when there is no tilt
+        cos_tilt = 1.0
+        sin_tilt = 0.0
+        cos_tpr = 1.0
+        sin_tpr = 0.0
+    else:
+        cos_tpr = max(-1.0, min(1.0, -np.cos(controls["Rot2"]) * np.sin(controls["Rot1"]) / sin_tilt))
+        sin_tpr = np.sin(controls["Rot2"]) / sin_tilt
+    directDist = 1.0e3 * controls["Distance"] / cos_tilt
+    tilt = np.degrees(np.arccos(cos_tilt))
+    if sin_tpr < 0:
+        tpr = -np.degrees(np.arccos(cos_tpr))
+    else:
+        tpr = np.degrees(np.arccos(cos_tpr))
+
+    # centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) / controls["Detector_config"]["pixel2"]
+    centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) * 1000
+    if abs(tilt) < 1e-5: # in degrees
+        # centerY = (controls["Poni1"]) / controls["Detector_config"]["pixel1"]
+        centerY = (controls["Poni1"]) * 1000
+    else:
+        # centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) / controls["Detector_config"]["pixel1"]
+        centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) * 1000
+    
+    # further corrections to match GSASII: angle is off by 90 degrees
+    
+    tilt = -tilt
+    tpr = 360-tpr
+    if tpr > 360:
+        tpr -= 360
+    tpr -= 90.
+    if tpr < 0:
+        tpr += 360
+
+    out = {}
+    out["distance"] = directDist
+    out["tilt"] = tilt
+    out["rotation"] = tpr
+    out["center"] = [centerX, centerY]
+    out["wavelength"] = controls["Wavelength"] * 1e10
+    print(out)
+
+    return out
 
 
 # G2fil; used to read in user-defined GSAS-II masks
@@ -952,3 +1053,336 @@ def peneCorr(tth, dep, dist):
     "Needs a doc string"
     return dep * (1.0 - npcosd(tth)) * dist**2 / 1000.0  # best one
 
+# G2img_1TIF.py
+def GetTifData(filename, DEBUG=False):
+    '''Read an image in a pseudo-tif format,
+    as produced by a wide variety of software, almost always
+    incorrectly in some way. 
+    '''
+    import struct as st
+    import array as ar
+    image = None
+    File = open(filename,'rb')
+    dataType = 5
+    center = [None,None]
+    wavelength = None
+    distance = None
+    polarization = None
+    samplechangerpos = None
+    xpixelsize = None
+    ypixelsize = None
+    pixy = None
+    try:
+        Meta = open(filename+'.metadata','r')
+        head = Meta.readlines()
+        for line in head:
+            line = line.strip()
+            try:
+                if '=' not in line: continue
+                keyword = line.split('=')[0].strip()
+                if 'dataType' == keyword:
+                    dataType = int(line.split('=')[1])
+                elif 'wavelength' == keyword.lower():
+                    wavelength = float(line.split('=')[1])
+                elif 'distance' == keyword.lower():
+                    distance = float(line.split('=')[1])
+                elif 'polarization' == keyword.lower():
+                    polarization = float(line.split('=')[1])
+                elif 'samplechangercoordinate' == keyword.lower():
+                    samplechangerpos = float(line.split('=')[1])
+                elif 'detectorxpixelsize' == keyword.lower():
+                    xpixelsize = float(line.split('=')[1])
+                elif 'detectorypixelsize' == keyword.lower():
+                    ypixelsize = float(line.split('=')[1])
+            except:
+                print('error reading metadata: '+line)
+        Meta.close()
+    except IOError:
+        if DEBUG:
+            print ('no metadata file found - will try to read file anyway')
+        head = ['no metadata file found',]
+        
+    tag = File.read(2)
+    if 'bytes' in str(type(tag)):
+        tag = tag.decode('latin-1')
+    byteOrd = '<'
+    if tag == 'II' and int(st.unpack('<h',File.read(2))[0]) == 42:     #little endian
+        IFD = int(st.unpack(byteOrd+'i',File.read(4))[0])
+    elif tag == 'MM' and int(st.unpack('>h',File.read(2))[0]) == 42:   #big endian
+        byteOrd = '>'
+        IFD = int(st.unpack(byteOrd+'i',File.read(4))[0])        
+    else:
+        lines = ['not a detector tiff file',]
+        return lines,0,0,0
+    File.seek(IFD)                                                  #get number of directory entries
+    NED = int(st.unpack(byteOrd+'h',File.read(2))[0])
+    IFD = {}
+    nSlice = 1
+    if DEBUG: print('byteorder:',byteOrd)
+    for ied in range(NED):
+        Tag,Type = st.unpack(byteOrd+'Hh',File.read(4))
+        nVal = st.unpack(byteOrd+'i',File.read(4))[0]
+        if DEBUG: print ('Try:',Tag,Type,nVal)
+        if Type == 1:
+            Value = st.unpack(byteOrd+nVal*'b',File.read(nVal))
+        elif Type == 2:
+            Value = st.unpack(byteOrd+'i',File.read(4))
+        elif Type == 3:
+            Value = st.unpack(byteOrd+nVal*'h',File.read(nVal*2))
+            st.unpack(byteOrd+nVal*'h',File.read(nVal*2))
+        elif Type == 4:
+            if Tag in [273,279]:
+                nSlice = nVal
+                nVal = 1
+            Value = st.unpack(byteOrd+nVal*'i',File.read(nVal*4))
+        elif Type == 5:
+            Value = st.unpack(byteOrd+nVal*'i',File.read(nVal*4))
+        elif Type == 11:
+            Value = st.unpack(byteOrd+nVal*'f',File.read(nVal*4))
+        IFD[Tag] = [Type,nVal,Value]
+        if DEBUG: print (Tag,IFD[Tag])
+    sizexy = [IFD[256][2][0],IFD[257][2][0]]
+    [nx,ny] = sizexy
+    Npix = nx*ny
+    time0 = time.time()
+    if 34710 in IFD:
+        print ('Read MAR CCD tiff file: '+filename)
+        import ReadMarCCDFrame as rmf
+        marFrame = rmf.marFrame(File,byteOrd,IFD)
+        image = np.array(np.asarray(marFrame.image),dtype=np.int32)
+        image = np.reshape(image,sizexy)
+        if marFrame.origin:     #not upper left?
+            image = np.flipud(image)
+        if marFrame.viewDirection:  #view through sample to detector instead of TOWARD_SOURCE
+            image = np.fliplr(image)
+        tifType = marFrame.filetitle
+        pixy = [marFrame.pixelsizeX/1000.0,marFrame.pixelsizeY/1000.0]
+        head = marFrame.outputHead()
+# extract resonable wavelength from header
+        wavelength = marFrame.sourceWavelength*1e-5
+        wavelength = (marFrame.opticsWavelength > 0) and marFrame.opticsWavelength*1e-5 or wavelength
+        wavelength = (wavelength <= 0) and None or wavelength
+# extract resonable distance from header
+        distance = (marFrame.startXtalToDetector+marFrame.endXtalToDetector)*5e-4
+        distance = (distance <= marFrame.startXtalToDetector*5e-4) and marFrame.xtalToDetector*1e-3 or distance
+        distance = (distance <= 0) and None or distance
+# extract resonable center from header
+        center = [marFrame.beamX*marFrame.pixelsizeX*1e-9,marFrame.beamY*marFrame.pixelsizeY*1e-9]
+        center = (center[0] != 0 and center[1] != 0) and center or [None,None]
+#print head,tifType,pixy
+    elif nSlice > 1:    #CheMin multislice tif file!
+        try:
+            import Image as Im
+        except ImportError:
+            try:
+                from PIL import Image as Im
+            except ImportError:
+                print ("PIL/pillow Image module not present. This TIF cannot be read without this")
+                #raise Exception("PIL/pillow Image module not found")
+                lines = ['not a detector tiff file',]
+                return lines,0,0,0
+        tifType = 'CheMin'
+        pixy = [40.,40.]
+        image = np.flipud(np.array(Im.open(filename)))*10.
+        distance = 18.0
+        center = [pixy[0]*sizexy[0]/2000,0]     #the CheMin beam stop is here
+        wavelength = 1.78892
+    elif 272 in IFD:
+        ifd = IFD[272]
+        File.seek(ifd[2][0])
+        S = File.read(ifd[1])
+        if b'PILATUS' in S:
+            tifType = 'Pilatus'
+            dataType = 0
+            pixy = [172.,172.]
+            File.seek(4096)
+            print ('Read Pilatus tiff file: '+filename)
+            image = np.array(np.frombuffer(File.read(4*Npix),dtype=np.int32),dtype=np.int32)
+        else:
+            if IFD[258][2][0] == 16:
+                if sizexy == [3888,3072] or sizexy == [3072,3888]:
+                    tifType = 'Dexela'
+                    pixy = [74.8,74.8]
+                    print ('Read Dexela detector tiff file: '+filename)
+                else:
+                    tifType = 'GE'
+                    pixy = [200.,200.]
+                    print ('Read GE-detector tiff file: '+filename)
+                File.seek(8)
+                image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+            elif IFD[258][2][0] == 32:
+                # includes CHESS & Pilatus files from Area Detector
+                tifType = 'CHESS'
+                pixy = [200.,200.]
+                File.seek(8)
+                print ('Read as 32-bit unsigned (CHESS) tiff file: '+filename)
+                image = np.array(ar.array('I',File.read(4*Npix)),dtype=np.uint32)
+    elif 270 in IFD:
+        File.seek(IFD[270][2][0])
+        S = File.read(IFD[273][2][0]-IFD[270][2][0])
+        if b'Pilatus3' in S:
+            tifType = 'Pilatus3'
+            dataType = 0
+            pixy = [172.,172.]
+            File.seek(IFD[273][2][0])
+            print ('Read Pilatus3 tiff file: '+filename)
+            image = np.array(np.frombuffer(File.read(4*Npix),dtype=np.int32),dtype=np.int32)
+        elif b'ImageJ' in S:
+            tifType = 'ImageJ'
+            dataType = 0
+            pixy = [200.,200.]*IFD[277][2][0]
+            File.seek(IFD[273][2][0])
+            print ('Read ImageJ tiff file: '+filename)
+            if IFD[258][2][0] == 32:
+                image = File.read(4*Npix)
+                image = np.array(np.frombuffer(image,dtype=byteOrd+'i4'),dtype=np.int32)
+            elif IFD[258][2][0] == 16:
+                image = File.read(2*Npix)
+                pixy = [109.92,109.92]      #for LCLS ImageJ tif files
+                image = np.array(np.frombuffer(image,dtype=byteOrd+'u2'),dtype=np.int32)
+        else:   #gain map from  11-ID-C?
+            pixy = [200.,200.]
+            tifType = 'Gain map'
+            image = File.read(4*Npix)
+            image = np.array(np.frombuffer(image,dtype=byteOrd+'f4')*1000,dtype=np.int32)
+            
+    elif 262 in IFD and IFD[262][2][0] > 4:
+        tifType = 'DND'
+        pixy = [158.,158.]
+        File.seek(512)
+        print ('Read DND SAX/WAX-detector tiff file: '+filename)
+        image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+    elif sizexy == [1536,1536]:
+        tifType = 'APS Gold'
+        pixy = [150.,150.]
+        File.seek(64)
+        print ('Read Gold tiff file:'+filename)
+        image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+    elif sizexy == [2048,2048] or sizexy == [1024,1024] or sizexy == [3072,3072]:
+        if IFD[273][2][0] == 8:
+            if IFD[258][2][0] == 32:
+                tifType = 'PE'
+                pixy = [200.,200.]
+                File.seek(8)
+                print ('Read APS PE-detector tiff file: '+filename)
+                if dataType == 5:
+                    image = np.array(np.frombuffer(File.read(4*Npix),dtype=np.float32),dtype=np.int32)  #fastest
+                else:
+                    image = np.array(np.frombuffer(File.read(4*Npix),dtype=np.int32),dtype=np.int32)
+            elif IFD[258][2][0] == 16: 
+                tifType = 'MedOptics D1'
+                pixy = [46.9,46.9]
+                File.seek(8)
+                print ('Read MedOptics D1 tiff file: '+filename)
+                image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+                  
+        elif IFD[273][2][0] == 4096:
+            if sizexy[0] == 3072:
+                pixy =  [73.,73.]
+                tifType = 'MAR225'            
+            else:
+                pixy = [158.,158.]
+                tifType = 'MAR325'            
+            File.seek(4096)
+            print ('Read MAR CCD tiff file: '+filename)
+            image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+        elif IFD[273][2][0] == 512:
+            tifType = '11-ID-C'
+            pixy = [200.,200.]
+            File.seek(512)
+            print ('Read 11-ID-C tiff file: '+filename)
+            image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+                    
+    elif sizexy == [4096,4096]:
+        if IFD[273][2][0] == 8:
+            if IFD[258][2][0] == 16:
+                tifType = 'scanCCD'
+                pixy = [9.,9.]
+                File.seek(8)
+                print ('Read APS scanCCD tiff file: '+filename)
+                image = np.array(ar.array('H',File.read(2*Npix)),dtype=np.int32)
+            elif IFD[258][2][0] == 32:
+                tifType = 'PE4k'
+                pixy = [100.,100.]
+                File.seek(8)
+                print ('Read PE 4Kx4K tiff file: '+filename)
+                image = np.array(np.frombuffer(File.read(4*Npix),dtype=np.float32)/2.**4,dtype=np.int32)
+        elif IFD[273][2][0] == 4096:
+            tifType = 'Rayonix'
+            pixy = [73.242,73.242]
+            File.seek(4096)
+            print ('Read Rayonix MX300HE tiff file: '+filename)
+            image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.uint16),dtype=np.int32)
+    elif sizexy == [391,380]:
+        pixy = [109.92,109.92]
+        File.seek(8)
+        image = np.array(np.frombuffer(File.read(2*Npix),dtype=np.int16),dtype=np.int32)
+    elif sizexy == [380,391]:
+        File.seek(110)
+        pixy = [109.92,109.92]
+        image = np.array(np.frombuffer(File.read(Npix),dtype=np.uint8),dtype=np.int32)
+    elif sizexy ==  [825,830]:
+        pixy = [109.92,109.92]
+        File.seek(8)
+        image = np.array(np.frombuffer(File.read(Npix),dtype=np.uint8),dtype=np.int32)
+    elif sizexy ==  [1800,1800]:
+        pixy = [109.92,109.92]
+        File.seek(110)
+        image = np.array(np.frombuffer(File.read(Npix),dtype=np.uint8),dtype=np.int32)
+    elif sizexy == [2880,2880]:
+        pixy = [150.,150.]
+        File.seek(8)
+        dt = np.dtype(np.float32)
+        dt = dt.newbyteorder(byteOrd)
+        image = np.array(np.frombuffer(File.read(Npix*4),dtype=dt),dtype=np.int32)
+    elif sizexy == [3070,1102]:
+        print ('Read Dectris Eiger 1M tiff file: '+filename)
+        pixy = [75.,75.]
+        File.seek(8)
+        dt = np.dtype(np.float32)
+        dt = dt.newbyteorder(byteOrd)
+        image = np.array(np.frombuffer(File.read(Npix*4),dtype=np.uint32),dtype=np.int32)
+    elif sizexy == [1024,402]:
+        pixy = [56.,56.]
+        File.seek(8)
+        dt = np.dtype(np.float32)
+        dt = dt.newbyteorder(byteOrd)
+        image = np.array(np.frombuffer(File.read(Npix*2),dtype=np.uint16),dtype=np.int32)
+        
+#    elif sizexy == [960,960]:
+#        tiftype = 'PE-BE'
+#        pixy = (200,200)
+#        File.seek(8)
+#        if not imageOnly:
+#            print 'Read Gold tiff file:',filename
+#        image = np.array(ar.array('H',File.read(2*Npix)),dtype=np.int32)
+           
+    if image is None:
+        lines = ['not a known detector tiff file',]
+        File.close()    
+        return lines,0,0,0
+        
+    if sizexy[1]*sizexy[0] != image.size: # test is resize is allowed
+        lines = ['not a known detector tiff file',]
+        File.close()    
+        return lines,0,0,0
+#    if GSASIIpath.GetConfigValue('debug'):
+    if DEBUG:
+        print ('image read time: %.3f'%(time.time()-time0))
+    image = np.reshape(image,(sizexy[1],sizexy[0]))
+    center = (not center[0]) and [pixy[0]*sizexy[0]/2000,pixy[1]*sizexy[1]/2000] or center
+    wavelength = (not wavelength) and 0.10 or wavelength
+    distance = (not distance) and 100.0 or distance
+    polarization = (not polarization) and 0.99 or polarization
+    samplechangerpos = (not samplechangerpos) and 0.0 or samplechangerpos
+    if xpixelsize is not None and ypixelsize is not None:
+        pixy_meta = [xpixelsize,ypixelsize]
+        # if GSASIIpath.GetConfigValue('debug'):
+        if DEBUG:
+            print ('pixel size from metadata: '+str(pixy_meta))
+        if pixy is None:
+            pixy = pixy_meta
+    data = {'pixelSize':pixy,'pixelSize_metadata':pixy_meta,'wavelength':wavelength,'distance':distance,'center':center,'size':sizexy,
+            'setdist':distance,'PolaVal':[polarization,False],'samplechangerpos':samplechangerpos,'det2theta':0.0}
+    File.close()
+    return head,data,Npix,image

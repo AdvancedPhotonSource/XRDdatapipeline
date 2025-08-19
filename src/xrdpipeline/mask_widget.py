@@ -88,6 +88,23 @@ def read_imctrl(imctrlname):
     return image_controls
 
 
+def get_save_file_location(ext):
+    location = QtWidgets.QFileDialog.getSaveFileName(
+        None,
+        "Save as...",
+        ".",
+        ext,
+    )
+    start, typed_end = os.path.splitext(location[0])
+    if start == "":
+        return None
+    if (typed_end != "") and typed_end != ext:
+        print("Typed extension does not match required file type.")
+    filename = start + ext
+    print(f"Saving {filename}")
+    return filename
+
+
 class Point(pg.QtCore.QPoint):
     def __init__(self, image_size, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -707,7 +724,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
     def __init__(self):
         super().__init__()
         self.setMinimumSize(1000,600)
-        self.main_image = MainImage()
+        self.image_file_name = choose_file()
+        self.main_image = MainImage(self.image_file_name)
         # Read/Write buttons
         self.load_immask_button = QtWidgets.QPushButton(
             "Load immask"
@@ -839,6 +857,12 @@ class MainWindow(pg.GraphicsLayoutWidget):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","imctrl files (*.imctrl)")[0]
         self.cache = {}
         self.cache['size'] = self.main_image.image_data.shape
+        # with tf.TiffFile(self.image_file_name) as tif:
+        #     for page in tif.pages:
+        #         for tag in page.tags:
+        #             print(f"{tag.name}: {tag.value}")
+        _,data,_,_ = GetTifData(self.image_file_name)
+        self.cache = data
         getmaps(self.cache, imctrl_file_name,".", save=False) # use os path
         Arc.tthmap = self.cache['pixelTAmap']
         Arc.azmap = self.cache['pixelAzmap']
@@ -1110,193 +1134,197 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.preview_mask_button.setText("Preview Mask")
 
     def save_mask(self):
-        tf.imwrite("predef_mask.tif", self.predef_mask)
+        location = get_save_file_location(".tif")
+        if location is not None:
+            tf.imwrite(location, self.predef_mask)
 
     def save_immask(self):
-        # GSASII outputs/expects an explicit return to the first point
-        polygon_points_list = []
-        frame_points_list = []
-        arcs_list = []
-        xlines = []
-        ylines = []
-        points = []
-        rings_list = []
-        for i in self.main_image.objects:
-            if type(i) == Polygon:
-                poly_points = i.saveState()["points"]
-                # print(poly_points)
-                poly_points = [
-                    [
-                        pixel_to_mm(x, self.cache["pixelSize"][0]),
-                        pixel_to_mm(y,self.cache["pixelSize"][1])
-                    ] for x,y in poly_points
-                ]
-                # print(poly_points)
-                poly_points.append(poly_points[0])
-                if i.isFrame:
-                    frame_points_list = poly_points
-                else:
-                    polygon_points_list.append(poly_points)
-            elif type(i) == Arc:
-                # arcs_list.append(i.table_item.text())
-                # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
-                arcs_list.append([
-                    i.tth_center,
-                    [i.startazim,i.endazim],
-                    i.tthwidth
-                ])
-            elif type(i) == Line:
-                if i.orientation == "horizontal":
-                    xlines.append(int(i.table_item.text()))
-                else:
-                    ylines.append(int(i.table_item.text()))
-            elif type(i) == Spot:
-                center0_mm = pixel_to_mm(
-                    i.center[1],
-                    self.cache["pixelSize"][0]
-                )
-                center1_mm = pixel_to_mm(
-                    i.center[0],
-                    self.cache["pixelSize"][1]
-                )
-                if self.imagescale_is_square:
-                    diameter_mm = pixel_to_mm(
-                        i.radius * 2,
+        outfilename = get_save_file_location(".immask")
+        if outfilename is not None:
+            # GSASII outputs/expects an explicit return to the first point
+            polygon_points_list = []
+            frame_points_list = []
+            arcs_list = []
+            xlines = []
+            ylines = []
+            points = []
+            rings_list = []
+            for i in self.main_image.objects:
+                if type(i) == Polygon:
+                    poly_points = i.saveState()["points"]
+                    # print(poly_points)
+                    poly_points = [
+                        [
+                            pixel_to_mm(x, self.cache["pixelSize"][0]),
+                            pixel_to_mm(y,self.cache["pixelSize"][1])
+                        ] for x,y in poly_points
+                    ]
+                    # print(poly_points)
+                    poly_points.append(poly_points[0])
+                    if i.isFrame:
+                        frame_points_list = poly_points
+                    else:
+                        polygon_points_list.append(poly_points)
+                elif type(i) == Arc:
+                    # arcs_list.append(i.table_item.text())
+                    # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
+                    arcs_list.append([
+                        i.tth_center,
+                        [i.startazim,i.endazim],
+                        i.tthwidth
+                    ])
+                elif type(i) == Line:
+                    if i.orientation == "horizontal":
+                        xlines.append(int(i.table_item.text()))
+                    else:
+                        ylines.append(int(i.table_item.text()))
+                elif type(i) == Spot:
+                    center0_mm = pixel_to_mm(
+                        i.center[1],
                         self.cache["pixelSize"][0]
                     )
-                else:
-                    print("Warning: Radius may not align with GSASII as image is not square.")
-                    diameter_mm = pixel_to_mm(
-                        i.radius * 2,
-                        np.sqrt(
-                            self.cache["pixelSize"][0] ** 2
-                            + self.cache["pixelSize"][1] ** 2
-                        )
+                    center1_mm = pixel_to_mm(
+                        i.center[0],
+                        self.cache["pixelSize"][1]
                     )
-                points.append([center0_mm, center1_mm, diameter_mm])
-            elif type(i) == Point:
-                x_mm = pixel_to_mm(
-                    i.x(),
-                    self.cache["pixelSize"][0]
-                )
-                y_mm = pixel_to_mm(
-                    i.y(),
-                    self.cache["pixelSize"][1]
-                )
-                if self.imagescale_is_square:
-                    d_mm = pixel_to_mm(
-                        1,
+                    if self.imagescale_is_square:
+                        diameter_mm = pixel_to_mm(
+                            i.radius * 2,
+                            self.cache["pixelSize"][0]
+                        )
+                    else:
+                        print("Warning: Radius may not align with GSASII as image is not square.")
+                        diameter_mm = pixel_to_mm(
+                            i.radius * 2,
+                            np.sqrt(
+                                self.cache["pixelSize"][0] ** 2
+                                + self.cache["pixelSize"][1] ** 2
+                            )
+                        )
+                    points.append([center0_mm, center1_mm, diameter_mm])
+                elif type(i) == Point:
+                    x_mm = pixel_to_mm(
+                        i.x(),
                         self.cache["pixelSize"][0]
                     )
-                else:
-                    d_mm = pixel_to_mm(
-                        1,
-                        np.sqrt(
-                            self.cache["pixelSize"][0] ** 2
-                            + self.cache["pixelSize"][1] ** 2
-                        )
+                    y_mm = pixel_to_mm(
+                        i.y(),
+                        self.cache["pixelSize"][1]
                     )
-                points.append([x_mm, y_mm, d_mm])
-            elif type(i) == Ring:
-                rings_list.append([i.center_tth, i.tth_width])
+                    if self.imagescale_is_square:
+                        d_mm = pixel_to_mm(
+                            1,
+                            self.cache["pixelSize"][0]
+                        )
+                    else:
+                        d_mm = pixel_to_mm(
+                            1,
+                            np.sqrt(
+                                self.cache["pixelSize"][0] ** 2
+                                + self.cache["pixelSize"][1] ** 2
+                            )
+                        )
+                    points.append([x_mm, y_mm, d_mm])
+                elif type(i) == Ring:
+                    rings_list.append([i.center_tth, i.tth_width])
 
-        # TODO: choice of outfile location
-        outfilename = os.path.join(".", "mask.immask")
-        with open(outfilename,'w') as outfile:
-            outfile.write("Points:{points}\n".format(points=points))
-            outfile.write("Rings:{rings}\n".format(rings=rings_list))
-            outfile.write("Arcs:{arcs}\n".format(arcs=arcs_list))
-            # print(points_list)
-            outfile.write(
-                "Polygons:{polys}\n".format(polys=polygon_points_list)
-                .replace('(','[').replace(')',']')
-            )
-            outfile.write("Xlines:{xlines}\n".format(xlines=xlines))
-            outfile.write("Ylines:{ylines}\n".format(ylines=ylines))
-            outfile.write(
-                "Frames:{frames}\n".format(frames=frame_points_list)
-                .replace('(','[').replace(')',']')
-            )
-            # outfile.write("Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(image_min=np.min(self.main_image.image_data),image_max=np.max(self.main_image.image_data)))
-            outfile.write(
-                "Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(
-                    image_min=self.min_intensity_threshold.value(),
-                    image_max=self.max_intensity_threshold.value(),
+            # outfilename = os.path.join(".", "mask.immask")
+            with open(outfilename,'w') as outfile:
+                outfile.write("Points:{points}\n".format(points=points))
+                outfile.write("Rings:{rings}\n".format(rings=rings_list))
+                outfile.write("Arcs:{arcs}\n".format(arcs=arcs_list))
+                # print(points_list)
+                outfile.write(
+                    "Polygons:{polys}\n".format(polys=polygon_points_list)
+                    .replace('(','[').replace(')',']')
                 )
-            )
+                outfile.write("Xlines:{xlines}\n".format(xlines=xlines))
+                outfile.write("Ylines:{ylines}\n".format(ylines=ylines))
+                outfile.write(
+                    "Frames:{frames}\n".format(frames=frame_points_list)
+                    .replace('(','[').replace(')',']')
+                )
+                # outfile.write("Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(image_min=np.min(self.main_image.image_data),image_max=np.max(self.main_image.image_data)))
+                outfile.write(
+                    "Thresholds:[({image_min}, {image_max}), [{image_min}, {image_max}]]".format(
+                        image_min=self.min_intensity_threshold.value(),
+                        image_max=self.max_intensity_threshold.value(),
+                    )
+                )
 
     def load_immask(self):
-        print("loading")
         infilename = QtWidgets.QFileDialog.getOpenFileName(
             None, "Choose Image Mask", ".", "Immask files (*.immask)"
         )[0]
-        masks = readMasks(infilename)
-        print(masks)
-        # TODO: prompt for clearing the current table vs appending
-        if not self.hasLoadedConfig:
-            print("No config loaded. Please load a config.")
-            return
-        for poly in masks["Polygons"]:
-            self.add_polygon()
-            print(poly)
-            for point in poly:
-                p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
-                p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
-                self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
-            self.done_creating()
-        if len(masks["Frames"]) > 0:
-            self.add_polygon(isFrame=True)
-            for point in masks["Frames"]:
-                p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
-                p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
-                self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
-            self.done_creating()
-        if (len(masks["Points"]) > 0) and not self.imagescale_is_square:
-            print(
-                "Warning: Radius of spots may not align with GSASII due to the image not being square. "
-                "The radius is calculated in pixels here, but in mm in GSASII. "
-                "Direct translations between the two would make ellipses."
-            )
-        for spot in masks["Points"]:
-            self.add_spot()
-            x, y, d = spot
-            x_pix = mm_to_pixel(x, self.cache["pixelSize"][0])
-            y_pix = mm_to_pixel(y, self.cache["pixelSize"][1])
-            if self.imagescale_is_square:
-                r_pix = mm_to_pixel(d/2, self.cache["pixelSize"][0])
-            else:
-                r_pix = mm_to_pixel(
-                    d/2,
-                    np.sqrt(
-                        self.cache["pixelSize"][0] ** 2
-                        + self.cache["pixelSize"][1] **2
-                    )
+        if not ((infilename is None) or (infilename == "")):
+            print(f"Loading {infilename}")
+            masks = readMasks(infilename)
+            print(masks)
+            # TODO: prompt for clearing the current table vs appending
+            if not self.hasLoadedConfig:
+                print("No config loaded. Please load a config.")
+                return
+            for poly in masks["Polygons"]:
+                self.add_polygon()
+                print(poly)
+                for point in poly:
+                    p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
+                    p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
+                    self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
+                self.done_creating()
+            if len(masks["Frames"]) > 0:
+                self.add_polygon(isFrame=True)
+                for point in masks["Frames"]:
+                    p0_pix = int(mm_to_pixel(point[0], self.cache["pixelSize"][0]))
+                    p1_pix = int(mm_to_pixel(point[1], self.cache["pixelSize"][1]))
+                    self.main_image.add_polygon_point(QtCore.QPoint(p0_pix, p1_pix))
+                self.done_creating()
+            if (len(masks["Points"]) > 0) and not self.imagescale_is_square:
+                print(
+                    "Warning: Radius of spots may not align with GSASII due to the image not being square. "
+                    "The radius is calculated in pixels here, but in mm in GSASII. "
+                    "Direct translations between the two would make ellipses."
                 )
-            spot = [x_pix, y_pix, r_pix]
-            self.main_image.objects[-1].table_item.setText(str(spot))
-            self.main_image.objects[-1].updateFromTable()
-        for ring in masks["Rings"]:
-            self.add_ring()
-            self.main_image.objects[-1].table_item.setText(str(ring))
-            self.main_image.objects[-1].updateFromTable()
-        for arc in masks["Arcs"]:
-            self.add_arc()
-            self.main_image.set_arc_point(pg.QtCore.QPoint(0, 0))
+            for spot in masks["Points"]:
+                self.add_spot()
+                x, y, d = spot
+                x_pix = mm_to_pixel(x, self.cache["pixelSize"][0])
+                y_pix = mm_to_pixel(y, self.cache["pixelSize"][1])
+                if self.imagescale_is_square:
+                    r_pix = mm_to_pixel(d/2, self.cache["pixelSize"][0])
+                else:
+                    r_pix = mm_to_pixel(
+                        d/2,
+                        np.sqrt(
+                            self.cache["pixelSize"][0] ** 2
+                            + self.cache["pixelSize"][1] **2
+                        )
+                    )
+                spot = [x_pix, y_pix, r_pix]
+                self.main_image.objects[-1].table_item.setText(str(spot))
+                self.main_image.objects[-1].updateFromTable()
+            for ring in masks["Rings"]:
+                self.add_ring()
+                self.main_image.objects[-1].table_item.setText(str(ring))
+                self.main_image.objects[-1].updateFromTable()
+            for arc in masks["Arcs"]:
+                self.add_arc()
+                self.main_image.set_arc_point(pg.QtCore.QPoint(0, 0))
+                self.done_creating()
+                self.main_image.objects[-1].table_item.setText(str(arc))
+                self.main_image.objects[-1].updateFromTable()
+            for xline in masks["Xlines"]:
+                self.add_line(orientation="horizontal")
+                self.main_image.objects[-1].table_item.setText(str(xline))
+                self.main_image.objects[-1].updateFromTable()
+            for yline in masks["Ylines"]:
+                self.add_line(orientation="vertical")
+                self.main_image.objects[-1].table_item.setText(str(yline))
+                self.main_image.objects[-1].updateFromTable()
+            # Run 'done creating' one more time just in case
             self.done_creating()
-            self.main_image.objects[-1].table_item.setText(str(arc))
-            self.main_image.objects[-1].updateFromTable()
-        for xline in masks["Xlines"]:
-            self.add_line(orientation="horizontal")
-            self.main_image.objects[-1].table_item.setText(str(xline))
-            self.main_image.objects[-1].updateFromTable()
-        for yline in masks["Ylines"]:
-            self.add_line(orientation="vertical")
-            self.main_image.objects[-1].table_item.setText(str(yline))
-            self.main_image.objects[-1].updateFromTable()
-        # Run 'done creating' one more time just in case
-        self.done_creating()
-        self.min_intensity_threshold.setValue(masks["Thresholds"][1][0])
-        self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
+            self.min_intensity_threshold.setValue(masks["Thresholds"][1][0])
+            self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
 
 
     def image_changed(self, data):
@@ -1394,13 +1422,15 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
 
 class MainImage(pg.GraphicsLayoutWidget):
-    def __init__(self):
+    def __init__(self, image_file):
         super().__init__()
         self.view = self.addPlot()
         self.view.setAspectLocked(True)
         self.cmap = pg.colormap.get("gist_earth", source="matplotlib", skipCache=True)
         # self.image_data = np.zeros((2880,2880))
-        self.image_data = tf.imread(choose_file())
+        self.image_file_name = image_file
+        self.image_data = tf.imread(self.image_file_name)
+        self.image_size = self.image_data.shape
         self.image = pg.ImageItem(self.image_data)
         self.predef_mask_data = np.zeros(
             (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
