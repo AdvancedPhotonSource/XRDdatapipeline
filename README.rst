@@ -36,7 +36,7 @@ Installation
 
 This software was designed for Python version 3.10.8. Set up and start a virtual environment in that version, then run:
 
-``git clone https://github.com/ahmerritt/XRDdatapipeline.git``
+``git clone https://github.com/AdvancedPhotonSource/XRDdatapipeline.git``
 
 ..
         The cookiecutter template applied by Miaoqi should let this be pip-installable, but it needs to be registered with pypi first.
