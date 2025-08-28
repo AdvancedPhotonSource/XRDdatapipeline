@@ -781,16 +781,22 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.max_tth_threshold_label.setEnabled(False)
         self.max_tth_threshold.setEnabled(False)
         # intensity thresholds
+        minimum = np.min(self.main_image.image_data)
+        # min_sign = np.sign(minimum)
+        min_oom = np.floor(np.log10(np.abs(minimum)))
+        maximum = np.max(self.main_image.image_data)
+        # max_sign = np.sign(maximum)
+        max_oom = np.floor(np.log10(np.abs(maximum)))
         self.min_intensity_threshold_label = QtWidgets.QLabel("Minimum intensity:")
         self.min_intensity_threshold = QtWidgets.QDoubleSpinBox()
-        self.min_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.min_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
+        self.min_intensity_threshold.setMinimum(-1 * 10**(min_oom +3))
+        self.min_intensity_threshold.setMaximum(10**(max_oom + 3))
         self.min_intensity_threshold.setValue(np.min(self.main_image.image_data))
         # self.min_intensity_threshold.valueChanged.connect(self.min_intensity_threshold_changed)
         self.max_intensity_threshold_label = QtWidgets.QLabel("Maximum intensity:")
         self.max_intensity_threshold = QtWidgets.QDoubleSpinBox()
-        self.max_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.max_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
+        self.max_intensity_threshold.setMinimum(-1 * 10**(min_oom + 3))
+        self.max_intensity_threshold.setMaximum(10**(max_oom + 3))
         self.max_intensity_threshold.setValue(np.max(self.main_image.image_data))
         # self.max_intensity_threshold.valueChanged.connect(self.max_intensity_threshold_changed)
 
@@ -1342,10 +1348,16 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # set image data
         self.main_image.image_data = data
         # reset min/max intensity
-        self.min_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.min_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
-        self.max_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.max_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
+        minimum = np.min(self.main_image.image_data)
+        min_oom = np.floor(np.log10(np.abs(minimum)))
+        maximum = np.max(self.main_image.image_data)
+        max_oom = np.floor(np.log10(np.abs(maximum)))
+        self.min_intensity_threshold.setMinimum(-1 * 10**(min_oom +3))
+        self.min_intensity_threshold.setMaximum(10**(max_oom + 3))
+        self.min_intensity_threshold.setValue(np.min(self.main_image.image_data))
+        self.max_intensity_threshold.setMinimum(-1 * 10**(min_oom + 3))
+        self.max_intensity_threshold.setMaximum(10**(max_oom + 3))
+        self.max_intensity_threshold.setValue(np.max(self.main_image.image_data))
 
     def clear_polygon(self, index):
         # clear points
