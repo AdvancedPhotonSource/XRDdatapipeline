@@ -105,6 +105,16 @@ def get_save_file_location(ext):
     return filename
 
 
+# change background color of edited item
+class Delegate(QtWidgets.QStyledItemDelegate):
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        editor.setStyleSheet('''
+            {} {{ background: white; color: black;}}
+        '''.format(editor.__class__.__name__))
+        return editor
+
+
 class Point(pg.QtCore.QPoint):
     def __init__(self, image_size, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -793,6 +803,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # self.objects = [] # keeping in MainImage for the mouseReleaseEvent
         self.polygons_label = QtWidgets.QLabel("Objects")
         self.polygons_table = QtWidgets.QTableWidget()
+        self.polygons_table.setItemDelegate(Delegate(self.polygons_table))
         self.setBackground('w')
         self.polygons_table.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
