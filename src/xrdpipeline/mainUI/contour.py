@@ -51,6 +51,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         # self.image_data = tf.imread(tiflist[keylist[curr_key]][curr_pos] + ".tif")
         self.contour_image = pg.ImageItem()
         self.contour_waterfall = []
+        # plasma, CET-C6
+        self.waterfall_cmap = pg.colormap.get("plasma", skipCache=True)
         self.view.addItem(self.contour_image)
         self.intensityBar = pg.HistogramLUTItem()
         self.intensityBar.setImageItem(self.contour_image)
@@ -279,12 +281,14 @@ class ContourView(pg.GraphicsLayoutWidget):
             xvals = self.tthvals
         elif self.x_axis_type == 1:
             xvals = self.qvals
+        lut = self.waterfall_cmap.getLookupTable(nPts=len(self.integral_data), mode='qcolor')
         for i in range(len(self.integral_data)):
             self.contour_waterfall.append(pg.PlotDataItem())
             self.contour_waterfall[i].setData(
                 xvals,
                 self.integral_data[i] + i * self.offset.value()
             )
+            self.contour_waterfall[i].setPen(lut[i])
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
             # see if there's an addItems
             [self.view.addItem(i) for i in self.contour_waterfall]
@@ -356,6 +360,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.view.autoRange()
             self.offset_label.hide()
             self.offset.hide()
+            self.intensityBar.show()
         elif evt == Viewtype.Waterfall.value:
             self.setBackground("w")
             self.view.removeItem(self.contour_image)
@@ -363,6 +368,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.view.autoRange()
             self.offset_label.show()
             self.offset.show()
+            self.intensityBar.hide()
 
     def offset_changed(self):
         self.update_integral_data()
