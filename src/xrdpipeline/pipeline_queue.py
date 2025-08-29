@@ -647,6 +647,7 @@ class main_window(QtWidgets.QWidget):
         self.poni_config_options_layout.addWidget(self.PolaVal, 3, 2)
 
         self.window_layout = QtWidgets.QGridLayout()
+        self.window_layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
         self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
         self.window_layout.addWidget(self.output_directory_widget, 1, 0, 1, 3)
         self.window_layout.addWidget(self.config_widget, 2, 0, 1, 3)
