@@ -51,8 +51,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         # self.image_data = tf.imread(tiflist[keylist[curr_key]][curr_pos] + ".tif")
         self.contour_image = pg.ImageItem()
         self.contour_waterfall = []
-        # plasma, CET-C6
-        self.waterfall_cmap = pg.colormap.get("plasma", skipCache=True)
+        # CET-R1, CET-R2, CET-R3
+        self.waterfall_cmap = pg.colormap.get("CET-R3", skipCache=True)
         self.view.addItem(self.contour_image)
         self.intensityBar = pg.HistogramLUTItem()
         self.intensityBar.setImageItem(self.contour_image)
