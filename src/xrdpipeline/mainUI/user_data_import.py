@@ -153,8 +153,8 @@ class UserAddedDataTab(QtWidgets.QWidget):
 
     def send_update(self):
         for datum in self.user_data:
-            datum.data_instance.name = datum.name_field.toPlainText()
-            datum.data_instance.color.color = datum.color_field.toPlainText()
+            datum.data_instance.name = datum.name_field.text()
+            datum.data_instance.color.color = datum.color_field.text()
             datum.data_instance.offset = datum.offset_field.value()
             datum.data_instance.multiplier = datum.multiplier_field.value()
             datum.data_instance.x_type = datum.x_type_field.currentData()
