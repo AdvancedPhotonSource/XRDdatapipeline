@@ -1,3 +1,12 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines the UI and base functionality of the analysis pipeline.
+"""
+
 from collections import deque
 import argparse
 import copy
@@ -647,6 +656,7 @@ class main_window(QtWidgets.QWidget):
         self.poni_config_options_layout.addWidget(self.PolaVal, 3, 2)
 
         self.window_layout = QtWidgets.QGridLayout()
+        self.window_layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
         self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
         self.window_layout.addWidget(self.output_directory_widget, 1, 0, 1, 3)
         self.window_layout.addWidget(self.config_widget, 2, 0, 1, 3)

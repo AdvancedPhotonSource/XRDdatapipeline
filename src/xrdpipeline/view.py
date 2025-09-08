@@ -1,3 +1,16 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines a synced four-image view with options for one mask per image.
+The image itself can be the detector output or a modification of that image named
+[image_name]_[image_ext].tif located in a given subdirectory.
+This has been used to view and compare partial steps of the classification
+algorithm.
+"""
+
 import os
 os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"
 from pyqtgraph.Qt import QtGui, QtWidgets, QtCore

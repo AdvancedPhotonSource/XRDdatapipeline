@@ -36,7 +36,7 @@ Installation
 
 This software was designed for Python version 3.10.8. Set up and start a virtual environment in that version, then run:
 
-``git clone https://github.com/ahmerritt/XRDdatapipeline.git``
+``git clone https://github.com/AdvancedPhotonSource/XRDdatapipeline.git``
 
 ..
         The cookiecutter template applied by Miaoqi should let this be pip-installable, but it needs to be registered with pypi first.
@@ -148,6 +148,13 @@ X Lines, Y Lines, Spots, and Rings do not currently have a UI implementation, bu
 X Lines and Y Lines require text in the format [pos], where pos is the integer number of the pixel line being masked.
 
 The Preview Mask button lets you preview the current mask. Save Mask will save a .tif file which can be used in the analysis pipeline.
+
+Tutorials
+---------
+
+For more information on usage, please see the tutorials_.
+
+.. _tutorials: https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/docs/tutorials.rst
 
 Credits
 -------

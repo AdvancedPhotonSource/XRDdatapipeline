@@ -1,3 +1,13 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines the user data import widget for the results UI.
+"""
+
+
 import numpy as np
 from dataclasses import dataclass, field
 import pyqtgraph as pg
@@ -153,8 +163,8 @@ class UserAddedDataTab(QtWidgets.QWidget):
 
     def send_update(self):
         for datum in self.user_data:
-            datum.data_instance.name = datum.name_field.toPlainText()
-            datum.data_instance.color.color = datum.color_field.toPlainText()
+            datum.data_instance.name = datum.name_field.text()
+            datum.data_instance.color.color = datum.color_field.text()
             datum.data_instance.offset = datum.offset_field.value()
             datum.data_instance.multiplier = datum.multiplier_field.value()
             datum.data_instance.x_type = datum.x_type_field.currentData()

@@ -1,3 +1,12 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines the contour/waterfall widget for the results UI.
+"""
+
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtWidgets, QtCore
 import os
@@ -19,7 +28,6 @@ class ContourView(pg.GraphicsLayoutWidget):
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         self.setMinimumHeight(150)
-        self.setBackground("w")
         # self.directory = directory
         self.settings = settings
         self.live_max_lines_visible = 100
@@ -52,6 +60,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         # self.image_data = tf.imread(tiflist[keylist[curr_key]][curr_pos] + ".tif")
         self.contour_image = pg.ImageItem()
         self.contour_waterfall = []
+        # CET-R1, CET-R2, CET-R3
+        self.waterfall_cmap = pg.colormap.get("CET-R3", skipCache=True)
         self.view.addItem(self.contour_image)
         self.intensityBar = pg.HistogramLUTItem()
         self.intensityBar.setImageItem(self.contour_image)
@@ -91,6 +101,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.viewtype_select.setCurrentIndex(0)
         self.viewtype_select.currentIndexChanged.connect(self.viewtype_changed)
 
+        self.offset_label = QtWidgets.QLabel("Offset:")
         self.offset = QtWidgets.QSpinBox()
         self.offset.setMaximum(1000000)
         self.offset.setValue(1000)
@@ -154,7 +165,7 @@ class ContourView(pg.GraphicsLayoutWidget):
     def update_dir(self):
         self.reset_integral_data(reset_z=True)
 
-    def update_integral_list(self, reset_z=False):
+    def update_integral_list(self, reset_z=False, manual = False):
         # global keylist, curr_key
         self.integral_filelist = sorted(
             glob.glob(
@@ -177,7 +188,10 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.integral_filelist.pop()
         if self.automatically_set_spacing:
             self.auto_set_spacing()
-        self.update_integral_data(reset_z=reset_z)
+        if manual:
+            self.update_integral_data_manual()
+        else:
+            self.update_integral_data(reset_z=reset_z)
 
     def auto_set_spacing(self):
         # while len(self.integral_filelist) >= (self.max_lines_visible + 1)*self.requested_spacing:
@@ -276,12 +290,14 @@ class ContourView(pg.GraphicsLayoutWidget):
             xvals = self.tthvals
         elif self.x_axis_type == 1:
             xvals = self.qvals
+        lut = self.waterfall_cmap.getLookupTable(nPts=len(self.integral_data), mode='qcolor')
         for i in range(len(self.integral_data)):
             self.contour_waterfall.append(pg.PlotDataItem())
             self.contour_waterfall[i].setData(
                 xvals,
                 self.integral_data[i] + i * self.offset.value()
             )
+            self.contour_waterfall[i].setPen(lut[i])
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
             # see if there's an addItems
             [self.view.addItem(i) for i in self.contour_waterfall]
@@ -310,7 +326,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             self.update_waterfall_data()
 
     def update_integral_data_manual(self):
-        self.live_spacing = self.integral_step.value()
+        # self.live_spacing = self.integral_step.value()
         self.append_integral_data(max=self.manual_max + 1)
         # if self._temp_auto_spacing == self.live_spacing:
         #    self.append_integral_data(max=self.manual_max)
@@ -323,7 +339,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.xvals = []
         self.yvals = []
         if manual:
-            self.update_integral_data_manual()
+            self.live_spacing = self.integral_step.value()
+            self.update_integral_list(manual=True)
         else:
             self.live_spacing = 1
             self._temp_auto_spacing = 1
@@ -345,12 +362,22 @@ class ContourView(pg.GraphicsLayoutWidget):
 
     def viewtype_changed(self, evt):
         if evt == Viewtype.Contour.value:
+            self.setBackground("k")
             for i in self.contour_waterfall:
                 self.view.removeItem(i)
             self.view.addItem(self.contour_image)
+            self.view.autoRange()
+            self.offset_label.hide()
+            self.offset.hide()
+            self.intensityBar.show()
         elif evt == Viewtype.Waterfall.value:
+            self.setBackground("w")
             self.view.removeItem(self.contour_image)
             self.update_waterfall_data()
+            self.view.autoRange()
+            self.offset_label.show()
+            self.offset.show()
+            self.intensityBar.hide()
 
     def offset_changed(self):
         self.update_integral_data()

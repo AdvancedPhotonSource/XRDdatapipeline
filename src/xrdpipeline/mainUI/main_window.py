@@ -1,3 +1,13 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines the main window of the results UI.
+"""
+
+
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
@@ -135,7 +145,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contour_layout.addWidget(self.contourview.tth_line_checkbox, 5, 1)
         self.contour_layout.addWidget(self.contourview.integral_select, 5, 2)
         self.contour_layout.addWidget(self.contourview.viewtype_select, 5, 3)
-        self.contour_layout.addWidget(self.contourview.offset, 5, 4)
+        self.contour_layout.addWidget(self.contourview.offset_label, 5, 4)
+        self.contour_layout.addWidget(self.contourview.offset, 5, 5)
+        self.contourview.offset_label.hide()
+        self.contourview.offset.hide()
         self.contour_layout.addWidget(self.contourview.live_integral_min_label, 6, 0)
         self.contour_layout.addWidget(self.contourview.live_integral_min, 6, 1)
         self.contour_layout.addWidget(self.contourview.live_integral_max_label, 6, 2)
@@ -391,8 +404,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
         self.update_num()
         self.updateImages(z_reset=True)
-        self.tabbed_area.contour_widget.reset_integral_data(reset_z=True)
-        self.contourview.reset_integral_data(reset_z = True)
+        tabbed_live = self.tabbed_area.contour_widget.live_update_checkbox.isChecked()
+        self.tabbed_area.contour_widget.reset_integral_data(reset_z = True, manual = not tabbed_live)
+        contourview_live = self.contourview.live_update_checkbox.isChecked()
+        self.contourview.reset_integral_data(reset_z = True, manual = not contourview_live)
         self.tabbed_area.csim_widget.update_data()
         # self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
@@ -404,8 +419,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
         self.update_num()
         self.updateImages(z_reset=True)
-        self.tabbed_area.contour_widget.reset_integral_data(reset_z=True)
-        self.contourview.reset_integral_data(reset_z = True)
+        tabbed_live = self.tabbed_area.contour_widget.live_update_checkbox.isChecked()
+        self.tabbed_area.contour_widget.reset_integral_data(reset_z = True, manual = not tabbed_live)
+        contourview_live = self.contourview.live_update_checkbox.isChecked()
+        self.contourview.reset_integral_data(reset_z = True, manual = not contourview_live)
         self.tabbed_area.csim_widget.update_data()
         # self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])

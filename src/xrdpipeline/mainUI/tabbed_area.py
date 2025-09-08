@@ -1,3 +1,13 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines the tabbed widget in the results UI.
+"""
+
+
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
@@ -41,7 +51,10 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.contour_layout.addWidget(self.contour_widget.tth_line_checkbox, 5, 1)
         self.contour_layout.addWidget(self.contour_widget.integral_select, 5, 2)
         self.contour_layout.addWidget(self.contour_widget.viewtype_select, 5, 3)
-        self.contour_layout.addWidget(self.contour_widget.offset, 5, 4)
+        self.contour_layout.addWidget(self.contour_widget.offset_label, 5, 4)
+        self.contour_layout.addWidget(self.contour_widget.offset, 5, 5)
+        self.contour_widget.offset_label.hide()
+        self.contour_widget.offset.hide()
         self.contour_layout.addWidget(self.contour_widget.live_integral_min_label, 6, 0)
         self.contour_layout.addWidget(self.contour_widget.live_integral_min, 6, 1)
         self.contour_layout.addWidget(self.contour_widget.live_integral_max_label, 6, 2)

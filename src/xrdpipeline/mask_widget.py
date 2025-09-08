@@ -1,3 +1,12 @@
+"""
+XRDdatapipeline is a package for automated XRD data masking and integration.
+Copyright (C) 2025 UChicago Argonne, LLC
+Full copyright info can be found in the LICENSE included with this project or at
+https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
+
+This file defines a mask creation widget.
+"""
+
 import os, sys
 import numpy as np
 import PySide6
@@ -103,6 +112,16 @@ def get_save_file_location(ext):
     filename = start + ext
     print(f"Saving {filename}")
     return filename
+
+
+# change background color of edited item
+class Delegate(QtWidgets.QStyledItemDelegate):
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        editor.setStyleSheet('''
+            {} {{ background: white; color: black;}}
+        '''.format(editor.__class__.__name__))
+        return editor
 
 
 class Point(pg.QtCore.QPoint):
@@ -771,16 +790,22 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.max_tth_threshold_label.setEnabled(False)
         self.max_tth_threshold.setEnabled(False)
         # intensity thresholds
+        minimum = np.min(self.main_image.image_data)
+        # min_sign = np.sign(minimum)
+        min_oom = np.floor(np.log10(np.abs(minimum)))
+        maximum = np.max(self.main_image.image_data)
+        # max_sign = np.sign(maximum)
+        max_oom = np.floor(np.log10(np.abs(maximum)))
         self.min_intensity_threshold_label = QtWidgets.QLabel("Minimum intensity:")
         self.min_intensity_threshold = QtWidgets.QDoubleSpinBox()
-        self.min_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.min_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
+        self.min_intensity_threshold.setMinimum(-1 * 10**(min_oom +3))
+        self.min_intensity_threshold.setMaximum(10**(max_oom + 3))
         self.min_intensity_threshold.setValue(np.min(self.main_image.image_data))
         # self.min_intensity_threshold.valueChanged.connect(self.min_intensity_threshold_changed)
         self.max_intensity_threshold_label = QtWidgets.QLabel("Maximum intensity:")
         self.max_intensity_threshold = QtWidgets.QDoubleSpinBox()
-        self.max_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.max_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
+        self.max_intensity_threshold.setMinimum(-1 * 10**(min_oom + 3))
+        self.max_intensity_threshold.setMaximum(10**(max_oom + 3))
         self.max_intensity_threshold.setValue(np.max(self.main_image.image_data))
         # self.max_intensity_threshold.valueChanged.connect(self.max_intensity_threshold_changed)
 
@@ -793,6 +818,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # self.objects = [] # keeping in MainImage for the mouseReleaseEvent
         self.polygons_label = QtWidgets.QLabel("Objects")
         self.polygons_table = QtWidgets.QTableWidget()
+        self.polygons_table.setItemDelegate(Delegate(self.polygons_table))
         self.setBackground('w')
         self.polygons_table.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
@@ -1331,10 +1357,16 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # set image data
         self.main_image.image_data = data
         # reset min/max intensity
-        self.min_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.min_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
-        self.max_intensity_threshold.setMinimum(np.min(self.main_image.image_data))
-        self.max_intensity_threshold.setMaximum(np.max(self.main_image.image_data))
+        minimum = np.min(self.main_image.image_data)
+        min_oom = np.floor(np.log10(np.abs(minimum)))
+        maximum = np.max(self.main_image.image_data)
+        max_oom = np.floor(np.log10(np.abs(maximum)))
+        self.min_intensity_threshold.setMinimum(-1 * 10**(min_oom +3))
+        self.min_intensity_threshold.setMaximum(10**(max_oom + 3))
+        self.min_intensity_threshold.setValue(np.min(self.main_image.image_data))
+        self.max_intensity_threshold.setMinimum(-1 * 10**(min_oom + 3))
+        self.max_intensity_threshold.setMaximum(10**(max_oom + 3))
+        self.max_intensity_threshold.setValue(np.max(self.main_image.image_data))
 
     def clear_polygon(self, index):
         # clear points

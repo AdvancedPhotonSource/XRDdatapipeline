@@ -1,0 +1,31 @@
+type:PWDR
+color:GSPaired
+wavelength:0.2099
+calibrant:CeO2  SRM674b
+distance:895.3407792377596
+center:[np.float64(204.89760316343475), np.float64(204.60745943181237)]
+Oblique:[0.5, False]
+tilt:0.1677823032703541
+rotation:32.99594240473582
+azmthOff:0.0
+fullIntegrate:True
+LRazimuth:[0.0, 360.0]
+setdist:940.0
+IOtth:[1.0, 12.7]
+outChannels:2500
+outAzimuths:1
+invert_x:False
+invert_y:True
+DetDepth:0.0
+calibskip:0
+pixLimit:2
+cutoff:1.0
+calibdmin:1.0
+Flat Bkg:0.0
+varyList:{'dist': True, 'det-X': True, 'det-Y': True, 'tilt': True, 'phi': True, 'dep': False, 'wave': False}
+binType:2-theta
+SampleShape:Cylinder
+PolaVal:[1.0, False]
+SampleAbs:[0.0, False]
+dark image:['', -1.0]
+background image:['', -1.0]
