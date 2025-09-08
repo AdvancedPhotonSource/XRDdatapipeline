@@ -8,7 +8,7 @@ Welcome to XRDPipeline's documentation!
    readme
    installation
    usage
-   modules
+   tutorials
    contributing
    authors
    history

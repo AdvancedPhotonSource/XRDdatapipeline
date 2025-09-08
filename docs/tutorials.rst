@@ -1,0 +1,182 @@
+========
+Tutorial
+========
+
+In this tutorial, we will be using a small provided dataset in the folder GuiliangJun25_tutorial.
+These images were taken at beamline 11-ID-B at the Advanced Photon Source.
+
+Materials are located in the GuiliangJun25_tutorial folder:
+
+* 3 images of MA2, 7 images of MA2b, and their metadata files
+* Image control file, mask, and calculated profiles of a few phases in the configs subdirectory
+* Pipeline output in the folder GuiliangJun25_tutorial_output for those who wish to skip to the UI tutorial
+
+Pipeline
+--------
+
+Pipeline UI Overview
+~~~~~~~~~~~~~~~~~~~~
+
+Launching the pipeline will open the following window:
+
+.. image:: tutorial_images/pipeline_UI_empty.png
+
+Clicking the buttons on the left will open a file dialog to select the directory or file for each component.
+The Input Directory, Output Directory, and Config file are all required.
+
+The Input Directory is the directory containing the images you want to run over.
+While the pipeline runs, it will add any new images which enter this directory to the queue to be processed.
+Set it to the location of the GuiliangJun25 directory.
+
+The Output Directory is the directory which will hold the output integrals, masks, and other data from the pipeline.
+This can be the same directory as the input directory: all of the outputs will be in labelled subdirectories.
+
+The Config file may be either a GSASII .imctrl file or a PyFAI .poni file. If using the latter, please set the 2theta and azimuthal integration ranges,
+the number of integration bins, and the polarization in this step.
+GSASII .imctrl files contain this information; loading one in will autofill this information.
+For this tutorial, the config file is located in GuiliangJun25_tutorial/configs.
+
+The flat-field file is an optional input which contains information about any flat-field corrections which need to be made to the images.
+This will not be used in the tutorial.
+
+The Experimental Mask is an image file which contains the overall mask to use based on the experimental setup.
+The one provided covers the shadow of the beam stop and was made with the mask_widget tool using a polygon mask.
+The image is also located in GuiliangJun25_tutorial/configs.
+
+The Bad Pixel Mask is an optional file masking any known faulty pixels in the detector. This will not be used in the tutorial.
+Note that the pipeline will automatically mask out any zero-intensity pixels, which will catch any dead pixels from the detector.
+
+.. image:: tutorial_images/pipeline_UI_filled.png
+
+Once these files have been chosen, click on “Process existing images” so the pipeline knows to search the directory for any existing files rather than simply wait for new ones, then click Start.
+There will be a delay as the pipeline creates the cache on the first file, then processing will speed up for the rest of the images in the directory.
+When the queue size goes back down to zero, click Stop and exit the program.
+You may start the UI tutorial while this runs.
+
+Optional: Advanced Settings
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. image:: tutorial_images/pipeline_UI_advanced_settings.png
+
+The Advanced Settings option lets you modify other aspects of the pipeline.
+Should you wish to change the threshold for certain values or even skip spot/texture classification altogether, you can change those in Advanced Settings.
+In cases where you only want to run over a subset of files in a directory, there are also filtering options for including or excluding certain phrases in the file name.
+For example, if you type MA2b in the Include section, only those images will be processed.
+
+Results UI
+----------
+
+Once you have started the pipeline, it will begin to output image masks, integrals, and other data into subfolders in the Output Directory.
+To visualize this data, launch pyqtgraph_layout.py. This will open two windows: the main UI and a small window asking for the Input Directory, Output Directory, and Image Control file (or Config file) again.
+Click Browse to give these the same inputs as you gave to the pipeline, then hit Okay.
+
+.. image:: tutorial_images/results_UI_blank.png
+
+.. image:: tutorial_images/results_UI_file_select_filled.png
+
+Once you have loaded the directory, the screen will populate with information from the output of the pipeline.
+The upper left shows the current image and its masks, the upper right shows the integrated data from the current image and various masks,
+the lower left shows a contour plot of all completed integrated lines for this dataset, and the lower right can be toggled to show various pieces of data.
+
+.. image:: tutorial_images/results_UI_filled.png
+
+Basic Controls
+~~~~~~~~~~~~~~
+
+A useful set of tools to turn on right away are the 2theta lines and circle; these checkboxes can be found on the image, integral, and contour plots.
+When toggled on, they will show the 2theta position for the cursor on other windows.
+
+.. image:: tutorial_images/results_UI_mainimage_2thcircle.png
+
+.. image:: tutorial_images/results_UI_integral_2thline.png
+
+Live View
+^^^^^^^^^
+
+Note that both the image window and the contour window have a Live Update option.
+Checking the option on the image window will set the image and integral lines to update whenever an image is fully processed by the pipeline.
+Checking the option on the contour window will add more integral data to the contour as images are processed.
+
+Image Navigation
+^^^^^^^^^^^^^^^^
+
+To navigate between images in a dataset, you may either:
+
+* Press the left or right keys on the keyboard. If this is instead cycling a selection box around checkboxes or the like, click somewhere on the main image before trying again.
+
+* Click on the contour graph. A horizontal yellow line will show the current position in the processed dataset.
+
+Both options for navigating between images will disable the image's Live Update option and show that specific image, its mask, and its integrals in the upper left and right quadrants.
+
+If you have multiple datasets in the directory, you may cycle between them with the up and down keys on the keyboard.
+
+Mask Overlays
+^^^^^^^^^^^^^
+
+Each image mask can be toggled on and off with the checkboxes below the main image. The opacity of these masks can also be set.
+
+Contour/Waterfall
+^^^^^^^^^^^^^^^^^
+
+.. image:: tutorial_images/results_UI_contour_controls.png
+
+The Contour image can show data from any of the available integrals, including the Base, Outlier Masked, and Spot- and Texture-masked integrals.
+You can also set a minimum and maximum value to zoom in on a particular section.
+You can also set the step size (recommended for large datasets) to reduce the number of datapoints shown.
+
+These features are also available as a waterfall plot instead; select the dropdown that shows “Contour” and select “Waterfall.” The controls are the same.
+
+Finding Phase Features: User Data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Ensure the 2theta circle and 2theta line checkboxes below the main image and integral sections are toggled on.
+Click on the main image once, then hit the up arrow to swap to a MA2b image.
+
+Take a look at the upper right set of integrals.
+These are showing the base integral (with only the predefined beam stop mask applied), the outlier-masked integral, and the spot- and texture-masked integrals.
+The visibility of these can be toggled with a set of checkboxes below the image.
+To help see where these are overlapping, you can set an offset below the line of toggle checkboxes.
+
+The split into spot- and texture-masked integrals helps classify which phase a particular peak comes from.
+If there is a peak in the texture-masked integral but not the spot-masked integral, that contribution must be coming from one of the phases causing single crystal
+spots or spotty rings (since the texture-masked integral is not masking them out).
+Since this is a bit backwards, another way to look at the contribution to intensity from a particular type of phase is are the Texture Phase and Spot Phase difference integrals,
+which show the difference in intensity between the base integral and their named masked integral, respectively.
+When there is a peak in the Spot Phases line, this is due to an increase in intensity which was labelled as a spot.
+
+.. image:: tutorial_images/results_UI_texture_phases.png
+
+These spot and texture phase difference integrals can help pair peaks with a particular phase.
+Toggle on the Texture Phase integral and toggle off all the others.
+If you move the cursor around the integral image, you can see that the peaks correspond to the texture-masked areas on the main image.
+
+.. image:: tutorial_images/results_UI_user_data_tab.png
+
+This particular texture is coming from an aluminum phase.
+To verify this, go to the User Data tab in the lower-right section.
+Click on "Import new data" and import the file in GuiliangJun25_tutorial/configs which has the name Profile Al delta.
+This is a calculated profile text file output from CrystalMaker.
+
+.. image:: tutorial_images/results_UI_user_data_info.png
+
+When it is loaded in, set the multiplier to 5000 and set the Display to Integral.
+Then click "Update" at the bottom of the window.
+
+.. image:: tutorial_images/results_UI_texture_phases_user_data.png
+
+The locations of the calculated peaks of the aluminum phase line up with those of the texture phases in this dataset.
+
+Finding Phase Features: Spot Statistics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. image:: tutorial_images/results_UI_stats_tab.png
+
+.. image:: tutorial_images/results_UI_stats_image.png
+
+In the lower right quadrant, navigate to the Stats pane.
+This will show a scatter plot of the spot areas in the image and a histogram of the spot count.
+If you toggle on the spot phases difference line in the top-right quadrant, you can see that the peaks in the spot phases correspond to the peaks in spot area.
+Note that the scatter plot 2theta positions are placed at the center of the masked area rather than the brightest point, so the positions will not line up exactly.
+
+.. image:: tutorial_images/results_UI_spot_stats_comparison.png
+

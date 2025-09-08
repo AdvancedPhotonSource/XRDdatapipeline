@@ -149,6 +149,13 @@ X Lines and Y Lines require text in the format [pos], where pos is the integer n
 
 The Preview Mask button lets you preview the current mask. Save Mask will save a .tif file which can be used in the analysis pipeline.
 
+Tutorials
+---------
+
+For more information on usage, please see the tutorials_.
+
+.. _tutorials: https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/docs/tutorials.rst
+
 Credits
 -------
 
