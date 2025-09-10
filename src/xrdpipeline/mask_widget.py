@@ -660,39 +660,37 @@ class Arc(pg.ROI):
     def _clearPath(self):
         self.path = None
 
-class Line(pg.ROI):
+class Line(pg.InfiniteLine):
     def __init__(self,image_size,orientation,*args,**kwargs):
         self.image_size = image_size
         self.table_item = pg.QtWidgets.QTableWidgetItem()
         self.orientation = orientation
         if self.orientation == "horizontal":
-            self.position = self.image_size[0]/2
+            self.position = int(self.image_size[0]/2)
+            self.table_item.setText(str(self.position))
             self.table_label = pg.QtWidgets.QTableWidgetItem("X Line")
+            super().__init__(pos=self.position,angle=0,movable=True,*args,**kwargs)
+            self.setBounds((0,self.image_size[0]))
         else:
-            self.position = self.image_size[1]/2
+            self.position = int(self.image_size[1]/2)
+            self.table_item.setText(str(self.position))
             self.table_label = pg.QtWidgets.QTableWidgetItem("Y Line")
-        super().__init__(pos=self.position,movable=False, rotatable=False, resizable=False,*args,**kwargs)
+            super().__init__(pos=self.position,angle=90,movable=True,*args,**kwargs)
+            self.setBounds((0,self.image_size[1]))
+        
+        self.sigPositionChangeFinished.connect(self.updateTable)
 
-    def setPosition(self,position):
-        self.position = position
+    def updateTable(self):
+        self.position = int(self.value())
+        self.table_item.setText(str(self.position))
 
     def updateFromTable(self):
-        position = int(self.table_item.text())
-        self.setPosition(position)
+        self.position = int(self.table_item.text())
+        self.setValue(self.position)
     
     def verifyState(self):
         return
 
-    def paint(self,p,*args):
-        p.setRenderHint(
-            p.RenderHint.Antialiasing,
-            self._antialias
-        )
-        p.setPen(self.currentPen)
-        if self.orientation == "horizontal":
-            p.drawLine(pg.QtCore.QPoint(0,self.position),pg.QtCore.QPoint(self.image_size[1],self.position))
-        else:
-            p.drawLine(pg.QtCore.QPoint(self.position,0),pg.QtCore.QPoint(self.position,self.image_size[0]))
 
 class Ring(pg.CircleROI):
     def __init__(self,image_size,*args,**kwargs):
@@ -993,7 +991,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.main_image.current_polygon = self.main_image.objects[-1]
 
     def add_line(self,orientation):
-        line = Line(self.main_image.image_data.shape,orientation=orientation)
+        line = self.main_image.add_line(orientation=orientation)
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
         self.polygons_table.setItem(self.number_of_objects-1,0,line.table_label)
@@ -1545,6 +1543,11 @@ class MainImage(pg.GraphicsLayoutWidget):
     
     def set_arc_point(self, point):
         self.current_arc.initialize_handles(point)
+
+    def add_line(self, orientation):
+        line = Line(self.image_data.shape,orientation=orientation)
+        self.view.addItem(line)
+        return line
 
     # def clear_polygon(self):
     #     self.polygon_points = []
