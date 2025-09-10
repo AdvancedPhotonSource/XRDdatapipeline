@@ -28,6 +28,22 @@ from mainUI.tabbed_area import TabbedArea
 from corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
 
 
+class NavigationBar(QtWidgets.QWidget):
+    def __init__(self, settings: Settings):
+        super().__init__()
+        self.setMaximumHeight(50)
+
+        self.settings = settings
+        self.dataset_select = pg.QtWidgets.QComboBox()
+        self.prev_button = pg.QtWidgets.QPushButton("<- Previous Image")
+        self.next_button = pg.QtWidgets.QPushButton("Next Image ->")
+
+        self.setLayout(pg.QtWidgets.QHBoxLayout())
+        self.layout().addWidget(self.prev_button)
+        self.layout().addWidget(self.dataset_select)
+        self.layout().addWidget(self.next_button)
+
+
 class KeyPressWindow(QtWidgets.QWidget):
     def __init__(self, image_directory=".", output_directory = ".", imagecontrol=""):
         super().__init__()
@@ -48,6 +64,20 @@ class KeyPressWindow(QtWidgets.QWidget):
         )
         self.settingsmenu = self.menubar.addMenu("&Settings")
         self.settingsmenu.addAction("Open Settings...", self.show_settings)
+        self.helpmenu = self.menubar.addMenu("&Help")
+        self.helpmenu.addAction("Help", self.show_help)
+        self.help_widget = pg.QtWidgets.QLabel("For usage instructions, see the <a href=\"https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/README.rst\">README</a>")
+        self.help_widget.setTextInteractionFlags(pg.QtCore.Qt.TextInteractionFlag.TextBrowserInteraction)
+        self.help_widget.setOpenExternalLinks(True)
+        self.help_widget.setMinimumHeight(50)
+        self.help_widget.setMinimumWidth(250)
+        self.helpmenu.addAction("Tutorials", self.show_tutorials)
+        self.tutorial_widget = pg.QtWidgets.QLabel("Tutorials are located on Github <a href=\"https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/docs/tutorials.rst\">here</a>")
+        self.tutorial_widget.setTextInteractionFlags(pg.QtCore.Qt.TextInteractionFlag.TextBrowserInteraction)
+        self.tutorial_widget.setOpenExternalLinks(True)
+        self.tutorial_widget.setMinimumHeight(50)
+        self.tutorial_widget.setMinimumWidth(250)
+        self.navigation_bar = NavigationBar(self.settings)
         self.imageview = MainImageView(self.settings, parent=self)
         # self.csimview = CSimView(self, self.settings)
         self.contourview = ContourView(self, self.settings)
@@ -61,9 +91,13 @@ class KeyPressWindow(QtWidgets.QWidget):
         # self.name_label = QtWidgets.QLabel()
         # self.name_label.setMinimumSize(500, 50)
 
+        self.navigation_bar.prev_button.released.connect(self.backward)
+        self.navigation_bar.next_button.released.connect(self.forward)
+        self.navigation_bar.dataset_select.currentIndexChanged.connect(self.selectkey)
+
         # Placing the mouseMoved() event here so it can more easily be passed to the integral widget
         self.cursor_label = QtWidgets.QLabel(
-            "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f</span>,   <span style='color: red; font-size: 12pt'>2Theta=%0.1f,    Azim=%0.1f,</span>    <span style='font-size: 12pt'>Q=%0.0f,    d=%0.0f</span>"
+            "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f</span>,   <span style='color: red; font-size: 12pt'>2\u03b8=%0.1f\u00b0,    Azim=%0.1f\u00b0,</span>    <span style='font-size: 12pt'>Q=%0.0f\u212b\u207b\u00b9,    d=%0.0f\u212b</span>"
             % (0, 0, 0, 0, 0, 0)
         )
         self.cursor_label.setMinimumSize(500, 50)
@@ -124,7 +158,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.layout = QtWidgets.QGridLayout()
         # addWidget(widget,row,col,row_length,col_length)
         self.layout.addWidget(self.menubar, 0, 0, 1, 11)
-        self.layout.addWidget(self.imageview, 1, 0, 7, 5)
+        self.layout.addWidget(self.navigation_bar, 1, 1, 1, 3)
+        self.layout.addWidget(self.imageview, 2, 0, 6, 5)
         # self.layout.addWidget(self.name_label, 8, 0, 1, 4)
         self.layout.addWidget(self.live_view_image_checkbox, 8, 4)
         self.layout.addWidget(self.cursor_label, 8, 0, 1, 4)
@@ -203,6 +238,12 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings_widget.update_shown_info()
         self.settings_widget.show()
 
+    def show_help(self):
+        self.help_widget.show()
+
+    def show_tutorials(self):
+        self.tutorial_widget.show()
+
     def choose_dir(self):
         self.file_select_widget.update_shown_info()
         self.file_select_widget.show()
@@ -238,6 +279,14 @@ class KeyPressWindow(QtWidgets.QWidget):
                 ]
             )
         )
+        self.navigation_bar.dataset_select.clear()
+        self.navigation_bar.dataset_select.addItems(self.settings.keylist)
+        self.navigation_bar.dataset_select.currentIndexChanged.disconnect()
+        self.navigation_bar.dataset_select.setCurrentIndex(self.settings.curr_key)
+        self.navigation_bar.dataset_select.currentIndexChanged.connect(self.selectkey)
+
+        self.circleCheckbox.setChecked(True)
+        self.vLineCheckbox.setChecked(True)
 
     def update_settings(self):
         self.settings.curr_key = 0
@@ -411,6 +460,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.csim_widget.update_data()
         # self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
+        self.navigation_bar.dataset_select.currentIndexChanged.disconnect()
+        self.navigation_bar.dataset_select.setCurrentIndex(self.settings.curr_key)
+        self.navigation_bar.dataset_select.currentIndexChanged.connect(self.selectkey)
 
     def nextkey(self):
         # global tiflist, keylist, curr_key, curr_pos
@@ -426,6 +478,20 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.csim_widget.update_data()
         # self.csimview.update_data()
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
+        self.navigation_bar.dataset_select.currentIndexChanged.disconnect()
+        self.navigation_bar.dataset_select.setCurrentIndex(self.settings.curr_key)
+        self.navigation_bar.dataset_select.currentIndexChanged.connect(self.selectkey)
+
+    def selectkey(self, evt):
+        self.settings.curr_pos = 0
+        self.settings.curr_key = evt
+        self.update_num()
+        self.updateImages(z_reset=True)
+        tabbed_live = self.tabbed_area.contour_widget.live_update_checkbox.isChecked()
+        self.tabbed_area.contour_widget.reset_integral_data(reset_z = True, manual = not tabbed_live)
+        contourview_live = self.contourview.live_update_checkbox.isChecked()
+        self.contourview.reset_integral_data(reset_z = True, manual = not contourview_live)
+        self.tabbed_area.csim_widget.update_data()
 
     def mouseMovedImage(self, evt):
         pos = evt
@@ -452,7 +518,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 # calc intensity of underlying image
                 z = self.imageview.image_data[int(mousePoint.y()), int(mousePoint.x())]
                 self.cursor_label.setText(
-                    "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f,    z=%0.0f</span>,   <span style='color: red; font-size: 12pt'>2Theta=%0.2f,    Azim=%0.1f,</span>    <span style='font-size: 12pt'>Q=%0.2f,    d=%0.2f</span>"
+                    "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f,    z=%0.0f</span>,   <span style='color: red; font-size: 12pt'>2\u03b8=%0.2f\u00b0,    Azim=%0.1f\u00b0,</span>    <span style='font-size: 12pt'>Q=%0.2f\u212b\u207b\u00b9,    d=%0.2f\u212b</span>"
                     % (mousePoint.x(), mousePoint.y(), z, tth, azim, Q, d)
                 )
                 if self.vLineCheckbox.isChecked():
@@ -478,7 +544,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                         integral_point.setX(Q)
                         self.integral_cursor_label.setPos(integral_point)
                     self.integral_cursor_label.setText(
-                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
                     )
                 if self.circleCheckbox.isChecked():
                     self.imageview.update_tth_circle(tth)
@@ -519,7 +585,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.contourview.tth_line.setPos(mousePoint.x())
                 d = tth_to_d(tth, self.settings.wavelength)
                 self.integral_cursor_label.setText(
-                    "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                    "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
                 )
             if self.circleCheckbox.isChecked():
                 if self.x_axis_choice.currentIndex() == 0:
@@ -578,7 +644,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                         tth = q_to_tth(Q, self.settings.wavelength)
                         d = tth_to_d(tth, self.settings.wavelength)
                     self.integral_cursor_label.setText(
-                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
                     )
                 if self.circleCheckbox.isChecked():
                     if self.x_axis_choice.currentIndex() == 0:
@@ -623,7 +689,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                         tth = q_to_tth(Q, self.settings.wavelength)
                         d = tth_to_d(tth, self.settings.wavelength)
                     self.integral_cursor_label.setText(
-                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
                     )
                 if self.circleCheckbox.isChecked():
                     if self.x_axis_choice.currentIndex() == 0:
@@ -662,7 +728,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                     tth = q_to_tth(Q, self.settings.wavelength)
                 d = tth_to_d(tth, self.settings.wavelength)
                 self.integral_cursor_label.setText(
-                    "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                    "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
                 )
                 # axes for both are swapped at the same time, so it can still use mousePoint.x()
                 self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
@@ -706,7 +772,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                         self.tabbed_area.stats_widget.vLine.setPos(Q)
                         self.contourview.tth_line.setPos(Q)
                     self.integral_cursor_label.setText(
-                        "tth={0:0.2f}\nQ={1:0.2f}\nd={2:0.2f}".format(tth, Q, d)
+                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
                     )
                 if self.circleCheckbox.isChecked():
                     self.imageview.update_tth_circle(tth)
