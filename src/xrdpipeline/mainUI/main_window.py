@@ -19,7 +19,7 @@ import tifffile as tf
 
 from mainUI.UI_settings import Settings, SettingsWindow
 from mainUI.file_select import FileSelectWindow
-from mainUI.contour import ContourView
+from mainUI.contour import ContourView, Viewtype
 from mainUI.file_select import FileSelectWindow
 from mainUI.integrals import IntegralView
 from mainUI.main_image import MainImageView
@@ -799,7 +799,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         #         print(pos)
         #         self.tabbed_area.contour_widget.horiz_line.setValue(pos)
         #         self.updateImages()
-        if evt.button() == pg.QtCore.Qt.MouseButton.LeftButton:
+        if (
+            (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton) and
+            (self.tabbed_area.contour_widget.viewtype_select.currentIndex() == Viewtype.Contour.value)
+        ):
             pos = int(
                 self.tabbed_area.contour_widget.view.vb.mapSceneToView(
                     evt.scenePos()
@@ -827,7 +830,10 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.updateImages()
     
     def mouseClickedLeftContourChangeImage(self, evt):
-        if evt.button() == pg.QtCore.Qt.MouseButton.LeftButton:
+        if (
+            (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton) and
+            (self.contourview.viewtype_select.currentIndex() == Viewtype.Contour.value)
+        ):
             pos = int(
                 self.contourview.view.vb.mapSceneToView(
                     evt.scenePos()
