@@ -145,13 +145,26 @@ class MainImageView(pg.GraphicsLayoutWidget):
             # self.closed_arcs: [self.closed_arcs_RGBA,self.closed_arcs_vals,"_arcsclosed.tif"],
         }
 
+        self.masks_label = QtWidgets.QLabel("Masks:")
         self.mask_opacity_label = QtWidgets.QLabel("Mask Opacity:")
-        self.mask_opacity_box = QtWidgets.QSpinBox()
-        self.mask_opacity_box.setMinimum(0)
-        self.mask_opacity_box.setMaximum(100)
-        self.mask_opacity_box.setSingleStep(10)
-        self.mask_opacity_box.setValue(100)
-        self.mask_opacity_box.valueChanged.connect(self.mask_opacity_changed)
+        self.predef_mask_opacity_box = QtWidgets.QSpinBox()
+        self.outlier_mask_opacity_box = QtWidgets.QSpinBox()
+        self.spot_mask_opacity_box = QtWidgets.QSpinBox()
+        self.arcs_mask_opacity_box = QtWidgets.QSpinBox()
+        for mask_opacity_box in [
+                self.predef_mask_opacity_box,
+                self.outlier_mask_opacity_box,
+                self.spot_mask_opacity_box,
+                self.arcs_mask_opacity_box,
+                ]:
+            mask_opacity_box.setMinimum(0)
+            mask_opacity_box.setMaximum(100)
+            mask_opacity_box.setSingleStep(10)
+            mask_opacity_box.setValue(100)
+        self.predef_mask_opacity_box.valueChanged.connect(self.predef_mask_opacity_changed)
+        self.outlier_mask_opacity_box.valueChanged.connect(self.outlier_mask_opacity_changed)
+        self.spot_mask_opacity_box.valueChanged.connect(self.spot_mask_opacity_changed)
+        self.arcs_mask_opacity_box.valueChanged.connect(self.arcs_mask_opacity_changed)
 
         # self.update_masks_data()
 
@@ -359,12 +372,20 @@ class MainImageView(pg.GraphicsLayoutWidget):
     #     else:
     #         #self.view.removeItem(self.closed_arcs)
     #         self.closed_arcs.setVisible(False)
+ 
+    def predef_mask_opacity_changed(self, evt):
+        self.predef_mask_data.set_opacity(evt / 100)
+        self.predef_mask.updateImage(self.predef_mask_data.full_data)
+    
+    def outlier_mask_opacity_changed(self, evt):
+        self.outlier_mask_data.set_opacity(evt / 100)
+        self.outlier_mask.updateImage(self.outlier_mask_data.full_data)
 
-    def mask_opacity_changed(self, evt):
-        for mask, vals in self.masks.items():
-            # mask.setOpts(opacify=evt/100.)
-            # vals[0][:,:,3] = vals[1]*int(255*evt/100)
-            vals[0].set_opacity(evt / 100)
-            mask.updateImage(vals[0].full_data)
+    def spot_mask_opacity_changed(self, evt):
+        self.spot_mask_data.set_opacity(evt / 100)
+        self.spot_mask.updateImage(self.spot_mask_data.full_data)
 
+    def arcs_mask_opacity_changed(self, evt):
+        self.arcs_mask_data.set_opacity(evt / 100)
+        self.arcs_mask.updateImage(self.arcs_mask_data.full_data)
 
