@@ -599,9 +599,13 @@ class main_window(QtWidgets.QWidget):
         self.stop_button.setEnabled(False)
         # tooltip for clear queue button which notes that program will finish processing current item
         # exit button with "are you sure you're done processing everything" pop-up
-        self.process_existing_images_checkbox = QtWidgets.QCheckBox(
-            "Process existing images"
-        )
+        # self.process_existing_images_checkbox = QtWidgets.QCheckBox(
+        #     "Process existing images"
+        # )
+        self.process_existing_only_radio = QtWidgets.QRadioButton("Process existing images only")
+        self.process_both_radio = QtWidgets.QRadioButton("Process existing and new images")
+        self.process_new_only_radio = QtWidgets.QRadioButton("Process new images only")
+        self.process_both_radio.setChecked(True)
         self.regex_label = QtWidgets.QLabel("Regex for existing images:")
         self.existing_images_regex = QtWidgets.QTextEdit()
 
@@ -669,7 +673,10 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.clear_queue_button, 9, 1)
         self.window_layout.addWidget(self.stop_button, 9, 2)
         self.window_layout.addWidget(self.settings_widget, 11, 0, 1, 3)
-        self.window_layout.addWidget(self.process_existing_images_checkbox, 12, 0)
+        # self.window_layout.addWidget(self.process_existing_images_checkbox, 12, 0)
+        self.window_layout.addWidget(self.process_existing_only_radio, 12, 0)
+        self.window_layout.addWidget(self.process_both_radio, 12, 1)
+        self.window_layout.addWidget(self.process_new_only_radio, 12, 2)
         self.window_layout.addWidget(self.queue_length_info, 13, 0)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
@@ -841,6 +848,8 @@ class main_window(QtWidgets.QWidget):
                         self.cache_thread.start()
             else:
                 self.queue_length_info.setText("Queue is 0 items long")
+                if self.process_existing_only_radio.isChecked():
+                    self.stop_button_pressed()
             # else:
             #    #If it's been over an hour since the last update, stop
             #    if time.time() - wait_start > 60:
@@ -872,7 +881,7 @@ class main_window(QtWidgets.QWidget):
                 os.mkdir(path)
 
         # Grab existing file names and add them to the queue if option checked
-        if self.process_existing_images_checkbox.isChecked():
+        if self.process_both_radio.isChecked() or self.process_existing_only_radio.isChecked():
             # existing_files = glob.glob(self.directory+"/*.metadata")
             existing_files = glob.glob(self.input_directory + "/*.tif")
             # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif.metadata$"
@@ -916,10 +925,11 @@ class main_window(QtWidgets.QWidget):
         # Start queue
         print("Starting queue")
 
-        self.observer = Observer()
-        self.event_handler = image_monitor(self.queue, include = self.include_regex, exclude = self.exclude_regex)
-        self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
-        self.observer.start()
+        if self.process_new_only_radio.isChecked() or self.process_both_radio.isChecked():
+            self.observer = Observer()
+            self.event_handler = image_monitor(self.queue, include = self.include_regex, exclude = self.exclude_regex)
+            self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
+            self.observer.start()
 
         # main function to cycle, calls iteration while there are new images to process
         self.keep_running = True
@@ -946,15 +956,15 @@ class main_window(QtWidgets.QWidget):
         self.keep_running = True
         self.timer.start(100)
 
-    def update_dir(self, input_directory):
-        self.pause()
-        self.clear_queue()
-        self.input_directory = input_directory
-        # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
-        self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
-        self.observer.start()
-        # self.resume()
+    # def update_dir(self, input_directory):
+    #     self.pause()
+    #     self.clear_queue()
+    #     self.input_directory = input_directory
+    #     # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
+    #     self.observer = Observer()
+    #     self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
+    #     self.observer.start()
+    #     # self.resume()
 
     def advanced_settings_button_pressed(self):
         if self.settings_shown:
@@ -979,6 +989,10 @@ class main_window(QtWidgets.QWidget):
             self.flatfield_widget.setEnabled(False)
             self.predef_mask_widget.setEnabled(False)
             self.bad_pixel_mask_widget.setEnabled(False)
+            self.process_existing_only_radio.setEnabled(False)
+            self.process_both_radio.setEnabled(False)
+            self.process_new_only_radio.setEnabled(False)
+            self.poni_config_options.setEnabled(False)
         elif self.start_button.text() == "Pause":
             self.pause()
             self.start_button.setText("Resume")
@@ -1011,8 +1025,9 @@ class main_window(QtWidgets.QWidget):
         self.clear_queue()
         # self.watchdog_thread.stop()
         # self.watchdog_thread.join()
-        self.observer.stop()
-        self.observer.join()
+        if self.process_new_only_radio.isChecked() or self.process_both_radio.isChecked():
+            self.observer.stop()
+            self.observer.join()
         # if self.cache_thread.isRunning():
         if not self.has_made_cache:
             self.cache_worker.stopEarly = True
@@ -1025,17 +1040,7 @@ class main_window(QtWidgets.QWidget):
             self.iteration_thread.finished.connect(self.iteration_thread.deleteLater)
         else:
             # self.is_running_process = False
-            self.advanced_settings_button.setEnabled(True)
-            self.start_button.setText("Start")
-            self.start_button.setEnabled(True)
-            self.clear_queue_button.setEnabled(True)
-            self.stop_button.setText("Stop")
-            self.input_directory_widget.setEnabled(True)
-            self.output_directory_widget.setEnabled(True)
-            self.config_widget.setEnabled(True)
-            self.flatfield_widget.setEnabled(True)
-            self.predef_mask_widget.setEnabled(True)
-            self.bad_pixel_mask_widget.setEnabled(True)
+            self.really_stopped()
 
     def really_stopped(self):
         # self.is_running_process = False
@@ -1051,6 +1056,10 @@ class main_window(QtWidgets.QWidget):
         self.flatfield_widget.setEnabled(True)
         self.predef_mask_widget.setEnabled(True)
         self.bad_pixel_mask_widget.setEnabled(True)
+        self.process_existing_only_radio.setEnabled(True)
+        self.process_both_radio.setEnabled(True)
+        self.process_new_only_radio.setEnabled(True)
+        self.poni_config_options.setEnabled(True)
 
     def closeEvent(self, evt):
         # if not self.is_running_process:
