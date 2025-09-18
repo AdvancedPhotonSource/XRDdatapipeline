@@ -11,6 +11,7 @@ import os, sys
 import numpy as np
 import PySide6
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.graphicsItems.ROI import Handle, _PolyLineSegment
 import pyqtgraph as pg
 import tifffile as tf
 from PIL import Image
@@ -114,6 +115,46 @@ def get_save_file_location(ext):
     return filename
 
 
+def check_in_bounds(pos, shape):
+    if type(pos) == QtCore.QPoint:
+        x = pos.x()
+        y = pos.y()
+    else:
+        x = pos[1]
+        y = pos[0]
+    
+    in_bounds = True
+    if x < 0 or y < 0 or x > shape[1] or y > shape[0]:
+        in_bounds = False
+        
+    return in_bounds
+
+def find_closest_valid(pos, shape):
+    if check_in_bounds(pos, shape):
+        return pos
+    else:
+        if type(pos) == QtCore.QPoint or type(pos) == QtCore.QPointF:
+            x = pos.x()
+            y = pos.y()
+        else:
+            x = pos[1]
+            y = pos[0]
+        if x < 0:
+            x = 0
+        if x >= shape[1]:
+            x = shape[1] - 1
+        if y < 0:
+            y = 0
+        if y >= shape[0]:
+            y = shape[0] - 1
+        if type(pos) == QtCore.QPoint:
+            return QtCore.QPoint(int(x), int(y))
+        elif type(pos) == QtCore.QPointF:
+            return QtCore.QPointF(x,y)
+        else:
+            return [y, x]
+
+
 # change background color of edited item
 class Delegate(QtWidgets.QStyledItemDelegate):
     def createEditor(self, parent, option, index):
@@ -122,6 +163,194 @@ class Delegate(QtWidgets.QStyledItemDelegate):
             {} {{ background: white; color: black;}}
         '''.format(editor.__class__.__name__))
         return editor
+
+
+# extend Handle to allow it to be disabled
+class ToggleableHandle(Handle):
+    def __init__(self, radius, start_enabled = True, typ=None, pen=(200, 200, 220),
+                 hoverPen=(255, 255, 0), parent=None, deletable=False, antialias=True):
+        super().__init__(radius, typ=typ, pen=pen,
+                         hoverPen=hoverPen, parent=parent, deletable=deletable)
+        self.is_enabled = start_enabled
+        if not self.is_enabled:
+            self.setDisabled()
+    
+    # reimplement hoverEvent to account for disabled status
+    def hoverEvent(self, ev):
+        hover = False
+        if not ev.isExit() and self.is_enabled:
+            if ev.acceptDrags(QtCore.Qt.MouseButton.LeftButton):
+                hover = True
+            for btn in [QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.MouseButton.RightButton, QtCore.Qt.MouseButton.MiddleButton]:
+                if (self.acceptedMouseButtons() & btn) and ev.acceptClicks(btn):
+                    hover = True
+
+        if hover:
+            self.currentPen = self.hoverPen
+        else:
+            if self.is_enabled:
+                self.currentPen = self.pen
+            else:
+                self.currentPen = pg.mkPen("#0000")
+        self.update()
+
+    # reimplement mouseClickEvent
+    def mouseClickEvent(self, ev):
+        ## right-click cancels drag
+        if self.is_enabled:
+            if ev.button() == QtCore.Qt.MouseButton.RightButton and self.isMoving:
+                self.isMoving = False  ## prevents any further motion
+                self.movePoint(self.startPos, finish=True)
+                ev.accept()
+            elif self.acceptedMouseButtons() & ev.button():
+                ev.accept()
+                if ev.button() == QtCore.Qt.MouseButton.RightButton and self.deletable:
+                    self.raiseContextMenu(ev)
+                self.sigClicked.emit(self, ev)
+            else:
+                ev.ignore()
+        else:
+            ev.ignore()
+
+    # reimplement mouseDragEvent
+    def mouseDragEvent(self, ev):
+        if (ev.button() != QtCore.Qt.MouseButton.LeftButton) or not self.is_enabled:
+            return
+        ev.accept()
+        
+        ## Inform ROIs that a drag is happening 
+        ##  note: the ROI is informed that the handle has moved using ROI.movePoint
+        ##  this is for other (more nefarious) purposes.
+        #for r in self.roi:
+            #r[0].pointDragEvent(r[1], ev)
+            
+        if ev.isFinish():
+            if self.isMoving:
+                for r in self.rois:
+                    r.stateChangeFinished()
+            self.isMoving = False
+            self.currentPen = self.pen
+            self.update()
+        elif ev.isStart():
+            for r in self.rois:
+                r.handleMoveStarted()
+            self.isMoving = True
+            self.startPos = self.scenePos()
+            self.cursorOffset = self.scenePos() - ev.buttonDownScenePos()
+            self.currentPen = self.hoverPen
+            
+        if self.isMoving:  ## note: isMoving may become False in mid-drag due to right-click.
+            pos = ev.scenePos() + self.cursorOffset
+            self.currentPen = self.hoverPen
+            self.movePoint(pos, ev.modifiers(), finish=False)
+
+    def setEnabled(self):
+        # print("handle setEnabled called")
+        self.is_enabled = True
+        self.currentPen = self.pen
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.LeftButton)
+        self.update()
+
+    def setDisabled(self):
+        # print("handle disabled called")
+        self.is_enabled = False
+        self.currentPen = pg.mkPen("#0000")
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+        self.update()
+
+
+# extend _PolyLineSegment to allow it to be disabled
+class ToggleablePolyLineSegment(_PolyLineSegment):
+    def __init__(self, handles=(None,None), start_enabled = True, pen=None, hoverPen=None,
+                               parent=None, movable=False, antialias=None):
+        super().__init__(handles=handles, pen=pen, hoverPen=hoverPen,
+                         parent=parent, movable=movable, antialias=antialias)
+        self.is_enabled = start_enabled
+        if not self.is_enabled:
+            self.setDisabled()
+
+    # reimplement hoverEvent to account for disabled status
+    def hoverEvent(self, ev):
+        # accept drags even though we discard them to prevent competition with parent ROI
+        # (unless parent ROI is not movable)
+        if self.parentItem().translatable:
+            ev.acceptDrags(QtCore.Qt.MouseButton.LeftButton)
+        # then calls all the way back to ROI hoverEvent
+        hover = False
+        if not ev.isExit() and self.is_enabled:
+            if self.translatable and ev.acceptDrags(QtCore.Qt.MouseButton.LeftButton):
+                hover=True
+                
+            for btn in [QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.MouseButton.RightButton, QtCore.Qt.MouseButton.MiddleButton]:
+                if (self.acceptedMouseButtons() & btn) and ev.acceptClicks(btn):
+                    hover=True
+            if self.contextMenuEnabled():
+                ev.acceptClicks(QtCore.Qt.MouseButton.RightButton)
+                
+        if hover:
+            self.setMouseHover(True)
+            ev.acceptClicks(QtCore.Qt.MouseButton.LeftButton)  ## If the ROI is hilighted, we should accept all clicks to avoid confusion.
+            ev.acceptClicks(QtCore.Qt.MouseButton.RightButton)
+            ev.acceptClicks(QtCore.Qt.MouseButton.MiddleButton)
+            self.sigHoverEvent.emit(self)
+        else:
+            self.setMouseHover(False)
+
+    def shape(self):
+        p = QtGui.QPainterPath()
+    
+        h1 = self.endpoints[0].pos()
+        h2 = self.endpoints[1].pos()
+        dh = h2-h1
+        if dh.length() == 0:
+            return p
+        pxv = self.pixelVectors(dh)[1]
+        if pxv is None:
+            return p
+            
+        pxv *= 4
+        
+        p.moveTo(h1+pxv)
+        p.lineTo(h2+pxv)
+        p.lineTo(h2-pxv)
+        p.lineTo(h1-pxv)
+        p.lineTo(h1+pxv)
+      
+        return p
+
+    def setEnabled(self):
+        self.is_enabled = True
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.LeftButton)
+
+    def setDisabled(self):
+        self.is_enabled = False
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+        # don't want to hide lines, just stop accepting interactions
+
+    # reimplement addHandle to point to new toggleable handles
+    def addHandle(self, info, index=None):
+        ## If a Handle was not supplied, create it now
+        if 'item' not in info or info['item'] is None:
+            h = ToggleableHandle(self.handleSize, start_enabled=self.is_enabled, typ=info['type'], pen=self.handlePen,
+                       hoverPen=self.handleHoverPen, parent=self, antialias=self._antialias)
+            info['item'] = h
+        else:
+            h = info['item']
+            if info['pos'] is None:
+                info['pos'] = h.pos()
+        h.setPos(info['pos'] * self.state['size'])
+
+        ## connect the handle to this ROI
+        #iid = len(self.handles)
+        h.connectROI(self)
+        if index is None:
+            self.handles.append(info)
+        else:
+            self.handles.insert(index, info)
+        
+        h.setZValue(self.zValue()+1)
+        self.stateChanged()
+        return h
 
 
 class Point(pg.QtCore.QPoint):
@@ -180,6 +409,7 @@ class Polygon(pg.PolyLineROI):
             self.table_label = QtWidgets.QTableWidgetItem("Frame")
         else:
             self.table_label = QtWidgets.QTableWidgetItem("Polygon")
+        self.is_enabled = True
         self.table_item = QtWidgets.QTableWidgetItem("")
         # bottomLeft = QtCore.QPoint(0,0)
         # topRight = QtCore.QPoint(image_size[0],image_size[1])
@@ -233,7 +463,7 @@ class Polygon(pg.PolyLineROI):
                 right = int(self.image_size[0] + 1 - xmax)
                 bottomLeft = QtCore.QPoint(left, bottom)
                 topRight = QtCore.QPoint(right, top)
-                print(QtCore.QRect(bottomLeft, topRight))
+                # print(QtCore.QRect(bottomLeft, topRight))
                 self.maxBounds = QtCore.QRect(bottomLeft, topRight)
 
         super().setPoints(points, closed)
@@ -264,7 +494,7 @@ class Polygon(pg.PolyLineROI):
 
         # Add check for p1 out of bounds; move it back
         # # Doesn't visually move the handle back, so use with verifyPoints() to snap them where they should be
-        print(p1)
+        # print(p1)
         p1 = p1.toPoint()
         if p1.x() < 0:
             p1.setX(0)
@@ -274,7 +504,7 @@ class Polygon(pg.PolyLineROI):
             p1.setY(0)
         elif p1.y() > self.image_size[1]:
             p1.setY(self.image_size[1])
-        print(p1)
+        # print(p1)
 
         ## Handles with a 'center' need to know their local position relative to the center point (lp0, lp1)
         if "center" in h:
@@ -293,7 +523,7 @@ class Polygon(pg.PolyLineROI):
 
         elif h["type"] == "f":
             newPos = self.mapFromParent(p1)
-            print(newPos)
+            # print(newPos)
             h["item"].setPos(newPos)
             h["pos"] = newPos
             self.freeHandleMoved = True
@@ -458,13 +688,85 @@ class Polygon(pg.PolyLineROI):
         #     self.verifyState()
         # self.stateChanged(finish=finish)
 
+    # reimplement hoverEvent to account for a disabled status
+    def hoverEvent(self, ev):
+        hover = False
+        if not ev.isExit() and self.is_enabled:
+            if self.translatable and ev.acceptDrags(QtCore.Qt.MouseButton.LeftButton):
+                hover=True
+                
+            for btn in [QtCore.Qt.MouseButton.LeftButton, QtCore.Qt.MouseButton.RightButton, QtCore.Qt.MouseButton.MiddleButton]:
+                if (self.acceptedMouseButtons() & btn) and ev.acceptClicks(btn):
+                    hover=True
+            if self.contextMenuEnabled():
+                ev.acceptClicks(QtCore.Qt.MouseButton.RightButton)
+                
+        if hover:
+            self.setMouseHover(True)
+            ev.acceptClicks(QtCore.Qt.MouseButton.LeftButton)  ## If the ROI is hilighted, we should accept all clicks to avoid confusion.
+            ev.acceptClicks(QtCore.Qt.MouseButton.RightButton)
+            ev.acceptClicks(QtCore.Qt.MouseButton.MiddleButton)
+            self.sigHoverEvent.emit(self)
+        else:
+            self.setMouseHover(False)
+
+    # reimplement addHandle to point to new toggleable Handles
+    def addHandle(self, info, index=None):
+        ## If a Handle was not supplied, create it now
+        if 'item' not in info or info['item'] is None:
+            h = ToggleableHandle(self.handleSize, start_enabled=self.is_enabled, typ=info['type'], pen=self.handlePen,
+                       hoverPen=self.handleHoverPen, parent=self, antialias=self._antialias)
+            info['item'] = h
+        else:
+            h = info['item']
+            if info['pos'] is None:
+                info['pos'] = h.pos()
+        h.setPos(info['pos'] * self.state['size'])
+
+        ## connect the handle to this ROI
+        #iid = len(self.handles)
+        h.connectROI(self)
+        if index is None:
+            self.handles.append(info)
+        else:
+            self.handles.insert(index, info)
+        
+        h.setZValue(self.zValue()+1)
+        self.stateChanged()
+        h.sigRemoveRequested.connect(self.removeHandle)
+        self.stateChanged(finish=True)
+        return h
+    
+    # reimplement addSegment to point to new toggleable segments
+    def addSegment(self, h1, h2, index=None):
+        seg = ToggleablePolyLineSegment(handles=(h1, h2), start_enabled = self.is_enabled, pen=self.pen, hoverPen=self.hoverPen,
+                               parent=self, movable=False, antialias=self._antialias)
+        if index is None:
+            self.segments.append(seg)
+        else:
+            self.segments.insert(index, seg)
+        seg.sigClicked.connect(self.segmentClicked)
+        if self.is_enabled:
+            seg.setAcceptedMouseButtons(QtCore.Qt.MouseButton.LeftButton)
+            for h in seg.handles:
+                h['item'].setDeletable(True)
+                h['item'].setAcceptedMouseButtons(h['item'].acceptedMouseButtons() | QtCore.Qt.MouseButton.LeftButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
+        else:
+            seg.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+            for h in seg.handles:
+                h['item'].setDeletable(True)
+                h['item'].setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
+        seg.setZValue(self.zValue()+1)
+        
+
+
     def updateFromTable(self):
         matches = re.findall(r'(?P<x>\d+\.*\d*),\s*(?P<y>\d+\.*\d*)',self.table_item.text())
         newpoints = []
         for i in range(len(matches)):
-            print(matches[i])
-            print(matches[i][0],matches[i][1])
-            print(int(float(matches[i][0])),int(float(matches[i][1])))
+            # print(matches[i])
+            # print(matches[i][0],matches[i][1])
+            # print(int(float(matches[i][0])),int(float(matches[i][1])))
             x = int(float(matches[i][0]))
             y = int(float(matches[i][1]))
             if x < 0:
@@ -483,7 +785,7 @@ class Polygon(pg.PolyLineROI):
         # something doesn't properly update when dragging out of bounds
         # this properly, visually sets the points to where they are
         points = [(h[1].x(), h[1].y()) for h in self.getLocalHandlePositions()]
-        print(points, str(points))
+        # print(points, str(points))
         self.setPoints(points)
 
 class Arc(pg.ROI):
@@ -491,7 +793,7 @@ class Arc(pg.ROI):
     tthmap = None
     azmap = None
     def __init__(self, **args):
-        print(self.center)
+        # print(self.center)
         self.path = None
         pg.ROI.__init__(self, pos=self.center, size=(1,1), movable=False, rotatable=False, resizable=False, **args)
         self.sigRegionChanged.connect(self._clearPath)
@@ -502,6 +804,8 @@ class Arc(pg.ROI):
         self.mask_RGBA = np.zeros((self.tthmap.shape[0],self.tthmap.shape[1],4),dtype=np.uint8)
         self.mask_RGBA[:,:,0] = 255
         self.mask_RGBA[:,:,2] = 255
+        self.is_enabled = True
+        self.segments = []
         
     def initialize_handles(self,point):
         while len(self.handles) > 0:
@@ -516,9 +820,11 @@ class Arc(pg.ROI):
         self.addFreeHandle((-4.5,0.5),name="Tth_low")
         self.addFreeHandle((0.5,50.5),name="Azim_left")
         self.addFreeHandle((0.5,-49.5),name="Azim_right")
-        print(self.getLocalHandlePositions())
-        print(self.getHandles())
-        print(self.getSceneHandlePositions())
+        for i in range(0, 4):
+            self.addSegment(self.handles[0]['item'], self.handles[i+1]['item'])
+        # print(self.getLocalHandlePositions())
+        # print(self.getHandles())
+        # print(self.getSceneHandlePositions())
         for handle in self.getHandles():
             handle.buildPath()
             handle.update()
@@ -526,14 +832,33 @@ class Arc(pg.ROI):
     def checkPointMove(self,handle,pos,modifiers):
         if handle.typ == 't':
             pos = self.getViewBox().mapSceneToView(pos)
-            print(pos,pos.x(),pos.y())
+            # print(pos,pos.x(),pos.y())
             angle = self.azmap[int(pos.y())][int(pos.x())]
-            print(angle)
+            # print(angle)
             self.setAngle(angle)
         return True
 
     def verifyState(self):
         return
+    
+    def addSegment(self, h1, h2, index=None):
+        seg = ToggleablePolyLineSegment(handles=(h1, h2), start_enabled = self.is_enabled, pen=self.pen, hoverPen=self.hoverPen,
+                               parent=self, movable=False, antialias=self._antialias)
+        if index is None:
+            self.segments.append(seg)
+        else:
+            self.segments.insert(index, seg)
+        seg.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+        seg.setDisabled()
+        if self.is_enabled:
+            for h in seg.handles:
+                h['item'].setDeletable(True)
+                h['item'].setAcceptedMouseButtons(h['item'].acceptedMouseButtons() | QtCore.Qt.MouseButton.LeftButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
+        else:
+            for h in seg.handles:
+                h['item'].setDeletable(True)
+                h['item'].setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
+        seg.setZValue(self.zValue()+1)
 
     def paint(self,p,*args):
         # super().paint(p,*args)
@@ -555,18 +880,32 @@ class Arc(pg.ROI):
                     tth_high_pos = self.handles[i]['item'].pos()
                 elif name == "Tth_low":
                     tth_low_pos = self.handles[i]['item'].pos()
-            p.drawLine(azim_left_pos,center_pos)
-            p.drawLine(center_pos,azim_right_pos)
-            p.drawLine(tth_high_pos,center_pos)
-            p.drawLine(center_pos,tth_low_pos)
+            # p.drawLine(azim_left_pos,center_pos)
+            # p.drawLine(center_pos,azim_right_pos)
+            # p.drawLine(tth_high_pos,center_pos)
+            # p.drawLine(center_pos,tth_low_pos)
             scene_points = self.getSceneHandlePositions()
             mapped_points = {}
             for i in range(len(scene_points)):
                 mapped_points[scene_points[i][0]] = self.getViewBox().mapSceneToView(scene_points[i][1])
-            maxtth = self.tthmap[int(mapped_points['Tth_high'].y())][int(mapped_points['Tth_high'].x())]
-            mintth = self.tthmap[int(mapped_points['Tth_low'].y())][int(mapped_points['Tth_low'].x())]
-            maxazim = self.azmap[int(mapped_points['Azim_left'].y())][int(mapped_points['Azim_left'].x())]
-            minazim = self.azmap[int(mapped_points['Azim_right'].y())][int(mapped_points['Azim_right'].x())]
+            maxtth_pos = [int(mapped_points['Tth_high'].y()),int(mapped_points['Tth_high'].x())]
+            if check_in_bounds(maxtth_pos, self.tthmap.shape):
+                maxtth = self.tthmap[maxtth_pos[0]][maxtth_pos[1]]
+            else:
+                maxtth = np.max(self.tthmap)
+            mintth_pos = [int(mapped_points['Tth_low'].y()),int(mapped_points['Tth_low'].x())]
+            # not likely meant to be OoB, but this avoids problems if it's dragged OoB temporarily
+            if check_in_bounds(mintth_pos, self.tthmap.shape):
+                mintth = self.tthmap[mintth_pos[0]][mintth_pos[1]]
+            else:
+                mintth = np.max(self.tthmap)
+            mintth = self.tthmap[mintth_pos[0]][mintth_pos[1]]
+            maxazim_pos = [int(mapped_points['Azim_left'].y()),int(mapped_points['Azim_left'].x())]
+            maxazim_pos = find_closest_valid(maxazim_pos, self.tthmap.shape)
+            maxazim = self.azmap[maxazim_pos[0]][maxazim_pos[1]]
+            minazim_pos = [int(mapped_points['Azim_right'].y()),int(mapped_points['Azim_right'].x())]
+            minazim_pos = find_closest_valid(minazim_pos, self.tthmap.shape)
+            minazim = self.azmap[minazim_pos[0]][minazim_pos[1]]
             # print(mintth, maxtth, minazim, maxazim)
 
             self.mask_data = self.tthmap >= mintth
@@ -646,7 +985,7 @@ class Arc(pg.ROI):
         point = pg.QtCore.QPoint(p_yx[1],p_yx[0])
         # translate to scene coords
         point = self.getViewBox().mapViewToScene(point)
-        print(point)
+        # print(point)
         return point
     
     def clearPoints(self):
@@ -659,6 +998,42 @@ class Arc(pg.ROI):
     @pg.QtCore.Slot()
     def _clearPath(self):
         self.path = None
+
+    # reimplement addHandle to point to new toggleable handles
+    def addHandle(self, info, index=None):
+        ## If a Handle was not supplied, create it now
+        if 'item' not in info or info['item'] is None:
+            h = ToggleableHandle(self.handleSize, start_enabled=self.is_enabled, typ=info['type'], pen=self.handlePen,
+                       hoverPen=self.handleHoverPen, parent=self, antialias=self._antialias)
+            info['item'] = h
+        else:
+            h = info['item']
+            if info['pos'] is None:
+                info['pos'] = h.pos()
+        h.setPos(info['pos'] * self.state['size'])
+
+        ## connect the handle to this ROI
+        #iid = len(self.handles)
+        h.connectROI(self)
+        if index is None:
+            self.handles.append(info)
+        else:
+            self.handles.insert(index, info)
+        
+        h.setZValue(self.zValue()+1)
+        self.stateChanged()
+        return h
+    
+    def setEnabled(self):
+        self.is_enabled = True
+        [handle.setEnabled() for handle in self.getHandles()]
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.LeftButton)
+
+    def setDisabled(self):
+        self.is_enabled = False
+        [handle.setDisabled() for handle in self.getHandles()]
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+
 
 class Line(pg.InfiniteLine):
     def __init__(self,image_size,orientation,*args,**kwargs):
@@ -692,44 +1067,180 @@ class Line(pg.InfiniteLine):
         return
 
 
-class Ring(pg.CircleROI):
-    def __init__(self,image_size,*args,**kwargs):
-        super().__init__(pos=(0,0),radius=1,movable=False,rotatable=False,resizable=False,*args,**kwargs)
-        self.image_size = image_size
-        self.table_label = pg.QtWidgets.QTableWidgetItem("Ring")
-        self.table_item = pg.QtWidgets.QTableWidgetItem()
-    
+class Ring(Polygon):
+    tthmap = None
+    azmap = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.table_label.setText("Ring")
+        self.mask_data = np.zeros(self.tthmap.shape,dtype=bool)
+        self.mask_RGBA = np.zeros((self.tthmap.shape[0],self.tthmap.shape[1],4),dtype=np.uint8)
+        self.mask_RGBA[:,:,0] = 255
+        self.mask_RGBA[:,:,2] = 255
+
+        self.tth_center = 0
+        self.tthwidth = 0
+
+    def addSegment(self, h1, h2, index=None):
+        seg = ToggleablePolyLineSegment(handles=(h1, h2), start_enabled = self.is_enabled, pen=self.pen, hoverPen=self.hoverPen,
+                               parent=self, movable=False, antialias=self._antialias)
+        if index is None:
+            self.segments.append(seg)
+        else:
+            self.segments.insert(index, seg)
+        seg.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+        seg.setDisabled()
+        if self.is_enabled:
+            for h in seg.handles:
+                h['item'].setDeletable(True)
+                h['item'].setAcceptedMouseButtons(h['item'].acceptedMouseButtons() | QtCore.Qt.MouseButton.LeftButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
+        else:
+            for h in seg.handles:
+                h['item'].setDeletable(True)
+                h['item'].setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton) ## have these handles take left clicks too, so that handles cannot be added on top of other handles
+        seg.setZValue(self.zValue()+1)
+
+    def setEnabled(self):
+        self.is_enabled = True
+        [handle.setEnabled() for handle in self.getHandles()]
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.LeftButton)
+
+    def setDisabled(self):
+        self.is_enabled = False
+        [handle.setDisabled() for handle in self.getHandles()]
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+
+    def paint(self, p, opt, widget):
+        # Note: don't use self.boundingRect here, because subclasses may need to redefine it.
+        r = QtCore.QRectF(0, 0, self.state['size'][0], self.state['size'][1]).normalized()
+        p.setRenderHint(
+            QtGui.QPainter.RenderHint.Antialiasing,
+            self._antialias
+        )
+        p.setPen(self.currentPen)
+        p.translate(r.left(), r.top())
+        p.scale(r.width(), r.height())
+        p.drawRect(0, 0, 1, 1)
+
+        if len(self.handles) == 2:
+            scene_points = self.getSceneHandlePositions()
+            mapped_points = []
+            for i in range(len(scene_points)):
+                mapped_points.append(self.getViewBox().mapSceneToView(scene_points[i][1]))
+            tth1 = self.tthmap[int(mapped_points[0].y())][int(mapped_points[0].x())]
+            tth2 = self.tthmap[int(mapped_points[1].y())][int(mapped_points[1].x())]
+            if tth1 < tth2:
+                mintth = tth1
+                maxtth = tth2
+            else:
+                mintth = tth2
+                maxtth = tth1
+
+            self.mask_data = self.tthmap >= mintth
+            self.mask_data &= self.tthmap <= maxtth
+            
+            self.mask_RGBA[:,:,3] = 175*self.mask_data
+
+            self.tth_center = maxtth-.5*(maxtth-mintth)
+            self.tthwidth = maxtth-mintth
+
+            # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=maxtth-.5*(maxtth-mintth),startazim=minazim,endazim=maxazim,tthwidth=maxtth-mintth))
+            self.table_item.setText("[{tthcenter},{tthwidth}]".format(tthcenter=self.tth_center,tthwidth=self.tthwidth))
+
     def updateFromTable(self):
         match = re.match(r'\[(?P<center_tth>\d+\.*\d*),\s*(?P<tth_width>\d+\.*\d*)\]',self.table_item.text())
-        self.center_tth = float(match.group('center_tth'))
-        self.tth_width = float(match.group('tth_width'))
+        self.tth_center = float(match.group('center_tth'))
+        self.tthwidth = float(match.group('tth_width'))
+        tth_low = self.tth_center - 0.5 * self.tthwidth
+        tth_high = self.tth_center + 0.5 * self.tthwidth
+        h1_pos = self.find_closest_point(tth_low, 45)
+        h2_pos = self.find_closest_point(tth_high, 45)
 
-    def verifyState(self):
-        return
+        if len(self.handles) == 2:
+            [h1, h2] = self.handles
+            # h1_azim = self.azmap[] #would need to remap yet again
+            h1['item'].movePoint(h1_pos)
+            h2['item'].movePoint(h2_pos)
+        else:
+            self.clearPoints()
+            self.setPoints([h1_pos, h2_pos])
+
+    def find_closest_point(self,tth,azim):
+        # handle cases near azim=0
+        z = (self.tthmap - tth)**2 + (self.azmap-azim)**2
+        p_yx = np.unravel_index(np.argmin(z),z.shape)
+        # print("closest point:",tth,azim,pxy)
+        point = pg.QtCore.QPoint(p_yx[1],p_yx[0])
+        # translate to scene coords
+        point = self.getViewBox().mapViewToScene(point)
+        return point
+
 
 class Spot(pg.CircleROI):
-    def __init__(self,image_size,*args,**kwargs):
-        super().__init__(pos=(0,0),radius=1,movable=False,rotatable=False,resizable=False,*args,**kwargs)
+    def __init__(self, image_size, start_enabled=True, *args, **kwargs):
+        self.is_enabled = start_enabled
+        super().__init__(pos=(0,0), radius=1, movable=False, rotatable=True, resizable=False, *args, **kwargs)
         self.image_size = image_size
         self.table_label = pg.QtWidgets.QTableWidgetItem("Spot")
         self.table_item = pg.QtWidgets.QTableWidgetItem()
 
     def _addHandles(self):
         self.addTranslateHandle([0.5,0.5],name="Center_point")
-        self.addScaleHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5],[0.5,0.5],name="Scale")
+        self.addScaleRotateHandle([0.5*2.**-0.5 + 0.5, 0.5*2.**-0.5 + 0.5],[0.5,0.5],name="Scale")
 
     def updateFromTable(self):
         match = re.match(r'\[(?P<x>\d+\.*\d*),\s*(?P<y>\d+\.*\d*),\s*(?P<r>\d+\.*\d*)\]',self.table_item.text())
         self.center = [float(match.group('y')),float(match.group('x'))]
         self.radius = float(match.group('r'))
+        scale_pos = [self.center[0] + self.radius / np.sqrt(2), self.center[1] + self.radius / np.sqrt(2)]
+        center_pos = pg.QtCore.QPoint(self.center[1],self.center[0])
+        center_pos = self.getViewBox().mapViewToScene(center_pos)
+        scale_pos = pg.QtCore.QPoint(scale_pos[1], scale_pos[0])
+        scale_pos = self.getViewBox().mapViewToScene(scale_pos)
+        for handle in self.handles:
+            if handle['name'] == "Center_point":
+                handle['item'].movePoint(center_pos)
+            elif handle['name'] == "Scale":
+                handle['item'].movePoint(scale_pos)
 
     def paint(self, p, opt, widget):
         super().paint(p,opt,widget)
-        # self.center = 
-        # self.table_item.setText()
+        scene_points = self.getSceneHandlePositions()
+        mapped_points = {}
+        for i in range(len(scene_points)):
+            mapped_points[scene_points[i][0]] = self.getViewBox().mapSceneToView(scene_points[i][1])
+        self.center = [mapped_points['Center_point'].y(),mapped_points['Center_point'].x()]
+        scale_pos = [mapped_points['Scale'].y(),mapped_points['Scale'].x()]
+        self.radius = np.linalg.norm(np.array(self.center) - np.array(scale_pos))
+        self.table_item.setText(f"[{self.center[1]}, {self.center[0]}, {self.radius}]")
+        # print(f"[{self.center[1]}, {self.center[0]}, {self.radius}]")
 
     def verifyState(self):
         return
+    
+    def addHandle(self, info, index=None):
+        ## If a Handle was not supplied, create it now
+        if 'item' not in info or info['item'] is None:
+            h = ToggleableHandle(self.handleSize, start_enabled=self.is_enabled, typ=info['type'], pen=self.handlePen,
+                       hoverPen=self.handleHoverPen, parent=self, antialias=self._antialias)
+            info['item'] = h
+        else:
+            h = info['item']
+            if info['pos'] is None:
+                info['pos'] = h.pos()
+        h.setPos(info['pos'] * self.state['size'])
+
+        ## connect the handle to this ROI
+        #iid = len(self.handles)
+        h.connectROI(self)
+        if index is None:
+            self.handles.append(info)
+        else:
+            self.handles.insert(index, info)
+        
+        h.setZValue(self.zValue()+1)
+        self.stateChanged()
+        return h
 
 class NoImctrlWarning(QtWidgets.QWidget):
     def __init__(self):
@@ -891,6 +1402,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
         Arc.tthmap = self.cache['pixelTAmap']
         Arc.azmap = self.cache['pixelAzmap']
         Arc.center = self.cache['center']
+        Ring.tthmap = self.cache['pixelTAmap']
+        Ring.azmap = self.cache['pixelAzmap']
         self.min_tth_threshold_label.setEnabled(True)
         self.min_tth_threshold.setEnabled(True)
         self.min_tth_threshold.setMinimum(0)
@@ -912,7 +1425,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # define an enum or the like so these automatically update with new options
         if evt == 0:
             frame_list = self.polygons_table.findItems("Frame",QtCore.Qt.MatchFlag.MatchExactly)
-            print(frame_list, len(frame_list))
+            # print(frame_list, len(frame_list))
             if len(frame_list) > 0:
                 self.add_object_button.setText("Max 1 Frame")
             else:
@@ -980,6 +1493,12 @@ class MainWindow(pg.GraphicsLayoutWidget):
                 QtWidgets.QMessageBox.question(self,"Exit","Please load an image control file before using arcs and rings.",QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
                 return
             self.add_ring()
+            self.add_object_button.setText("Complete Ring")
+            self.creating_object = True
+        elif cur_text == "Complete Ring":
+            self.done_creating()
+            self.add_object_button.setText("New Ring")
+            self.creating_object = False
 
     def add_polygon(self,isFrame = False):
         poly = self.main_image.add_polygon(isFrame = isFrame)
@@ -999,7 +1518,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.main_image.objects.append(line)
 
     def add_spot(self):
-        spot = Spot(self.main_image.image_data.shape)
+        spot = self.main_image.add_spot()
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
         self.polygons_table.setItem(self.number_of_objects-1,0,spot.table_label)
@@ -1007,18 +1526,20 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.main_image.objects.append(spot)
 
     def add_ring(self):
-        ring = Ring(self.main_image.image_data.shape)
+        ring = self.main_image.add_ring()
         self.number_of_objects += 1
         self.polygons_table.setRowCount(self.number_of_objects)
         self.polygons_table.setItem(self.number_of_objects-1,0,ring.table_label)
         self.polygons_table.setItem(self.number_of_objects-1,1,ring.table_item)
         self.main_image.objects.append(ring)
+        self.main_image.current_ring = self.main_image.objects[-1]
 
     def done_creating(self):
         self.creating_object = False
         self.main_image.current_polygon = None
         self.main_image.current_point = None
         self.main_image.current_arc = None
+        self.main_image.current_ring = None
 
     def add_point(self):
         point = Point(image_size=self.main_image.image_data.shape)
@@ -1114,10 +1635,11 @@ class MainWindow(pg.GraphicsLayoutWidget):
                     )
                     self.predef_mask |= (dist < i.radius)
                 elif type(i) == Ring:
-                    temp = self.cache["pixelTAmap"] > (i.center_tth - 0.5 * i.tth_width)
-                    temp = np.logical_and(temp,self.cache["pixelTAmap"] < (i.center_tth + 0.5 * i.tth_width))
-                    self.predef_mask |= temp
-                    ~temp
+                    # temp = self.cache["pixelTAmap"] > (i.center_tth - 0.5 * i.tth_width)
+                    # temp = np.logical_and(temp,self.cache["pixelTAmap"] < (i.center_tth + 0.5 * i.tth_width))
+                    # self.predef_mask |= temp
+                    # ~temp
+                    self.predef_mask = np.logical_or(self.predef_mask, i.mask_data)
 
             # intensity thresholds
             below_mins = np.nonzero(
@@ -1447,8 +1969,37 @@ class MainWindow(pg.GraphicsLayoutWidget):
         for i in range(self.number_of_objects):
             if (current) and (i == current.row()):
                 self.main_image.objects[i].setMouseHover(True)
+                if type(self.main_image.objects[i]) == Line:
+                    self.main_image.objects[i].setMovable(True)
+                if type(self.main_image.objects[i]) == Polygon:
+                    self.main_image.objects[i].translatable = True
+                    self.main_image.objects[i].resizable = True
+                    self.main_image.objects[i].is_enabled = True
+                    # also get all handles
+                    # [handle.show() for handle in self.main_image.objects[i].getHandles()]
+                    [handle.setEnabled() for handle in self.main_image.objects[i].getHandles()]
+                    for seg in self.main_image.objects[i].segments:
+                        # seg.setAcceptedMouseButtons(QtCore.Qt.MouseButton.LeftButton)
+                        # seg.hoverPen = (255,255,255)
+                        seg.setEnabled()
+                if type(self.main_image.objects[i]) == Arc:
+                    self.main_image.objects[i].setEnabled()
             else:
                 self.main_image.objects[i].setMouseHover(False)
+                if type(self.main_image.objects[i]) == Line:
+                    self.main_image.objects[i].setMovable(False)
+                if type(self.main_image.objects[i]) == Polygon:
+                    self.main_image.objects[i].translatable = False
+                    self.main_image.objects[i].resizable = False
+                    self.main_image.objects[i].is_enabled = False
+                    # [handle.hide() for handle in self.main_image.objects[i].getHandles()]
+                    [handle.setDisabled() for handle in self.main_image.objects[i].getHandles()]
+                    for seg in self.main_image.objects[i].segments:
+                        # seg.setAcceptedMouseButtons(QtCore.Qt.MouseButton.NoButton)
+                        # seg.hoverPen = (255,255,255)
+                        seg.setDisabled()
+                if type(self.main_image.objects[i]) == Arc:
+                    self.main_image.objects[i].setDisabled()
 
 
 class MainImage(pg.GraphicsLayoutWidget):
@@ -1470,6 +2021,7 @@ class MainImage(pg.GraphicsLayoutWidget):
         self.current_polygon = None
         self.current_point = None
         self.current_arc = None
+        self.current_ring = None
         self.objects = []
 
         self.view.addItem(self.image)
@@ -1531,6 +2083,15 @@ class MainImage(pg.GraphicsLayoutWidget):
         # print("points list: ",points_list,type(points_list))
         self.current_polygon.setPoints(points_list)
 
+    def add_ring_point(self, point):
+        points_list = [tuple(h.pos()) for h in self.current_ring.getHandles()]
+        if len(points_list) < 2:
+            points_list.append((float(round(point.x())), float(round(point.y(),0))))
+            self.current_ring.setPoints(points_list)
+        else:
+            # auto-complete?
+            return
+
     def add_arc(self):
         bounds = QtCore.QRect()
         bounds.setLeft(0)
@@ -1541,8 +2102,33 @@ class MainImage(pg.GraphicsLayoutWidget):
         self.view.addItem(arc, ignoreBounds=True)
         return arc
     
+    def add_ring(self):
+        # ring = Ring(self.image_data.shape,parent=self.view)
+        ring = Ring(
+            positions=[],
+            closed=True,
+            translateSnap=True,
+            rotatable=False,
+            image_size=self.image_data.shape,
+            isFrame=False,
+            parent=self.view
+        )
+        self.view.addItem(ring, ignoreBounds=True)
+        return ring
+
+    def add_spot(self):
+        spot = Spot(
+            image_size=self.image_size,
+            start_enabled=True,
+        )
+        self.view.addItem(spot, ignoreBounds=True)
+        return spot
+
     def set_arc_point(self, point):
         self.current_arc.initialize_handles(point)
+
+    def set_ring_point(self, point):
+        self.current_ring.initialize_handles(point)
 
     def add_line(self, orientation):
         line = Line(self.image_data.shape,orientation=orientation)
@@ -1576,6 +2162,9 @@ class MainImage(pg.GraphicsLayoutWidget):
                 self.current_point.table_item.setText("("+str(self.current_point.x())+","+str(self.current_point.y())+")")
             elif self.current_arc != None:
                 self.set_arc_point(mousePoint.toPoint())
+            elif self.current_ring != None:
+                # self.set_ring_point(mousePoint.toPoint())
+                self.add_ring_point(mousePoint.toPoint())
             # self.add_point(mousePoint)
             # self.add_point(evt.pos())
             # self.qpicture = self.paint_polygon()
@@ -1595,7 +2184,15 @@ class MainImage(pg.GraphicsLayoutWidget):
         super().mouseReleaseEvent(evt)
 
 
+def tracefunc(frame, event, arg, indent=[0]):
+    if event == "call":
+        indent[0] += 2
+        print(f"{indent[0]}" + "> call fxn", frame.f_code.co_name)
+    elif event == "return":
+        print("<" + f"{indent[0]}", "exit fxn", frame.f_code.co_name)
+
 if __name__ == "__main__":
+    # sys.setprofile(tracefunc)
     app = QtWidgets.QApplication([])
     main_window = MainWindow()
     sys.exit(app.exec())
