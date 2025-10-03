@@ -992,8 +992,40 @@ class Arc(pg.ROI):
         """
         Remove all handles and segments.
         """
+        # print(f"{self.handles=}")
         while len(self.handles) > 0:
             self.removeHandle(self.handles[0]['item'])
+        # print(f"{self.handles=}")
+        # print(f"{self.segments=}")
+        # while len(self.segments) > 0:
+        #     self.removeSegment(self.segments[0])
+        # print(f"{self.segments=}")
+    
+    def removeSegment(self, seg):
+        self.scene().removeItem(seg)
+        # print(f"{seg.handles=}")
+        for handle in seg.handles[:]:
+            seg.removeHandle(handle['item'])
+        # print(f"{seg.handles=}")
+        self.segments.remove(seg)
+
+    @QtCore.Slot(object)
+    def removeHandle(self, handle, updateSegments=True):
+        pg.ROI.removeHandle(self, handle)
+        handle.sigRemoveRequested.disconnect(self.removeHandle)
+        
+        if not updateSegments:
+            return
+        segments = handle.rois[:]
+        
+        if len(segments) == 1:
+            self.removeSegment(segments[0])
+        elif len(segments) > 1:
+            handles = [h['item'] for h in segments[1].handles]
+            handles.remove(handle)
+            segments[0].replaceHandle(handle, handles[0])
+            self.removeSegment(segments[1])
+        self.stateChanged(finish=True)
 
     @pg.QtCore.Slot()
     def _clearPath(self):
@@ -1241,6 +1273,10 @@ class Spot(pg.CircleROI):
         h.setZValue(self.zValue()+1)
         self.stateChanged()
         return h
+    
+    def clearPoints(self):
+        while len(self.handles) > 0:
+            self.removeHandle(self.handles[0]['item'])
 
 class NoImctrlWarning(QtWidgets.QWidget):
     def __init__(self):
@@ -1284,8 +1320,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.add_object_button = QtWidgets.QPushButton("New Polygon")
         self.add_object_button.released.connect(self.add_object_button_pressed)
         self.creating_object = False
-        self.remove_polygon_button = QtWidgets.QPushButton("Delete Selected Object")
-        self.remove_polygon_button.released.connect(self.delete_selected_polygon)
+        self.remove_object_button = QtWidgets.QPushButton("Delete Selected Object")
+        self.remove_object_button.released.connect(self.delete_selected_object)
         # ellipse/circle # not supported in GSASII, unless it's new
         # arc - needs azimuth map
 
@@ -1369,7 +1405,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.object_layout.addWidget(self.object_dropdown, 5, 0)
         self.object_layout.addWidget(self.add_object_button, 5, 1)
         self.object_layout.addWidget(self.polygons_table, 6, 0, 2, 2)
-        self.object_layout.addWidget(self.remove_polygon_button, 8, 0)
+        self.object_layout.addWidget(self.remove_object_button, 8, 0)
         self.object_layout.addWidget(self.update_objects_from_table_button, 8, 1)
         self.object_list_widget.setLayout(self.object_layout)
         self.object_list.setWidget(self.object_list_widget)
@@ -1891,6 +1927,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
     def clear_polygon(self, index):
         # clear points
         self.main_image.objects[index].clearPoints()
+        self.main_image.view.removeItem(self.main_image.objects[index])
         # reduce size of objects list
         self.number_of_objects -= 1
         # remove from table
@@ -1900,6 +1937,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
     def clear_arc(self, index):
         self.main_image.objects[index].clearPoints()
+        self.main_image.view.removeItem(self.main_image.objects[index])
         self.number_of_objects -= 1
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
@@ -1914,20 +1952,25 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
     def clear_line(self, index):
         self.number_of_objects -= 1
+        self.main_image.view.removeItem(self.main_image.objects[index])
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
 
     def clear_spot(self, index):
+        self.main_image.objects[index].clearPoints()
         self.number_of_objects -= 1
+        self.main_image.view.removeItem(self.main_image.objects[index])
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
 
     def clear_ring(self, index):
+        self.main_image.objects[index].clearPoints()
         self.number_of_objects -= 1
+        self.main_image.view.removeItem(self.main_image.objects[index])
         self.polygons_table.removeRow(index)
         del self.main_image.objects[index]
 
-    def delete_selected_polygon(self):
+    def delete_selected_object(self):
         # list of singular item, as selection mode is single selection
         selected = self.polygons_table.selectedItems()[0]
         selected_row = selected.row()
