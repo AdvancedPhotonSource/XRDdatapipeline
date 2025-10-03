@@ -1716,6 +1716,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.preview_mask_button.setText("Preview Mask")
 
     def save_mask(self):
+        if self.preview_mask_button.text() == "Preview Mask":
+            self.preview_mask()
         location = get_save_file_location(".tif")
         if location is not None:
             tf.imwrite(location, self.predef_mask)
