@@ -308,9 +308,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 ]
             )
         )
-        matchstring = rf".*{re.escape(self.settings.curr_key)}(?P<number>\d{5}|\d{5}[_\-]\d{5})\..*"
-        matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
-        self.settings.curr_num = matches.group("number")
+        self.update_num()
 
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos
