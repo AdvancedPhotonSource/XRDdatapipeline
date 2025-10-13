@@ -100,6 +100,9 @@ class MainImageView(pg.GraphicsLayoutWidget):
         self.outlier_mask_data = image_mask(
             self.settings.image_size, self.settings.colors["outlier_mask"].color
         )  # green
+        self.outlier_mask_only_data = image_mask(
+            self.settings.image_size, self.settings.colors["outlier_mask"].color
+        )
         # self.nonzero_mask_RGBA[:,:,3] = tf.imread("masks\\" + tiflist[keylist[curr_key]][curr_pos] + "_maskpolnonzero.tif")
         # TODO: nonzero version
         # self.nonzero_mask_RGBA[:,:,3] = tf.imread("masks\\" + tiflist[keylist[curr_key]][curr_pos] + "_om.tif")
@@ -179,10 +182,12 @@ class MainImageView(pg.GraphicsLayoutWidget):
 
         self.predef_mask_box = QtWidgets.QCheckBox("Predefined Mask")
         self.mask_box = QtWidgets.QCheckBox("Outlier Mask")
+        self.outlier_only_box = QtWidgets.QCheckBox("Only unclassified clusters")
         self.predef_mask_box.setChecked(True)
         self.mask_box.setChecked(True)
         self.predef_mask_box.stateChanged.connect(self.predef_box_changed)
         self.mask_box.stateChanged.connect(self.mask_box_changed)
+        self.outlier_only_box.stateChanged.connect(self.outlier_only_changed)
         self.spot_mask_box = QtWidgets.QCheckBox("Spot Mask")
         self.arcs_mask_box = QtWidgets.QCheckBox("Texture Mask")
         self.spot_mask_box.setChecked(True)
@@ -241,6 +246,7 @@ class MainImageView(pg.GraphicsLayoutWidget):
             self.settings.colors["nonpositive_mask"].color
         )
         self.outlier_mask_data.set_color(self.settings.colors["outlier_mask"].color)
+        self.outlier_mask_only_data.set_color(self.settings.colors["outlier_mask"].color)
         self.arcs_mask_data.set_color(self.settings.colors["arcs_mask"].color)
         self.spot_mask_data.set_color(self.settings.colors["spot_mask"].color)
         self.tth_circle_data.set_color(self.settings.colors["tth_circle_mask"].color)
@@ -313,6 +319,9 @@ class MainImageView(pg.GraphicsLayoutWidget):
                 vals[0].set_shape(self.settings.image_size)
             # vals[0][:,:,3] = vals[1]*int(255*self.mask_opacity_box.value()/100)
             mask.updateImage(vals[0].full_data)
+        self.outlier_mask_only_data.set_data(self.outlier_mask_data.mask_data ^ self.arcs_mask_data.mask_data ^ self.spot_mask_data.mask_data)
+        if self.outlier_only_box.isChecked():
+            self.outlier_mask.updateImage(self.outlier_mask_only_data.full_data)
 
     def update_tth_circle(self, tth, width=0.03):
         circle = (self.tth_map > tth - width) & (self.tth_map < tth + width)
@@ -326,6 +335,12 @@ class MainImageView(pg.GraphicsLayoutWidget):
         else:
             # self.view.removeItem(self.outlier_mask)
             self.outlier_mask.setVisible(False)
+
+    def outlier_only_changed(self):
+        if self.outlier_only_box.isChecked():
+            self.outlier_mask.updateImage(self.outlier_mask_only_data.full_data)
+        else:
+            self.outlier_mask.updateImage(self.outlier_mask_data.full_data)
 
     def predef_box_changed(self):
         if self.predef_mask_box.isChecked():
@@ -379,7 +394,11 @@ class MainImageView(pg.GraphicsLayoutWidget):
     
     def outlier_mask_opacity_changed(self, evt):
         self.outlier_mask_data.set_opacity(evt / 100)
-        self.outlier_mask.updateImage(self.outlier_mask_data.full_data)
+        self.outlier_mask_only_data.set_opacity(evt / 100)
+        if self.outlier_only_box.isChecked():
+            self.outlier_mask.updateImage(self.outlier_mask_only_data.full_data)
+        else:
+            self.outlier_mask.updateImage(self.outlier_mask_data.full_data)
 
     def spot_mask_opacity_changed(self, evt):
         self.spot_mask_data.set_opacity(evt / 100)

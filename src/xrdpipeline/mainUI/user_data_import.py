@@ -55,16 +55,28 @@ class UserAddedDataInstanceWidget(QtWidgets.QWidget):
 
         self.data_instance = data_instance
         self.graph = []
-        self.color = data_instance.color
-        self.offset = data_instance.offset
-        self.multiplier = data_instance.multiplier
         
         self.name_field = QtWidgets.QLineEdit(self.data_instance.name)
         self.filename_field = QtWidgets.QLabel(self.data_instance.file_name)
-        self.color_field = QtWidgets.QLineEdit(self.color.color)
+        # self.color_field = QtWidgets.QLineEdit(self.color.color)
+        self.color_button = QtWidgets.QPushButton()
+        self.color_button.setStyleSheet(f"""
+QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.data_instance.color.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+        """)
+        self.color_button.released.connect(self.open_color_dialog)
         self.offset_field = QtWidgets.QSpinBox()
         self.multiplier_field = QtWidgets.QSpinBox()
-        self.multiplier_field.setValue(self.multiplier)
+        self.multiplier_field.setValue(self.data_instance.multiplier)
         self.multiplier_field.setMaximum(1000000)
         self.x_type_field = QtWidgets.QComboBox()
         self.x_type_field.addItems(x_types)
@@ -79,7 +91,7 @@ class UserAddedDataInstanceWidget(QtWidgets.QWidget):
 
         self.row_layout.addWidget(self.name_field, 1)
         self.row_layout.addWidget(self.filename_scroll, 3)
-        self.row_layout.addWidget(self.color_field, 1)
+        self.row_layout.addWidget(self.color_button, 1)
         self.row_layout.addWidget(self.offset_field, 1)
         self.row_layout.addWidget(self.multiplier_field, 1)
         self.row_layout.addWidget(self.x_type_field, 1)
@@ -89,6 +101,26 @@ class UserAddedDataInstanceWidget(QtWidgets.QWidget):
     
     def remove_button_pressed(self):
         self.delete_userdata_signal.emit(self)
+
+    def open_color_dialog(self):
+        newcolor = pg.QtWidgets.QColorDialog.getColor()
+        # Clicking Cancel on the dialog returns an empty color.
+        # This becomes interpreted as black if used as a color, but is not equal to black.
+        if newcolor != pg.QtGui.QColor():
+            self.data_instance.color.color = newcolor.name()
+            self.color_button.setStyleSheet(f"""
+ QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.data_instance.color.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+            """)
 
 
 class UserAddedDataTab(QtWidgets.QWidget):
@@ -164,7 +196,7 @@ class UserAddedDataTab(QtWidgets.QWidget):
     def send_update(self):
         for datum in self.user_data:
             datum.data_instance.name = datum.name_field.text()
-            datum.data_instance.color.color = datum.color_field.text()
+            # datum.data_instance.color.color = datum.color_field.text()
             datum.data_instance.offset = datum.offset_field.value()
             datum.data_instance.multiplier = datum.multiplier_field.value()
             datum.data_instance.x_type = datum.x_type_field.currentData()

@@ -169,6 +169,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.layout.addWidget(self.imageview.spot_mask_box, 9, 3)
         self.layout.addWidget(self.imageview.arcs_mask_box, 9, 4)
         self.layout.addWidget(self.circleCheckbox, 11, 0)
+        self.layout.addWidget(self.imageview.outlier_only_box, 11, 2)
         self.layout.addWidget(self.imageview.mask_opacity_label, 10, 0)
         # self.layout.addWidget(self.imageview.mask_opacity_box, 10, 2)
         self.layout.addWidget(self.imageview.predef_mask_opacity_box, 10, 1)
