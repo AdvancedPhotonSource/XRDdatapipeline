@@ -188,12 +188,22 @@ class ContourView(pg.GraphicsLayoutWidget):
             time.time() - os.path.getctime(self.integral_filelist[-1]) < 0.5
         ):
             self.integral_filelist.pop()
-        if self.automatically_set_spacing:
-            self.auto_set_spacing()
-        if manual:
-            self.update_integral_data_manual()
+        # Sanity check to avoid loading nothing
+        if len(self.integral_filelist) > 0:
+            if self.automatically_set_spacing:
+                self.auto_set_spacing()
+            if manual:
+                self.update_integral_data_manual()
+            else:
+                self.update_integral_data(reset_z=reset_z)
+        # If there are no valid files, clear the canvas to avoid showing stale data
         else:
-            self.update_integral_data(reset_z=reset_z)
+            if self.viewtype_select.currentIndex() == Viewtype.Contour.value:
+                self.integral_data = []
+                self.contour_image.clear()
+            elif self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+                for i in self.contour_waterfall:
+                    self.view.removeItem(i)
 
     def auto_set_spacing(self):
         # while len(self.integral_filelist) >= (self.max_lines_visible + 1)*self.requested_spacing:
