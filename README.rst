@@ -34,7 +34,9 @@ Features
 Installation
 ------------
 
-This software was designed for Python version 3.10.8. Set up and start a virtual environment in that version, then run:
+This software was designed for Python version 3.10.8. Set up and start a `virtual environment`_ in that version, then run:
+
+.. _`virtual environment`: https://docs.python.org/3/library/venv.html
 
 ``git clone https://github.com/AdvancedPhotonSource/XRDdatapipeline.git``
 

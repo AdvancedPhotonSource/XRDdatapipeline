@@ -66,15 +66,78 @@ class ColorWidget(QtWidgets.QWidget):
         self.coloritem = coloritem
         self.name_label = QtWidgets.QLabel(self.coloritem.name + ":")
         self.color_text = QtWidgets.QLineEdit(self.coloritem.color)
-        # self.current_color_preview =
+        self.current_color_preview = QtWidgets.QPushButton()
+        self.current_color_preview.setStyleSheet(f"""
+QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.coloritem.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+        """)
+        self.current_color_preview.released.connect(self.open_color_dialog)
         self.widgetlayout = QtWidgets.QHBoxLayout()
         self.widgetlayout.addWidget(self.name_label)
         self.widgetlayout.addWidget(self.color_text)
+        self.widgetlayout.addWidget(self.current_color_preview)
         self.setLayout(self.widgetlayout)
 
     def apply(self):
         self.coloritem.color = self.color_text.text()
+        self.current_color_preview.setStyleSheet(f"""
+QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.coloritem.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+        """)
 
+    def open_color_dialog(self):
+        newcolor = pg.QtWidgets.QColorDialog.getColor()
+        # Clicking Cancel on the dialog returns an empty color.
+        # This becomes interpreted as black if used as a color, but is not equal to black.
+        if newcolor != pg.QtGui.QColor():
+            self.color_text.setText(newcolor.name())
+            self.current_color_preview.setStyleSheet(f"""
+ QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.color_text.text()};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+            """)
+
+    def revert(self):
+        self.color_text.setText(self.coloritem.color)
+        self.current_color_preview.setStyleSheet(f"""
+QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.coloritem.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+        """)
 
 class SettingsWindow(QtWidgets.QWidget):
     # apply_settings = pg.QtCore.pyqtSignal()
@@ -208,6 +271,7 @@ class SettingsWindow(QtWidgets.QWidget):
     def default_colors_pressed(self):
         for name, coloritem in self.settings.colors.items():
             self.color_widgets[name].color_text.setText(coloritem.default_color)
+            self.color_widgets[name].apply()
 
     def apply_changes(self):
         self.settings.image_directory = self.image_directory_text.text()
@@ -216,7 +280,7 @@ class SettingsWindow(QtWidgets.QWidget):
         self.settings.wavelength = float(self.wavelength_text.text())
         self.settings.outChannels = int(self.outChannels_text.text())
         for name, coloritem in self.settings.colors.items():
-            coloritem.color = self.color_widgets[name].color_text.text()
+            self.color_widgets[name].apply()
         self.apply_settings.emit()
 
     def apply_button_pressed(self):
@@ -229,6 +293,8 @@ class SettingsWindow(QtWidgets.QWidget):
 
     def cancel_button_pressed(self):
         # self.close(is_from_button=True)
+        for name, coloritem in self.settings.colors.items():
+            self.color_widgets[name].revert()
         self.close()
 
     # def closeEvent(self,evt,is_from_button=False):

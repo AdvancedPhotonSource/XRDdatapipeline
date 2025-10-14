@@ -70,8 +70,10 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.addItem(self.intensityBar)
 
         self.tth_line = pg.InfiniteLine(angle=90, movable=False)
+        self.tth_line.setZValue(1)
         self.view.addItem(self.tth_line, ignoreBounds=True)
         self.horiz_line = pg.InfiniteLine(angle=0, movable=False)
+        self.horiz_line.setZValue(1)
         self.view.addItem(self.horiz_line, ignoreBounds=True)
 
         # self.update_integral_list()
@@ -186,12 +188,22 @@ class ContourView(pg.GraphicsLayoutWidget):
             time.time() - os.path.getctime(self.integral_filelist[-1]) < 0.5
         ):
             self.integral_filelist.pop()
-        if self.automatically_set_spacing:
-            self.auto_set_spacing()
-        if manual:
-            self.update_integral_data_manual()
+        # Sanity check to avoid loading nothing
+        if len(self.integral_filelist) > 0:
+            if self.automatically_set_spacing:
+                self.auto_set_spacing()
+            if manual:
+                self.update_integral_data_manual()
+            else:
+                self.update_integral_data(reset_z=reset_z)
+        # If there are no valid files, clear the canvas to avoid showing stale data
         else:
-            self.update_integral_data(reset_z=reset_z)
+            if self.viewtype_select.currentIndex() == Viewtype.Contour.value:
+                self.integral_data = []
+                self.contour_image.clear()
+            elif self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+                for i in self.contour_waterfall:
+                    self.view.removeItem(i)
 
     def auto_set_spacing(self):
         # while len(self.integral_filelist) >= (self.max_lines_visible + 1)*self.requested_spacing:
@@ -366,6 +378,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             for i in self.contour_waterfall:
                 self.view.removeItem(i)
             self.view.addItem(self.contour_image)
+            self.view.addItem(self.horiz_line, ignoreBounds=True)
             self.view.autoRange()
             self.offset_label.hide()
             self.offset.hide()
@@ -373,6 +386,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         elif evt == Viewtype.Waterfall.value:
             self.setBackground("w")
             self.view.removeItem(self.contour_image)
+            self.view.removeItem(self.horiz_line)
             self.update_waterfall_data()
             self.view.autoRange()
             self.offset_label.show()

@@ -18,25 +18,39 @@ def get_Qmap(Tmap, wavelength):
     return 4 * np.pi * np.sin(Tmap / 2 * np.pi / 180) / wavelength
 
 
-def prepare_qmaps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans):
+def prepare_qmaps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):
+    if logging:
+        t0 = time.time()
     tth = tth_map.ravel()
     raveled_pol = pol_map.ravel()
     raveled_dist = dist_map.ravel()
+    if logging:
+        t1 = time.time()
+        print(f"raveling: {(t1-t0):.2f}")
+        t0 = time.time()
 
     tth_delta = (tth_max - tth_min) / numChans
     tth_list = np.arange(tth_min, tth_max + tth_delta / 2.0, tth_delta)
     tth_val = ((tth_list[1:] + tth_list[:-1]) / 2.0).astype(np.float32)
+    if logging:
+        t1 = time.time()
+        print(f"tth delta, list, val: {(t1-t0):.2f}")
+        t0 = time.time()
 
-    tth_idx = np.zeros_like(tth, dtype=np.int32)
-    roi_1 = tth < tth_list[0]
-
-    for idx, val in enumerate(tth_list[1:]):
-        roi_2 = tth < val
-        tth_idx[(~roi_1) * roi_2] = idx + 1
-        roi_1[:] = roi_2
+    tth_idx = np.array((tth - tth_min) / tth_delta, dtype=np.int32)
+    tth_idx = np.where(tth_idx < 0, 0, tth_idx)
+    tth_idx = np.where(tth_idx > numChans, 0, tth_idx)
+    if logging:
+        t1 = time.time()
+        print(f"tth idx map: {(t1-t0):.2f}")
+        t0 = time.time()
 
     tth_idx = torch.from_numpy(tth_idx)
     tth_val = torch.from_numpy(tth_val)
+    if logging:
+        t1 = time.time()
+        print(f"numpy -> torch: {(t1-t0):.2f}")
+        t0 = time.time()
     return tth_idx, tth_val, raveled_pol, raveled_dist, len(tth_val)
 
 
