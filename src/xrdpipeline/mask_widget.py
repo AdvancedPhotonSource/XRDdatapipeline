@@ -155,6 +155,56 @@ def find_closest_valid(pos, shape):
             return [y, x]
 
 
+help_text = {
+    "Startup": "Without loading in a config file, you may use the intensity threshold, Polygon, "
+        "Frame, Point, Spot, and Line mask options.\n"
+        "Click on \"Load imctrl\" to load in a config file; this allows you to use Rings and Arcs.\n"
+        "To import an existing mask, use the \"Load immask\" button.",
+    "New Polygon": "Click on the image to create the vertices of the polygon. "
+        "You may drag the handles of the vertices once created.\n"
+        "Click \"Complete Polygon\" when done adding vertices. "
+        "If there are fewer than 3 vertices when clicking \"Complete Polygon\" or swapping to a new object, "
+        "this polygon will be deleted.\n"
+        "Once completed, you may still edit the locations of vertices by selecting the object "
+        "in the table above and dragging the vertex handles.",
+    "New Arc": "Arc masks require loading in a config file.\n"
+        "Click on the image to initialize the arc around that center point. "
+        "This will create a set of five handles: one for the center and two each for the "
+        "2theta and azimuth bounds. "
+        "Click \"Complete Arc\" when you are done adjusting the arc mask.\n"
+        "You may continue adjusting it by selecting the arc in the table above; "
+        "the handles will reappear and you may continue adjusting them.\n"
+        "You may also edit the second column of the table to adjust the exact values.",
+    "New Spot": "Clicking \"New Spot\" initializes the spot at the origin (typically the lower-left) of the image.\n"
+        "There will be two handles: one at the center to move the spot, and one on the edge to resize it.\n"
+        "When done adjusting it, click \"Complete Spot\" and the handles will become temporarily disabled. "
+        "To re-enable editing, select the object in the table above.",
+    "New Point": "After clicking \"New Point\", click the canvas on the pixel you wish to be masked. "
+        "Clicking on the canvas again will move the point to that location.\n"
+        "When you are done adjusting the location of the point, click \"Complete Point.\"\n"
+        "The location can still be adjusted by changing the values in the table above.",
+    "New X Line": "Clicking \"New X Line\" will place a horizontal line at the center of the image "
+        "which can be clicked and dragged to the desired location.\n"
+        "This will mask a single line of pixels."
+        "The line will become uneditable when a new object is created or selected; to be able to drag it again, "
+        "select the object in the table above.",
+    "New Y Line": "Clicking \"New Y Line\" will place a vertical line at the center of the image "
+        "which can be clicked and dragged to the desired location.\n"
+        "This will mask a single line of pixels."
+        "The line will become uneditable when a new object is created or selected; to be able to drag it again, "
+        "select the object in the table above.",
+    "New Ring": "Ring masks require loading in a config file.\n"
+        "After clicking \"New Ring\", click two locations on the image to denote the starting and ending 2theta "
+        "positions. "
+        "The handles can be dragged to adjust the width of the ring.\n"
+        "When done, click \"Complete Ring.\"\n"
+        "To continue editing the ring, select the object in the table above.\n\n"
+        "If no positions were selected when clicking \"Complete Ring\" or switching to a different object, "
+        "the ring will be deleted. If one position was selected, a second will be provided at a distance 0.2 2theta "
+        "further out from the first (or less if near the edge).",
+}
+
+
 # change background color of edited item
 class Delegate(QtWidgets.QStyledItemDelegate):
     def createEditor(self, parent, option, index):
@@ -1369,6 +1419,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
             QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
         )
         self.polygons_table.setColumnCount(2)
+        self.polygons_table.setColumnWidth(1,240)
         self.number_of_objects = 0
         self.polygons_table.setRowCount(self.number_of_objects)
         # self.polygons_table.itemClicked.connect(self.highlightROI)
@@ -1379,6 +1430,9 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
         self.update_objects_from_table_button = QtWidgets.QPushButton("Update Objects from Table")
         self.update_objects_from_table_button.released.connect(self.update_objects_from_table)
+
+        self.help_text_box = QtWidgets.QLabel(help_text["Startup"])
+        self.help_text_box.setWordWrap(True)
 
         # for testing
         # items are created separate from the table
@@ -1407,6 +1461,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.object_layout.addWidget(self.polygons_table, 6, 0, 2, 2)
         self.object_layout.addWidget(self.remove_object_button, 8, 0)
         self.object_layout.addWidget(self.update_objects_from_table_button, 8, 1)
+        self.object_layout.addWidget(self.help_text_box, 9, 0, 2, 2)
         self.object_list_widget.setLayout(self.object_layout)
         self.object_list.setWidget(self.object_list_widget)
 
@@ -1466,20 +1521,28 @@ class MainWindow(pg.GraphicsLayoutWidget):
                 self.add_object_button.setText("Max 1 Frame")
             else:
                 self.add_object_button.setText("New Frame")
+            self.help_text_box.setText(help_text["New Polygon"])
         elif evt == 1:
             self.add_object_button.setText("New Polygon")
+            self.help_text_box.setText(help_text["New Polygon"])
         elif evt == 2:
             self.add_object_button.setText("New Point")
+            self.help_text_box.setText(help_text["New Point"])
         elif evt == 3:
-            self.add_object_button.setText("New Arc")   
+            self.add_object_button.setText("New Arc")
+            self.help_text_box.setText(help_text["New Arc"])
         elif evt == 4:
             self.add_object_button.setText("New X Line")
+            self.help_text_box.setText(help_text["New X Line"])
         elif evt == 5:
             self.add_object_button.setText("New Y Line")
+            self.help_text_box.setText(help_text["New Y Line"])
         elif evt == 6:
             self.add_object_button.setText("New Spot")
+            self.help_text_box.setText(help_text["New Spot"])
         elif evt == 7:
             self.add_object_button.setText("New Ring")
+            self.help_text_box.setText(help_text["New Ring"])
 
     def add_object_button_pressed(self):
         cur_text = self.add_object_button.text()
@@ -1487,6 +1550,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.add_polygon()
             self.add_object_button.setText("Complete Polygon")
             self.creating_object = True
+            self.polygons_table.setCurrentItem(self.main_image.current_polygon.table_label)
+            self.help_text_box.setText(help_text["New Polygon"])
         elif cur_text == "Complete Polygon":
             self.done_creating()
             self.add_object_button.setText("New Polygon")
@@ -1495,6 +1560,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.add_point()
             self.add_object_button.setText("Complete Point")
             self.creating_object = True
+            self.polygons_table.setCurrentItem(self.main_image.current_point.table_label)
         elif cur_text == "Complete Point":
             self.done_creating()
             self.add_object_button.setText("New Point")
@@ -1506,6 +1572,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.add_arc()
             self.add_object_button.setText("Complete Arc")
             self.creating_object = True
+            self.polygons_table.setCurrentItem(self.main_image.current_arc.table_label)
         elif cur_text == "Complete Arc":
             self.done_creating()
             self.add_object_button.setText("New Arc")
@@ -1514,16 +1581,23 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.add_polygon(isFrame=True)
             self.add_object_button.setText("Complete Frame")
             self.creating_object = True
+            self.polygons_table.setCurrentItem(self.main_image.current_polygon.table_label)
         elif cur_text == "Complete Frame":
             self.done_creating()
             self.add_object_button.setText("Max 1 Frame")
             self.creating_object = False
         elif cur_text == "New X Line":
             self.add_line(orientation="horizontal")
+            # self.polygons_table.setRangeSelected(pg.QtWidgets.QTableWidgetSelectionRange(self.polygons_table.rowCount() - 1, 0, self.polygons_table.rowCount() - 1, 0), True)
+            self.polygons_table.setCurrentItem(self.main_image.objects[-1].table_label)
         elif cur_text == "New Y Line":
             self.add_line(orientation="vertical")
+            # self.polygons_table.setRangeSelected(pg.QtWidgets.QTableWidgetSelectionRange(self.polygons_table.rowCount() - 1, 0, self.polygons_table.rowCount() - 1, 0), True)
+            self.polygons_table.setCurrentItem(self.main_image.objects[-1].table_label)
         elif cur_text == "New Spot":
             self.add_spot()
+            # self.polygons_table.setRangeSelected(pg.QtWidgets.QTableWidgetSelectionRange(self.polygons_table.rowCount() - 1, 0, self.polygons_table.rowCount() - 1, 0), True)
+            self.polygons_table.setCurrentItem(self.main_image.objects[-1].table_label)
         elif cur_text == "New Ring":
             if not self.hasLoadedConfig:
                 QtWidgets.QMessageBox.question(self,"Exit","Please load an image control file before using arcs and rings.",QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
@@ -1531,6 +1605,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.add_ring()
             self.add_object_button.setText("Complete Ring")
             self.creating_object = True
+            # self.polygons_table.setRangeSelected(pg.QtWidgets.QTableWidgetSelectionRange(self.polygons_table.rowCount() - 1, 0, self.polygons_table.rowCount() - 1, 0), True)
+            self.polygons_table.setCurrentItem(self.main_image.current_ring.table_label)
         elif cur_text == "Complete Ring":
             self.done_creating()
             self.add_object_button.setText("New Ring")
@@ -1571,6 +1647,26 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.main_image.current_ring = self.main_image.objects[-1]
 
     def done_creating(self):
+        if self.main_image.current_polygon is not None:
+            if len(self.main_image.current_polygon.getHandles()) < 3:
+                print("Not enough handles for a polygon; deleting")
+                self.delete_selected_object()
+        elif self.main_image.current_arc is not None:
+            if len(self.main_image.current_arc.getHandles()) < 5:
+                print("Arc not initialized; deleting object")
+                self.delete_selected_object()
+        elif self.main_image.current_ring is not None:
+            if len(self.main_image.current_ring.getHandles()) == 0:
+                print("Ring not initialized; deleting object")
+                self.delete_selected_object()
+            elif len(self.main_image.current_ring.getHandles()) == 1:
+                print("Setting second point for ring")
+                curr_point = self.main_image.current_ring.getSceneHandlePositions()[0]
+                mapped_point = self.main_image.current_ring.getViewBox().mapSceneToView(curr_point[1])
+                curr_tth = self.main_image.current_ring.tthmap[int(mapped_point.y())][int(mapped_point.x())]
+                curr_azim = self.main_image.current_ring.azmap[int(mapped_point.y())][int(mapped_point.x())]
+                new_point = self.main_image.current_ring.find_closest_point(curr_tth + 0.2, curr_azim)
+                self.main_image.add_ring_point(self.main_image.current_ring.getViewBox().mapSceneToView(new_point))
         self.creating_object = False
         self.main_image.current_polygon = None
         self.main_image.current_point = None
@@ -2029,6 +2125,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
                         seg.setEnabled()
                 if type(self.main_image.objects[i]) == Arc:
                     self.main_image.objects[i].setEnabled()
+                if type(self.main_image.objects[i]) == Ring:
+                    self.main_image.objects[i].setEnabled()
             else:
                 self.main_image.objects[i].setMouseHover(False)
                 if type(self.main_image.objects[i]) == Line:
@@ -2044,6 +2142,8 @@ class MainWindow(pg.GraphicsLayoutWidget):
                         # seg.hoverPen = (255,255,255)
                         seg.setDisabled()
                 if type(self.main_image.objects[i]) == Arc:
+                    self.main_image.objects[i].setDisabled()
+                if type(self.main_image.objects[i]) == Ring:
                     self.main_image.objects[i].setDisabled()
 
 
