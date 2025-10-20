@@ -180,3 +180,110 @@ Note that the scatter plot 2theta positions are placed at the center of the mask
 
 .. image:: tutorial_images/results_UI_spot_stats_comparison.png
 
+Mask Creation
+-------------
+
+The mask creation widget has multiple tools available for creating a predefined experimental mask.
+The most basic are the polygon and frame masks, which allow you to define a polygon masking out a particular area.
+Spot and Line masks allow for cutting out a circular region or a single line of pixels.
+If you load in an image control file, you can also define arcs and rings to cut from the mask.
+There is also a threshold mask to cut out any pixels above or below a certain intensity.
+
+Masks can be imported from GSASII and can be exported as both a tiff file and as a GSASII-compatible .immask file.
+
+Setup
+~~~~~
+
+When first launched, the mask creation widget will prompt for a test image to use.
+Once loaded, there is the option to load in an image control file in order to use the 2 theta threshold, Arc, and Ring mask options; this button is located at the upper right of the window.
+The "Load immask" and "Save immask" buttons will allow you to import and export the current mask as an .immask file.
+To use the created mask with this software's analysis pipeline, please use the "Save mask" option in the lower right of the window; this will save the mask as a tiff file.
+
+Threshold Masks
+~~~~~~~~~~~~~~~
+
+Intensity
+^^^^^^^^^
+
+When first loading in an image, the threshold values will autopopulate with values below and above the minimum and maximum intensity, respectively.
+These can be adjusted to cut out particular pixels in the image.
+Note that, when saving as a tiff file, the threshold value itself is not retained. Only the locations of pixels which did not pass that threshold in the test image will be part of the experimental mask.
+Also note that there is a built-in filter in the analysis pipeline to mask out all nonpositive pixels in each image.
+
+2 Theta
+^^^^^^^
+
+The 2 theta threshold mask requires an image control file to be loaded. Once loaded, the minimum and maximum values will be set to those of the image.
+Adjusting the minimum and maximum 2 theta will mask out those sections of the image.
+
+Object Masks
+~~~~~~~~~~~~
+
+Object masks can be added by selecting the type of object in the drop-down menu (defaulting to Polygon) and clicking the "New [Object]"" button.
+This will add a new entry to the table for that specific object and allow it to be editable in the image UI.
+Some objects, such as polygons, have a setup phase; in these cases, the "New [Object]" button will become "Complete [Object]". More details will be in each section.
+When new objects are added, the old ones will become temporarily inactive; to adjust it later, click on the object's name in the table. The vertex handles will reappear and it can be readjusted.
+You may also adjust objects using the second column of the table. Information for the format for each object is in its section.
+To delete an object, click its name in the table and click the "Delete Selected Object" button.
+
+Polygon Masks
+^^^^^^^^^^^^^
+
+Once you hit the New Polygon button, a new row entry will appear in the table on the right.
+To add vertices to the polygon, left click the image.
+You may click and drag vertices to reposition them. You may also click and drag the center of the polygon to move it.
+When you are done adjusting the polygon mask, click the Complete Polygon button.
+If you need to adjust it later, click on the name of the object in the table; the vertex handles will reappear and the polygon will be adjustable again.
+
+You can also adjust the exact values of the polygon in the table on the right.
+Keep to the following format when adjusting:
+
+``[(x1,y1),(x2,y2),...]``
+
+Then click "Update Objects from Table".
+
+Frame Mask
+^^^^^^^^^^
+
+Frame masks are adjusted in the same way polygon masks are, but will mask the exterior of the polygon instead of the interior.
+You may only have one frame mask.
+
+Line Mask
+^^^^^^^^^
+
+When selecting "New Line", the horizontal or vertical line will appear at the center of the image.
+You may click and drag it to the desired location or adjust the postition in the table.
+Line masks will cover a single line of pixels.
+
+Point Mask
+^^^^^^^^^^
+
+Point masks will create a circular mask. After clicking "New Point", this will initialize at the origin of the image.
+You may adjust the center position and radius using the two handles for the point.
+
+To adjust the values using the table, use the following format:
+
+``[center x,center y,radius]``
+
+Arc Mask
+^^^^^^^^
+
+Arc masks will mask out a set of values for a given 2 theta and azimuthal range.
+After clicking "New Arc", click the image to intitialize the location of the arc.
+Dragging the center handle will rotate the arc around the image.
+The other four handles define the lower and higher 2 theta and azimuthal values.
+
+The values in the table use the following format:
+
+``[2 theta center,[azim start,azim end],2 theta range]``
+
+Ring Mask
+^^^^^^^^^
+
+Ring masks are initialized using two points: the lower and upper 2 theta bounds of the ring.
+After clicking "New Ring", click the image twice to initialize the two handles.
+These can be dragged to adjust the bounds of the ring.
+
+The values in the table use the following format:
+
+``[2 theta center, 2 theta range]``
