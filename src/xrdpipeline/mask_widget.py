@@ -16,6 +16,8 @@ import pyqtgraph as pg
 import tifffile as tf
 from PIL import Image
 import re
+
+from mainUI.main_image import image_mask
 from GSASII_imports import *
 
 pg.setConfigOptions(imageAxisOrder="row-major")
@@ -1374,6 +1376,28 @@ class MainWindow(pg.GraphicsLayoutWidget):
         )
         self.preview_mask_checkbox.setChecked(True)
         self.preview_mask_checkbox.checkStateChanged.connect(self.preview_mask_toggle)
+        self.mask_color_button = QtWidgets.QPushButton()
+        self.mask_color_button.setStyleSheet(f"""
+QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.main_image.predef_mask_data.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+        """)
+        self.mask_color_button.released.connect(self.open_color_dialog)
+        self.mask_opacity_label = QtWidgets.QLabel("Mask Opacity:")
+        self.mask_opacity_box = QtWidgets.QSpinBox()
+        self.mask_opacity_box.setMinimum(0)
+        self.mask_opacity_box.setMaximum(100)
+        self.mask_opacity_box.setSingleStep(10)
+        self.mask_opacity_box.setValue(100)
+        self.mask_opacity_box.valueChanged.connect(self.mask_opacity_changed)
         self.save_mask_button = QtWidgets.QPushButton(
             "Save Mask"
         )  # require user to preview first?
@@ -1498,8 +1522,11 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.gridlayout.addWidget(self.save_immask_button, 0, 6)
         self.gridlayout.addWidget(self.load_imctrl_button, 0, 7)
         self.gridlayout.addWidget(self.object_list, 1, 5, 4, 3)
-        self.gridlayout.addWidget(self.preview_mask_checkbox, 5, 5)
-        self.gridlayout.addWidget(self.save_mask_button, 5, 6)
+        self.gridlayout.addWidget(self.preview_mask_checkbox, 5, 0)
+        self.gridlayout.addWidget(self.mask_color_button, 5, 1)
+        self.gridlayout.addWidget(self.mask_opacity_label, 5, 2)
+        self.gridlayout.addWidget(self.mask_opacity_box, 5, 3)
+        self.gridlayout.addWidget(self.save_mask_button, 5, 5)
         self.setLayout(self.gridlayout)
         self.show()
 
@@ -1719,7 +1746,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         # now connected to table wiget item changed signal, which sends the changed table widget item first
         # need to catch that so it doesn't read in as override_checkbox = something therefore True
         if self.preview_mask_checkbox.isChecked() or override_checkbox:
-            self.predef_mask = np.zeros_like(self.main_image.image_data, dtype=bool)
+            predef_mask = np.zeros_like(self.main_image.image_data, dtype=bool)
             for i in self.main_image.objects:
                 # poly_mask = i.getArrayRegion(np.ones_like(self.main_image.image_data,dtype=bool),self.main_image.image, returnMappedCoords=True)
                 # print(poly_mask, poly_mask[0].shape)
@@ -1761,19 +1788,19 @@ class MainWindow(pg.GraphicsLayoutWidget):
                     )
                     poly_mask[(array_slice[0][1], array_slice[0][0])] = small_poly_mask
                     if i.isFrame:
-                        self.predef_mask = np.logical_or(self.predef_mask, ~poly_mask.T)
+                        predef_mask = np.logical_or(predef_mask, ~poly_mask.T)
                     else:
-                        self.predef_mask = np.logical_or(self.predef_mask, poly_mask.T)
+                        predef_mask = np.logical_or(predef_mask, poly_mask.T)
                     # print(i.boundingRect(),i.parentBounds(),i.pos())
                 elif type(i) == Point:
-                    self.predef_mask[i.y(), i.x()] = True
+                    predef_mask[i.y(), i.x()] = True
                 elif type(i) == Arc:
-                    self.predef_mask = np.logical_or(self.predef_mask, i.mask_data)
+                    predef_mask = np.logical_or(predef_mask, i.mask_data)
                 elif type(i) == Line:
                     if i.orientation == "horizontal":
-                        self.predef_mask[i.position, :] = True
+                        predef_mask[i.position, :] = True
                     else:
-                        self.predef_mask[:, i.position] = True
+                        predef_mask[:, i.position] = True
                 elif type(i) == Spot:
                     x, y = np.mgrid[
                         0:self.main_image.image_data.shape[0],
@@ -1783,13 +1810,13 @@ class MainWindow(pg.GraphicsLayoutWidget):
                         (x-i.center[0])**2
                         + (y-i.center[1])**2
                     )
-                    self.predef_mask |= (dist < i.radius)
+                    predef_mask |= (dist < i.radius)
                 elif type(i) == Ring:
                     # temp = self.cache["pixelTAmap"] > (i.center_tth - 0.5 * i.tth_width)
                     # temp = np.logical_and(temp,self.cache["pixelTAmap"] < (i.center_tth + 0.5 * i.tth_width))
                     # self.predef_mask |= temp
                     # ~temp
-                    self.predef_mask = np.logical_or(self.predef_mask, i.mask_data)
+                    predef_mask = np.logical_or(predef_mask, i.mask_data)
 
             # intensity thresholds
             below_mins = np.nonzero(
@@ -1799,33 +1826,24 @@ class MainWindow(pg.GraphicsLayoutWidget):
                 self.main_image.image_data > self.max_intensity_threshold.value()
             )
             # self.predef_mask |= below_mins
-            self.predef_mask[below_mins] = True
+            predef_mask[below_mins] = True
             # self.predef_mask |= above_maxs
-            self.predef_mask[above_maxs] = True
+            predef_mask[above_maxs] = True
 
             # tth thresholds
             if self.cache is not None:
                 below_mins = np.nonzero(self.cache["pixelTAmap"] < self.min_tth_threshold.value())
                 above_maxs = np.nonzero(self.cache["pixelTAmap"] > self.max_tth_threshold.value())
-                self.predef_mask[below_mins] = True
-                self.predef_mask[above_maxs] = True
+                predef_mask[below_mins] = True
+                predef_mask[above_maxs] = True
             
             # set mask image data
-            # self.main_image.predef_mask.setData(np.array(self.predef_mask,dtype=np.uint8))
-            self.poly_mask_rgba = (
-                np.ones(
-                    (self.predef_mask.shape[0], self.predef_mask.shape[1], 4),
-                    dtype=np.uint8,
-                )
-                * 255
-            )
-            self.poly_mask_rgba[:, :, 3] = self.predef_mask * 255
-            self.main_image.predef_mask.updateImage(self.poly_mask_rgba)
-            # self.main_image.image.updateImage(np.array(self.predef_mask,dtype=np.uint8))
+            self.main_image.predef_mask_data.set_data(predef_mask)
+            self.main_image.predef_mask.updateImage(self.main_image.predef_mask_data.full_data)
 
     def clear_mask_preview(self):
-        self.poly_mask_rgba[:, :, 3] = 0
-        self.main_image.predef_mask.updateImage(self.poly_mask_rgba)
+        self.main_image.predef_mask_data.set_data(np.zeros_like(self.main_image.predef_mask_data.mask_data))
+        self.main_image.predef_mask.updateImage(self.main_image.predef_mask_data.full_data)
 
     def preview_mask_toggle(self, state):
         if state == pg.QtCore.Qt.CheckState.Checked:
@@ -1833,12 +1851,37 @@ class MainWindow(pg.GraphicsLayoutWidget):
         elif state == pg.QtCore.Qt.CheckState.Unchecked:
             self.clear_mask_preview()
 
+    def mask_opacity_changed(self, evt):
+        self.main_image.predef_mask_data.set_opacity(evt / 100)
+        self.main_image.predef_mask.updateImage(self.main_image.predef_mask_data.full_data)
+
+    def open_color_dialog(self):
+        newcolor = pg.QtWidgets.QColorDialog.getColor()
+        # Clicking Cancel on the dialog returns an empty color.
+        # This becomes interpreted as black if used as a color, but is not equal to black.
+        if newcolor != pg.QtGui.QColor():
+            self.main_image.predef_mask_data.set_color(newcolor.name())
+            self.main_image.predef_mask.setImage(self.main_image.predef_mask_data.full_data)
+            self.mask_color_button.setStyleSheet(f"""
+ QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.main_image.predef_mask_data.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+            """)
+
     def save_mask(self):
         if not self.preview_mask_checkbox.isChecked():
             self.preview_mask(override_checkbox = True)
         location = get_save_file_location(".tif")
         if location is not None:
-            tf.imwrite(location, self.predef_mask)
+            tf.imwrite(location, self.main_image.predef_mask_data.mask_data)
         if not self.preview_mask_checkbox.isChecked():
             self.clear_mask_preview()
 
@@ -2182,10 +2225,13 @@ class MainImage(pg.GraphicsLayoutWidget):
         self.image_data = tf.imread(self.image_file_name)
         self.image_size = self.image_data.shape
         self.image = pg.ImageItem(self.image_data)
-        self.predef_mask_data = np.zeros(
-            (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
+        # self.predef_mask_data = np.zeros(
+        #     (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
+        # )
+        self.predef_mask_data = image_mask(
+            self.image_data.shape, "white"
         )
-        self.predef_mask = pg.ImageItem(self.predef_mask_data, levels=None)
+        self.predef_mask = pg.ImageItem(self.predef_mask_data.full_data, levels=None)
         # self.qpicture = None
         self.current_polygon = None
         self.current_point = None
