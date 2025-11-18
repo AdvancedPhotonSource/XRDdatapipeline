@@ -23,7 +23,7 @@ def prepare_qmaps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, loggin
         t0 = time.time()
     tth = tth_map.ravel()
     raveled_pol = pol_map.ravel()
-    raveled_dist = dist_map.ravel()
+    raveled_dist = dist_map.ravel() ** 1.5 # the dist map is squared distance, here it needs to be cubic
     if logging:
         t1 = time.time()
         print(f"raveling: {(t1-t0):.2f}")

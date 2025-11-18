@@ -52,17 +52,21 @@ def Export_chi(name, data, location):
             outfile.write(f" {data[0][i]:.7e}   {data[1][i]:.7e}\n")
 
 
-def pytorch_integrate(
-    image, mask, tth_idx, tth_val, raveled_pol, raveled_dist, tth_size
-):
+def pytorch_data_setup(image, raveled_pol, raveled_dist):
     data = image.ravel()
     data = torch.from_numpy(data)
+    data = (
+        data / raveled_pol * raveled_dist
+    )
+    return data
+
+
+def pytorch_integrate(
+    data, mask, tth_idx, tth_val, tth_size
+):
     mask = mask.ravel()
     mask = ~mask
     mask = torch.from_numpy(mask)
-    data = (
-        data / raveled_pol * raveled_dist**1.5
-    )  # the dist map is squared distance, here it needs to be cubic
 
     # no masked-array option for torch.bincount or np.bincount
     # val = torch.bincount(tth_idx, weights=data*mask, minlength=tth_size)[1:]
@@ -372,44 +376,38 @@ def run_iteration(
                 timing_0 = time.time()
 
 
+    # prep data
+    corrected_image_data = pytorch_data_setup(image_dict["image"], cache["raveled_pol"], cache["raveled_dist"])
     # integrate
     base_mask = frame_and_predef | cache["AzimMask"]
     hist_base = pytorch_integrate(
-        image_dict["image"],
+        corrected_image_data,
         base_mask,
         cache["tth_idx"],
         cache["tth_val"],
-        cache["raveled_pol"],
-        cache["raveled_dist"],
         cache["tth_size"],
     )
     if calc_outlier:
         hist_closed = pytorch_integrate(
-            image_dict["image"],
+            corrected_image_data,
             np.logical_or(closed_mask, base_mask),
             cache["tth_idx"],
             cache["tth_val"],
-            cache["raveled_pol"],
-            cache["raveled_dist"],
             cache["tth_size"],
         )
         if calc_splitting:
             hist_closedspotsmasked = pytorch_integrate(
-                image_dict["image"],
+                corrected_image_data,
                 np.logical_or(split_spots, base_mask),
                 cache["tth_idx"],
                 cache["tth_val"],
-                cache["raveled_pol"],
-                cache["raveled_dist"],
                 cache["tth_size"],
             )
             hist_closedarcsmasked = pytorch_integrate(
-                image_dict["image"],
+                corrected_image_data,
                 np.logical_or(split_arcs, base_mask),
                 cache["tth_idx"],
                 cache["tth_val"],
-                cache["raveled_pol"],
-                cache["raveled_dist"],
                 cache["tth_size"],
             )
     # save integrals
