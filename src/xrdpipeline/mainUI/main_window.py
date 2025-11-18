@@ -20,7 +20,6 @@ import tifffile as tf
 from mainUI.UI_settings import Settings, SettingsWindow
 from mainUI.file_select import FileSelectWindow
 from mainUI.contour import ContourView, Viewtype
-from mainUI.file_select import FileSelectWindow
 from mainUI.integrals import IntegralView
 from mainUI.main_image import MainImageView
 from mainUI.tabbed_area import TabbedArea
