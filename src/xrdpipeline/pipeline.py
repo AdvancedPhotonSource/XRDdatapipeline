@@ -18,7 +18,7 @@ import skimage as ski
 import torch
 from PIL import Image
 
-from classification import current_splitting_method, old_splitting_method
+from classification import current_splitting_method
 from corrections_and_maps import *
 from GSASII_imports import *
 
