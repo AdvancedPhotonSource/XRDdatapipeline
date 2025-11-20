@@ -165,7 +165,9 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_controls_list.append(self.integral_step)
 
     def update_dir(self):
-        self.reset_integral_data(reset_z=True)
+        self.tthvals = []
+        self.qvals = []
+        self.reset_integral_data(reset_z=True, reset_xy=True)
 
     def update_integral_list(self, reset_z=False, manual = False):
         # global keylist, curr_key
@@ -294,9 +296,9 @@ class ContourView(pg.GraphicsLayoutWidget):
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
             self.update_waterfall_data()
 
-    def update_waterfall_data(self):
+    def update_waterfall_data(self, reset_xy=False):
         for i in self.contour_waterfall:
-                self.view.removeItem(i)
+            self.view.removeItem(i)
         self.contour_waterfall.clear()
         if self.x_axis_type == 0:
             xvals = self.tthvals
@@ -313,6 +315,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
             # see if there's an addItems
             [self.view.addItem(i) for i in self.contour_waterfall]
+            if reset_xy:
+                self.view.autoRange()
 
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
@@ -346,7 +350,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         #    if self._temp_auto_spacing % self.live_spacing == 0:
         #        self.integral_data = self.integral_data[]
 
-    def reset_integral_data(self, manual=False, reset_z = False):
+    def reset_integral_data(self, manual=False, reset_z = False, reset_xy = False):
         self.integral_data = []
         self.xvals = []
         self.yvals = []
@@ -365,7 +369,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             )
             self.update_integral_list(reset_z=reset_z)
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
-            self.update_waterfall_data()
+            self.update_waterfall_data(reset_xy=reset_xy)
 
     def integral_type_changed(self, evt):
         self.integral_extension = self.integral_type_dict[self.integral_types[evt]]

@@ -13,7 +13,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from mainUI.UI_settings import Settings
 from mainUI.stats import StatsView
-from mainUI.contour import ContourView
+from mainUI.contour import ContourView, Viewtype
 from mainUI.csim import CSimView
 from mainUI.spottiness import SpottinessView
 from mainUI.user_data_import import UserAddedDataTab
@@ -70,6 +70,7 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.contour_layout.addWidget(self.contour_widget.integral_step_label, 7, 4)
         self.contour_layout.addWidget(self.contour_widget.integral_step, 7, 5)
         self.contour_page.setLayout(self.contour_layout)
+        self.contour_widget.viewtype_select.setCurrentIndex(Viewtype.Waterfall.value)
 
         self.csim_layout.addWidget(self.csim_widget)
         self.csim_page.setLayout(self.csim_layout)
