@@ -441,6 +441,7 @@ class SingleIterator(QtCore.QObject):
         calc_splitting = True,
         azim_Q_shape_min = 100,
         calc_spottiness = False,
+        csim_first_index = 0,
         logging=False,
         timing=None,
         timing_names = None,
@@ -461,6 +462,7 @@ class SingleIterator(QtCore.QObject):
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
         self.calc_spottiness = calc_spottiness
+        self.csim_first_index = csim_first_index
         self.logging = logging
         self.timing = timing
         self.timing_names = timing_names
@@ -480,6 +482,7 @@ class SingleIterator(QtCore.QObject):
             calc_splitting = self.calc_splitting,
             azim_Q_shape_min = self.azim_Q_shape_min,
             calc_spottiness = self.calc_spottiness,
+            csim_first_index = self.csim_first_index,
             timing = self.timing,
             timing_names = self.timing_names,
         )
@@ -523,6 +526,10 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.azim_q.setMinimum(0)
         self.azim_q.setMaximum(1000)
         self.azim_q.setValue(self.azim_q_default)
+        self.csim_first_label = QtWidgets.QLabel("Cosine Similarity: First image index for comparison")
+        self.csim_first_default = 0
+        self.csim_first_spinbox = QtWidgets.QSpinBox()
+        self.csim_first_spinbox.setValue(self.csim_first_default)
 
         self.calc_outlier_checkbox = QtWidgets.QCheckBox("Perform outlier masking")
         self.calc_outlier_default = True
@@ -552,7 +559,9 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.settings_layout.addWidget(self.regex_include_text, 0, 1)
         self.settings_layout.addWidget(self.regex_exclude_label, 1, 0)
         self.settings_layout.addWidget(self.regex_exclude_text, 1, 1)
-        self.settings_layout.addWidget(self.calc_outlier_checkbox, 2, 0, 1, 2)
+        self.settings_layout.addWidget(self.csim_first_label, 2, 0)
+        self.settings_layout.addWidget(self.csim_first_spinbox, 2, 1)
+        self.settings_layout.addWidget(self.calc_outlier_checkbox, 3, 0, 1, 2)
         self.outlier_layout.addWidget(self.override_label, 0, 0, 1, 2)
         self.outlier_layout.addWidget(self.madmult_override, 1, 0)
         self.outlier_layout.addWidget(self.madmult, 1, 1)
@@ -562,8 +571,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.azim_q_override, 4, 0)
         self.outlier_layout.addWidget(self.azim_q, 4, 1)
         self.outlier_layout.addWidget(self.calc_spottiness_checkbox, 5, 0, 1, 2)
-        self.settings_layout.addWidget(self.outlier_settings, 3, 0, 6, 2)
-        self.settings_layout.addWidget(self.defaults_button, 9, 0)
+        self.settings_layout.addWidget(self.outlier_settings, 4, 0, 6, 2)
+        self.settings_layout.addWidget(self.defaults_button, 10, 0)
 
         self.setLayout(self.settings_layout)
 
@@ -836,6 +845,7 @@ class main_window(QtWidgets.QWidget):
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
                                 calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                csim_first_index = self.settings_widget.csim_first_spinbox.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
                             )

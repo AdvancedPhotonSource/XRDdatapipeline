@@ -94,6 +94,7 @@ def run_iteration(
         calc_splitting = True,
         azim_Q_shape_min = 100,
         calc_spottiness = False,
+        csim_first_index = 0,
         timing = None,
         timing_names = None,
     ):
@@ -520,23 +521,24 @@ def run_iteration(
     except:
         print("Cannot find previous image for cosine similarity; using current instead.")
         previous_image = image_dict["image"].astype(np.float32)
+    first_index_str = f"{csim_first_index:0>5}"
     if os.path.exists(
-        os.path.join(input_directory, name + "-00000" + ext)
+        os.path.join(input_directory, name + f"-{first_index_str}" + ext)
     ):
         first_image = ski.io.imread(
-            os.path.join(input_directory, name + "-00000" + ext)
+            os.path.join(input_directory, name + f"-{first_index_str}" + ext)
         ).astype(np.float32)
     elif os.path.exists(
-        os.path.join(input_directory, name + "-00000-00000" + ext)
+        os.path.join(input_directory, name + f"-00000-{first_index_str}" + ext)
     ):
         first_image = ski.io.imread(
-            os.path.join(input_directory, name + "-00000-00000" + ext)
+            os.path.join(input_directory, name + f"-00000-{first_index_str}" + ext)
         ).astype(np.float32)
     elif os.path.exists(
-        os.path.join(input_directory, name[:-6] + "-00000" + ext)
+        os.path.join(input_directory, name[:-6] + f"-{first_index_str}" + ext)
     ):
         first_image = ski.io.imread(
-            os.path.join(input_directory, name[:-6] + "-00000" + ext)
+            os.path.join(input_directory, name[:-6] + f"-{first_index_str}" + ext)
         ).astype(np.float32)
     else:
         print("Cannot find first image for cosine similarity; using current instead.")
