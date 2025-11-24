@@ -340,7 +340,8 @@ def current_splitting_method(
     threshold_percentile=0.1,
     return_steps=False,
     interpolate=False,
-    calc_spottiness=False,
+    calc_spot_stats=True,
+    calc_grad_spottiness=False,
     azim_Q_shape_min=100,
     predef_mask=None,
     predef_mask_extended=None,
@@ -394,7 +395,7 @@ def current_splitting_method(
     # to_return = [spot_mask, arc_mask, df["classifier"]]
     to_return = [spot_mask, arc_mask]
 
-    if calc_spottiness:
+    if calc_spot_stats:
         spot_table_df = spottiness_df_stats(df, raveled_mask, spot_mask, Qbins)
         to_return.append(spot_table_df)
         if timing is not None:
@@ -404,6 +405,7 @@ def current_splitting_method(
             timing_name = "Spottiness calculation: stats DF"
             if timing_name not in timing_names:
                 timing_names.append(timing_name)
+    if calc_grad_spottiness:
         spot_table_grad = spottiness_azim_grad(azim_grad_2, Qbins)
         to_return.append(spot_table_grad)
         if timing is not None:

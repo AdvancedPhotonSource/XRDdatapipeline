@@ -9,7 +9,6 @@ This file defines the UI and base functionality of the analysis pipeline.
 
 from collections import deque
 import argparse
-import copy
 import glob
 import re
 import os, sys
@@ -20,8 +19,6 @@ from PIL import Image
 
 import PySide6
 from pyqtgraph.Qt import QtCore, QtWidgets
-
-from scipy import spatial
 
 from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
@@ -440,7 +437,8 @@ class SingleIterator(QtCore.QObject):
         outChannels = 0,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        calc_spottiness = False,
+        calc_spot_stats = True,
+        calc_grad_spottiness = False,
         csim_first_index = 0,
         logging=False,
         timing=None,
@@ -461,7 +459,8 @@ class SingleIterator(QtCore.QObject):
         self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
-        self.calc_spottiness = calc_spottiness
+        self.calc_spot_stats = calc_spot_stats
+        self.calc_grad_spottiness = calc_grad_spottiness
         self.csim_first_index = csim_first_index
         self.logging = logging
         self.timing = timing
@@ -481,7 +480,8 @@ class SingleIterator(QtCore.QObject):
             outChannels = self.outChannels,
             calc_splitting = self.calc_splitting,
             azim_Q_shape_min = self.azim_Q_shape_min,
-            calc_spottiness = self.calc_spottiness,
+            calc_spot_stats = self.calc_spot_stats,
+            calc_grad_spottiness = self.calc_grad_spottiness,
             csim_first_index = self.csim_first_index,
             timing = self.timing,
             timing_names = self.timing_names,
@@ -538,9 +538,16 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_splitting_checkbox = QtWidgets.QCheckBox("Perform spot/texture outlier mask splitting")
         self.calc_splitting_default = True
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
-        self.calc_spottiness_checkbox = QtWidgets.QCheckBox("Calculate Spottiness of Rings")
-        self.calc_spottiness_default = True
-        self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
+        self.calc_spottiness_label = QtWidgets.QLabel("Calculate Spottiness of Rings")
+        self.calc_spottiness_combobox = QtWidgets.QComboBox()
+        self.calc_spottiness_types = [
+            "None",
+            "Spot Area Stats Only",
+            "Gradient Statistics",
+        ]
+        self.calc_spottiness_combobox.addItems(self.calc_spottiness_types)
+        self.calc_spottiness_default = 1
+        self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
 
         self.regex_include_label = QtWidgets.QLabel("Only include filenames with:")
         self.regex_include_text = QtWidgets.QLineEdit()
@@ -570,7 +577,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.calc_splitting_checkbox, 3, 0, 1, 2)
         self.outlier_layout.addWidget(self.azim_q_override, 4, 0)
         self.outlier_layout.addWidget(self.azim_q, 4, 1)
-        self.outlier_layout.addWidget(self.calc_spottiness_checkbox, 5, 0, 1, 2)
+        self.outlier_layout.addWidget(self.calc_spottiness_label, 5, 0)
+        self.outlier_layout.addWidget(self.calc_spottiness_combobox, 5, 1)
         self.settings_layout.addWidget(self.outlier_settings, 4, 0, 6, 2)
         self.settings_layout.addWidget(self.defaults_button, 10, 0)
 
@@ -589,7 +597,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.nbins_om.setValue(self.nbins_om_default)
         self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
-        self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
+        self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
+        self.csim_first_spinbox.setValue(self.csim_first_default)
 
 
 class main_window(QtWidgets.QWidget):
@@ -844,7 +853,8 @@ class main_window(QtWidgets.QWidget):
                                 ext,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
+                                calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
                                 csim_first_index = self.settings_widget.csim_first_spinbox.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
@@ -863,7 +873,8 @@ class main_window(QtWidgets.QWidget):
                                 azim_Q_shape_min = self.settings_widget.azim_q.value(),
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
+                                calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
                             )

@@ -93,7 +93,8 @@ def run_iteration(
         outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        calc_spottiness = False,
+        calc_spot_stats = True,
+        calc_grad_spottiness = False,
         csim_first_index = 0,
         timing = None,
         timing_names = None,
@@ -244,7 +245,8 @@ def run_iteration(
                 return_steps=return_steps,
                 interpolate=False,
                 azim_Q_shape_min=azim_Q_shape_min,
-                calc_spottiness=calc_spottiness,
+                calc_spot_stats = calc_spot_stats,
+                calc_grad_spottiness=calc_grad_spottiness,
                 predef_mask=nonpositive_mask,
                 predef_mask_extended=predef_mask_extended,
                 min_arc_area=3,
@@ -307,11 +309,23 @@ def run_iteration(
             #         split_arcs,
             #         spots_table,
             #     ) = returned_items
-            if calc_spottiness:
+            if calc_spot_stats and calc_grad_spottiness:
                 (
                     split_spots,
                     split_arcs,
                     spots_table_df,
+                    spots_table_grad,
+                ) = returned_items
+            elif calc_spot_stats:
+                (
+                    split_spots,
+                    split_arcs,
+                    spots_table_df,
+                ) = returned_items
+            elif calc_grad_spottiness:
+                (
+                    split_spots,
+                    split_arcs,
                     spots_table_grad,
                 ) = returned_items
             else:
@@ -478,20 +492,13 @@ def run_iteration(
             #     np.save(outfile, y_edges)
 
         # spottiness
-        if calc_spottiness:
-            # with open(
-            #     stats_prefix + "-" + number + "_spottiness.npy", "wb"
-            # ) as outfile:
-            #     np.save(outfile, percents)
-            #     np.save(outfile, num_spots)
-            #     np.save(outfile, num_maxima)
-            #     np.save(outfile, num_spot_maxima)
-            #     np.save(outfile, cache["QbinEdges"])
-            spots_table_df.to_csv(stats_prefix + "-" + number + "_spots_stats_df.csv")
-            spots_table_grad.to_csv(stats_prefix + "-" + number + "_spots_stats_grad.csv")
+        if calc_spot_stats or calc_grad_spottiness:
+            if calc_spot_stats:
+                spots_table_df.to_csv(stats_prefix + "-" + number + "_spots_stats_df.csv")
+            if calc_grad_spottiness:
+                spots_table_grad.to_csv(stats_prefix + "-" + number + "_spots_stats_grad.csv")
             qbins_filename = stats_prefix + "_qbinedges.npy"
             if not os.path.exists(qbins_filename):
-                # print(cache["QbinEdges"])
                 with open(qbins_filename, "wb") as outfile:
                     np.save(outfile, cache["QbinEdges"])
         if timing is not None:
