@@ -166,9 +166,6 @@ def run_iteration(
     predef_mask_extended = ski.morphology.binary_dilation(
         predef_and_nonpositive, footprint=ski.morphology.square(7)
     )  # extend out by three pixels; use for determining whether something is nearby
-    frame_and_predef = np.logical_or(
-        predef_and_nonpositive, cache["FrameMask"]
-    )
     if timing is not None:
         timing_1 = time.time()
         local_times.append(timing_1-timing_0)
@@ -181,8 +178,8 @@ def run_iteration(
         GeneratePixelMask(
             image_dict,
             esdMul=esdMul,
-            FrameMask=frame_and_predef,
-            ThetaMap=cache["maskTmap"],
+            FrameMask=predef_and_nonpositive,
+            ThetaMap=cache["pixelTAmap"],
         )
         # outlier_mask = img.data['Masks']['SpotMask']['spotMask']
         outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]
@@ -394,7 +391,7 @@ def run_iteration(
     # prep data
     corrected_image_data = pytorch_data_setup(image_dict["image"], cache["raveled_pol"], cache["raveled_dist"])
     # integrate
-    base_mask = frame_and_predef | cache["AzimMask"]
+    base_mask = predef_and_nonpositive | cache["AzimMask"]
     hist_base = pytorch_integrate(
         corrected_image_data,
         base_mask,

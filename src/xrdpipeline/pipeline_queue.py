@@ -186,7 +186,6 @@ class CacheCreator(QtCore.QObject):
             t1 = time.time()
             print(f"read_image(): {(t1-t0):.2f}")
             t0 = time.time()
-        # img.loadControls(imctrlname)   # set controls/calibrations/masks
         if os.path.splitext(self.imctrlname)[1] == ".imctrl":
             with open(self.imctrlname, "r") as imctrlfile:
                 lines = imctrlfile.readlines()
@@ -201,8 +200,6 @@ class CacheCreator(QtCore.QObject):
             t1 = time.time()
             print(f"LoadControls(): {(t1-t0):.2f}")
             t0 = time.time()
-        # cache['Image Controls'] = img.getControls() # save controls & masks contents for quick reload
-        # self.cache['image'] = tf.imread(self.filename)
         self.cache["image"] = load_image(self.filename)
         if self.stopEarly: return
         if self.logging:
@@ -241,10 +238,6 @@ class CacheCreator(QtCore.QObject):
             print(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
             t0 = time.time()
         
-        # imctrlname = imctrlname.split("\\")[-1].split('/')[-1]
-        # path1 =  os.path.join(pathmaps,imctrlname)
-        # im = Image.fromarray(TA[0])
-        # im.save(os.path.splitext(path1)[0] + '_2thetamap.tif')
         imsave = Image.fromarray(predef_mask["image"])
         imsave.save(
             os.path.join(
@@ -266,79 +259,42 @@ class CacheCreator(QtCore.QObject):
             t1 = time.time()
             print(f"predef, flatfield save: {(t1-t0):.2f}")
             t0 = time.time()
-        self.cache["Image Controls"] = image_dict["Image Controls"]
         if self.logging:
             t1 = time.time()
             print(f"Image controls: {(t1-t0):.2f}")
             t0 = time.time()
-        # TODO: Look at image size?
-        # img.setControl('pixelSize',[150.0,150.0])
         _, tifdata, _, _ = GetTifData(self.filename)
         image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
-        self.cache["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
         if self.logging:
             t1 = time.time()
             print(f"GetTifData(): {(t1-t0):.2f}")
             t0 = time.time()
-        # cache['Masks'] = img.getMasks()
-        # self.cache['Masks'] = image_dict['Masks']
-        # cache['intMaskMap'] = img.IntMaskMap() # calc mask & TA arrays to save for integrations
-        # for k,v in img_copy['Image Controls'].items():
-        #    print(k)
-        # for k in img.data['Image Controls'].keys():
-        #    if k not in img_copy['Image Controls'].keys():
-        #        print(k, img.data['Image Controls'][k])
-        # Missing 5: size, samplechangerpos, det2theta, ImageTag, formatName
-        # [2880,2880] None 0.0 None GSAS-II known TIF image
-        # only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
         if self.stopEarly: return
         
-        # self.cache["intMaskMap"] = MakeUseMask(
-        #     image_dict["Image Controls"],image_dict["Masks"], blkSize=self.blkSize
-        # )
-        # cache['intTAmap'] = img.IntThetaAzMap()
-        self.cache["intTAmap"] = MakeUseTA(image_dict["Image Controls"],self.blkSize)
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"MakeUseTA(): {(t1-t0):.2f}")
-            t0 = time.time()
-        # cache['FrameMask'] = img.MaskFrameMask() # calc Frame mask & T array to save for Pixel masking
-        self.cache["FrameMask"] = MaskFrameMask(image_dict)
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"MaskFrameMask(): {(t1-t0):.2f}")
-            t0 = time.time()
-        # cache['maskTmap'] = img.MaskThetaMap()
-        self.cache["maskTmap"] = Make2ThetaAzimuthMap(
-            image_dict["Image Controls"],
-            (0, image_dict["Image Controls"]["size"][0]),
-            (0, image_dict["Image Controls"]["size"][1])
-        )[0]
         if self.stopEarly: return
         if self.logging:
             t1 = time.time()
             print(f"Make2ThetaAzimuthMap(): {(t1-t0):.2f}")
             t0 = time.time()
-        getmaps(self.cache, self.imctrlname, os.path.join(self.output_directory, "maps"))
+        getmaps(self.cache, image_dict["Image Controls"], self.imctrlname, os.path.join(self.output_directory, "maps"))
         if self.logging:
             t1 = time.time()
             print(f"getmaps(): {(t1-t0):.2f}")
             t0 = time.time()
-        self.cache["AzimMask"] = np.logical_or(self.cache["pixelAzmap"] < self.cache["Image Controls"]["LRazimuth"][0], self.cache["pixelAzmap"] > self.cache["Image Controls"]["LRazimuth"][1])
+        self.cache["AzimMask"] = np.logical_or(
+            self.cache["pixelAzmap"] < image_dict["Image Controls"]["LRazimuth"][0],
+            self.cache["pixelAzmap"] > image_dict["Image Controls"]["LRazimuth"][1]
+            )
         if self.stopEarly: return
         if self.logging:
             t1 = time.time()
             print(f"AzimMask: {(t1-t0):.2f}")
             t0 = time.time()
         # 2th fairly linear along center; calc 2th - pixelsize conversion
-        center = self.cache["Image Controls"]["center"]
-        center[0] = center[0] * 1000.0 / self.cache["Image Controls"]["pixelSize"][0]
-        center[1] = center[1] * 1000.0 / self.cache["Image Controls"]["pixelSize"][1]
-        self.cache["center"] = center
+        center = image_dict["Image Controls"]["center"]
+        center[0] = center[0] * 1000.0 / image_dict["Image Controls"]["pixelSize"][0]
+        center[1] = center[1] * 1000.0 / image_dict["Image Controls"]["pixelSize"][1]
         image_dict["center"] = center
-        # self.cache['d2th'] = (self.cache['pixelTAmap'][int(center[1]),0] - self.cache['pixelTAmap'][int(center[1]),99])/100
         self.cache["esdMul"] = self.esdMul
         image_dict["Masks"]["SpotMask"]["esdMul"] = self.esdMul
         if self.logging:
@@ -354,15 +310,15 @@ class CacheCreator(QtCore.QObject):
             t0 = time.time()
 
         # numChans
-        LUtth = np.array(self.cache["Image Controls"]["IOtth"])
-        wave = self.cache["Image Controls"]["wavelength"]
+        LUtth = np.array(image_dict["Image Controls"]["IOtth"])
+        wave = image_dict["Image Controls"]["wavelength"]
         dsp0 = wave / (2.0 * sind(LUtth[0] / 2.0))
         dsp1 = wave / (2.0 * sind(LUtth[1] / 2.0))
-        x0 = GetDetectorXY2(dsp0, 0.0, self.cache["Image Controls"])[0]
-        x1 = GetDetectorXY2(dsp1, 0.0, self.cache["Image Controls"])[0]
+        x0 = GetDetectorXY2(dsp0, 0.0, image_dict["Image Controls"])[0]
+        x1 = GetDetectorXY2(dsp1, 0.0, image_dict["Image Controls"])[0]
         if not np.any(x0) or not np.any(x1):
             raise Exception
-        numChans = int(1000 * (x1 - x0) / self.cache["Image Controls"]["pixelSize"][0]) // 2
+        numChans = int(1000 * (x1 - x0) / image_dict["Image Controls"]["pixelSize"][0]) // 2
         self.cache["numChans"] = numChans
         if self.logging:
             t1 = time.time()
@@ -385,9 +341,9 @@ class CacheCreator(QtCore.QObject):
             self.cache["pixelTAmap"],
             self.cache["polscalemap"],
             self.cache["pixelsampledistmap"],
-            self.cache["Image Controls"]["IOtth"][0],
-            self.cache["Image Controls"]["IOtth"][1],
-            self.cache["Image Controls"]["outChannels"],
+            image_dict["Image Controls"]["IOtth"][0],
+            image_dict["Image Controls"]["IOtth"][1],
+            image_dict["Image Controls"]["outChannels"],
         )
 
         if self.stopEarly: return
@@ -405,6 +361,7 @@ class CacheCreator(QtCore.QObject):
             print(f"gradient_cache(): {(t1-t0):.2f}")
             t0 = time.time()
 
+        # store this in cache to include corrections made
         self.cache["image_dict"] = image_dict
         if self.logging:
             t1 = time.time()
