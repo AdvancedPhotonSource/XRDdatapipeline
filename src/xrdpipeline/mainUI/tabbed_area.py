@@ -19,6 +19,15 @@ from mainUI.spottiness import SpottinessView
 from mainUI.user_data_import import UserAddedDataTab
 
 class TabbedArea(QtWidgets.QTabWidget):
+    """
+    Tabbed widget holding multiple views.
+    Currently contains:
+    Statistics widget
+    Contour widget
+    Cosine similarity widget
+    Spottiness widget
+    User-added data widget
+    """
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         self.settings = settings

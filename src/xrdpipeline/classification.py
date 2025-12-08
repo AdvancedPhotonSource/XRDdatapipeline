@@ -17,6 +17,13 @@ from spottiness import spottiness_azim_grad, spottiness_df_stats
 
 
 def remove_overlaps(labeled_cuts, predef_mask):
+    """
+    Remove any masked pixels which overlap the predefined experimental mask.
+    This was called by the spot-cutting algorithm, but is no longer in use.
+
+    :param labeled_cuts: Labeled mask of pixels
+    :param predef_mask: Predefined experimental mask
+    """
     labels = np.unique(labeled_cuts)
     # if this is just an array of 0, the only unique number will be 0 and we can stop
     if labels.shape == (1,):
@@ -37,6 +44,14 @@ def remove_overlaps(labeled_cuts, predef_mask):
 
 
 def modulo_range(array, center, range):
+    """
+    Used for finding pixels with an azimuthal value within some range of
+    a central value. The modulus is set to 360.
+
+    :param array: Array of values to check
+    :param center: Central value to check against
+    :param range: Range to check against
+    """
     diff = (array - center) % 360
     # range = range.values
     return np.logical_or(diff < range, diff > (360 - range))
@@ -45,6 +60,21 @@ def modulo_range(array, center, range):
 def radial_and_azim_gradient(
     image, r_hat, phi_hat, kernel_x, kernel_y, r=True, azim=True
 ):
+    """
+    Calculate the radial and azimuthal derivatives of an array of pixels,
+    averaged across each neighboring pixel as defined by the kernel.
+    The x and y derivatives are calculated first, using the x and y kernels
+    for their list of neighbors. This is then converted to the radial and
+    azimuthal directions using the r_hat and phi_hat matrices.
+
+    :param image: 2d array of pixel intensities
+    :param r_hat: Array of the 2theta-aligned unit vector for each pixel, given in x-y coordinates
+    :param phi_hat: Array of the azimuthal unit vector for each pixel, given in x-y coordinates
+    :param kernel_x: Convolution kernel for finding the x component of the average gradient calculated from surrounding neighbors
+    :param kernel_y: Convolution kernel for finding the y component of the average gradient calculated from surrounding neighbors
+    :param r: Whether to calculate and return the 2theta-aligned component of the gradient
+    :param azim: Whether to calculate and return the azimuthally-aligned component of the gradient
+    """
     # footprint = footprint.astype(np.uint)
 
     from scipy.ndimage import correlate
@@ -70,11 +100,21 @@ def qwidth_area_classification_groupby(
     min_arc_area=100,
     Q_max=0.1, # 0.08
     azim_min=3.5,
-    compare_shape=True,
-    area_Q_shape_min=150000,
     azim_Q_shape_min=100,
-    return_time=False,
 ):
+    """
+    Spot/texture classification step which looks at the width in Q and the total
+    area of the cluster.
+
+    :param om: Outlier mask
+    :param image: Image
+    :param Qmap: 2d array of Q values for each pixel
+    :param azmap: 2d array of azimuthal values for each pixel
+    :param min_arc_area: Minimum pixel area to be considered an arc
+    :param Q_max: Maximum Q width to be considered an arc
+    :param azim_min: Minimum azimuthal range to be considered an arc
+    :param azim_Q_shape_min: Minimum ratio of azimuthal width to Q width to be considered an arc
+    """
     flipped_azmap = np.fliplr(azmap)
     labeled_mask, num_features = scipy.ndimage.label(om)
     raveled_labels = labeled_mask.ravel()
@@ -125,11 +165,31 @@ def split_grad_with_Q_groupby(
     valid_labels,
     gradient_dict,
     predef,
-    predef_extended,
     labeled_mask,
     threshold_percentile = 0.1,
     report_times = True,
 ):
+    """
+    Spot/texture classification step which uses second radial and azimuthal
+    derivatives. The latter is used to find spot-like features, and the former
+    is used to find the center of an arc.
+    The threshold calculation for finding outliers along the azimuthal direction
+    is calculated using a percentile of the second radial derivative due to that
+    direction being filled with more normal shifts from rings. The azimuthal direction
+    is only taken up by spots and texture.
+
+    :param image: 2d image array
+    :param raveled_mask: 1d raveled outlier mask
+    :param df: Pandas dataframe of classification info from previous steps
+    :param valid_labels: Subset of labels for clusters which are large enough
+    to be considered for classification
+    :param gradient_dict: Dictionary of gradient info
+    :param predef: Predefined experimental mask
+    :param labeled_mask: Labeled outlier mask
+    :param threshold_percentile: Percentile of second radial derivative used to find
+    the center of a spot
+    :param report_times: Return times taken to perform each step
+    """
     if report_times: t0 = time.time()
     if report_times:
         t1 = time.time()
@@ -249,8 +309,15 @@ def remove_azim_spots_numpy(df, image_shape, raveled_mask, azim_gradient_mask, d
     """
     Function for searching through 2nd azimuthal derivative threshold masks and turning them into
     spots to cut from tagged arc clusters.
-
     Pure NumPy implementation.
+
+    :param df: Pandas dataframe of classification info from previous steps
+    :param image_shape: Tuple of the 2d image shape
+    :param raveled_mask: 1d raveled outlier mask
+    :param azim_gradient_mask: 1d raveled mask of spot-tagged sections from second azimuthal derivative-based
+    identification
+    :param diffQ: Widths in Q for each cluster
+    :param labeled_mask: 2d outlier mask with a unique label for each cluster
     """
     from scipy import ndimage
 
@@ -338,17 +405,35 @@ def current_splitting_method(
     gradient_dict,
     Qbins,
     threshold_percentile=0.1,
-    return_steps=False,
-    interpolate=False,
     calc_spot_stats=True,
     calc_grad_spottiness=False,
     azim_Q_shape_min=100,
     predef_mask=None,
-    predef_mask_extended=None,
     min_arc_area=100,
     timing = None,
     timing_names = None,
 ):
+    """
+    Current spot/texture classification method which splits the outlier
+    mask into two separate masks.
+
+    :param image: 2d array of pixels
+    :param om: Outlier mask
+    :param qmap: 2d array of Q values for each pixel
+    :param azmap: 2d array of azimuthal values for each pixel
+    :param gradient_dict: Dictionary of gradient information
+    :param Qbins: 2d array of Q bin values for each pixel
+    :param threshold_percentile: Percentile of second radial derivative used to find
+    the center of a spot
+    :param calc_spot_stats: Calculate and return area, number, and other statistics
+    on the spot-classified clusters
+    :param calc_grad_spottiness: Calculate and return 2nd derivative information on each Q bin
+    :param azim_Q_shape_min: Minimum ratio of azimuthal width to Q width to be considered an arc
+    :param predef_mask: Predefined experimental mask
+    :param min_arc_area: Minimum pixel area to be considered an arc
+    :param timing: Return timing values
+    :param timing_names: List of timing checkpoint names to append to
+    """
     if timing is not None:
         time0 = time.time()
     df, valid_labels, labeled_mask, raveled_mask = qwidth_area_classification_groupby(
@@ -359,9 +444,7 @@ def current_splitting_method(
         min_arc_area=min_arc_area,
         Q_max=0.1,
         azim_min=3.5,
-        compare_shape=True,
         azim_Q_shape_min=azim_Q_shape_min,
-        return_time=False,
     )
     if timing is not None:
         time1 = time.time()
@@ -378,7 +461,6 @@ def current_splitting_method(
         valid_labels,
         gradient_dict,
         predef=predef_mask,
-        predef_extended=predef_mask_extended,
         labeled_mask=labeled_mask,
         threshold_percentile=threshold_percentile,
         report_times=False,

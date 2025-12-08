@@ -26,6 +26,14 @@ from GSASII_imports import *
 # recreating xye export function
 # TODO: use numpy or the like to write this faster
 def Export_xye(name, data, location, error=True):
+    """
+    Export a set of integral data or similar to an xye file (x value, y value, error)
+
+    :param name: Name of the image
+    :param data: Array of data to write to the file
+    :param location: Location of the file to write, without an extension
+    :param error: Boolean of whether there is an error column in the data
+    """
     location += ".xye"
     with open(location, "w") as outfile:
         outfile.write("/*\n")
@@ -42,6 +50,13 @@ def Export_xye(name, data, location, error=True):
 
 
 def Export_chi(name, data, location):
+    """
+    Export a set of integral data or the like to a .chi file.
+
+    :param name: Name of the image
+    :param data: Array of data to write to the file
+    :param location: Location of the file to write, without an extension
+    """
     location += ".chi"
     data_len = len(data[0])
     with open(location,"w") as outfile:
@@ -53,6 +68,13 @@ def Export_chi(name, data, location):
 
 
 def pytorch_data_setup(image, raveled_pol, raveled_dist):
+    """
+    Prepare the image data to be integrated using pytorch methods
+
+    :param image: 2d image data
+    :param raveled_pol: 1d raveling of polarization data for each pixel
+    :param raveled_dist: 1d raveling of the distance map for each pixel
+    """
     data = image.ravel()
     data = torch.from_numpy(data)
     data = (
@@ -64,6 +86,15 @@ def pytorch_data_setup(image, raveled_pol, raveled_dist):
 def pytorch_integrate(
     data, mask, tth_idx, tth_val, tth_size
 ):
+    """
+    Fast integration method.
+
+    :param data: 1d ravel of prepared image data using pytorch_data_setup()
+    :param mask: 2d array of pixels to mask
+    :param tth_idx: 1d list of central bin 2theta values
+    :param tth_val: 1d ravel of 2theta values for each pixel
+    :param tth_size: Number of bins
+    """
     mask = mask.ravel()
     mask = ~mask
     mask = torch.from_numpy(mask)
@@ -88,7 +119,6 @@ def run_iteration(
         cache,
         ext,
         closing_method = "binary_closing",
-        return_steps = False,
         calc_outlier = True,
         outChannels = None,
         calc_splitting = True,
@@ -102,34 +132,16 @@ def run_iteration(
     """
     Runs over each file, outputting masks and integral files.
 
-    Parameters
-    ----------
-    filename: str
-        Name of the file to run over
-
-    input_directory: str
-        Path to the directory the images are located
-
-    output_directory: str
-        Path to the directory to place output files such as integrals
-
-    name: str
-
-    number:
-
-    cache: dict
-        Output from run_cache()
-
-    ext: str
-
-    closing_method: str
-        Method for removing small holes in the outlier mask.
-        Default is binary_closing.
-
-    return_steps: bool
-        Save intermediate masks and gradients.
-        Default is False.
-
+    :param filename: Name of the file to run over
+    :param input_directory: Path to the directory the images are located
+    :param output_directory: Path to the directory to place output files such as integrals
+    :param name: Name of the dataset
+    :param number: Number of this image
+    :param cache: Dictionary output from run_cache()
+    :param ext: Extension of the file name
+    :param closing_method: Method for removing small holes in the outlier mask.
+    Default is binary_closing.
+    Default is False.
     """
     if timing is not None:
         timing_0 = time.time()
@@ -163,9 +175,9 @@ def run_iteration(
             name + "-" + number + "_base.tif"
         )
     )
-    predef_mask_extended = ski.morphology.binary_dilation(
-        predef_and_nonpositive, footprint=ski.morphology.square(7)
-    )  # extend out by three pixels; use for determining whether something is nearby
+    # predef_mask_extended = ski.morphology.binary_dilation(
+    #     predef_and_nonpositive, footprint=ski.morphology.square(7)
+    # )  # extend out by three pixels; use for determining whether something is nearby
     if timing is not None:
         timing_1 = time.time()
         local_times.append(timing_1-timing_0)
@@ -231,7 +243,6 @@ def run_iteration(
             timing_0 = time.time()
 
         if calc_splitting:
-            # return_steps = False
             returned_items = current_splitting_method(
                 image_dict["image"].copy(),
                 closed_mask,
@@ -239,73 +250,14 @@ def run_iteration(
                 cache["pixelAzmap"],
                 cache["gradient"],
                 cache["Qbins"],
-                return_steps=return_steps,
-                interpolate=False,
                 azim_Q_shape_min=azim_Q_shape_min,
                 calc_spot_stats = calc_spot_stats,
                 calc_grad_spottiness=calc_grad_spottiness,
                 predef_mask=nonpositive_mask,
-                predef_mask_extended=predef_mask_extended,
                 min_arc_area=3,
                 timing = local_times,
                 timing_names = timing_names,
             )
-            # returned_items = old_splitting_method(
-            #     image_dict["image"],
-            #     closed_mask,
-            #     cache["pixelQmap"],
-            #     cache["pixelAzmap"],
-            #     cache["gradient"],
-            #     cache["Qbins"],
-            #     return_steps=return_steps,
-            #     interpolate=False,
-            #     azim_Q_shape_min=azim_Q_shape_min,
-            #     calc_spottiness=calc_spottiness,
-            #     predef_mask=nonpositive_mask,
-            #     predef_mask_extended=predef_mask_extended,
-            #     timing = local_times,
-            #     timing_names = timing_names,
-            # )
-            # if return_steps and calc_spottiness:
-            #     (
-            #         split_spots,
-            #         split_arcs,
-            #         spots_table,
-            #         base_arc,
-            #         qgrad_arc,
-            #         azim_grad_2,
-            #         radial_grad_2,
-            #         percents,
-            #         num_spots,
-            #         num_maxima,
-            #         num_spot_maxima
-            #     ) = returned_items
-            # elif return_steps:
-            #     (
-            #         split_spots,
-            #         split_arcs,
-            #         spots_table,
-            #         base_arc,
-            #         qgrad_arc,
-            #         azim_grad_2,
-            #         radial_grad_2,
-            #     ) = returned_items
-            # elif calc_spottiness:
-            #     (
-            #         split_spots,
-            #         split_arcs,
-            #         spots_table,
-            #         percents,
-            #         num_spots,
-            #         num_maxima,
-            #         num_spot_maxima
-            #     ) = returned_items
-            # else:
-            #     (
-            #         split_spots,
-            #         split_arcs,
-            #         spots_table,
-            #     ) = returned_items
             if calc_spot_stats and calc_grad_spottiness:
                 (
                     split_spots,
@@ -346,39 +298,6 @@ def run_iteration(
                     name + "-" + number + "_arcs.tif"
                 )
             )
-            # if return_steps:
-            #     imsave = Image.fromarray(base_arc)
-            #     imsave.save(
-            #         os.path.join(
-            #             output_directory,
-            #             "masks",
-            #             name + "-" + number + "_qwidth_arc.tif"
-            #         )
-            #     )
-            #     imsave = Image.fromarray(qgrad_arc)
-            #     imsave.save(
-            #         os.path.join(
-            #             output_directory,
-            #             "masks",
-            #             name + "-" + number + "_qgrad_arc.tif"
-            #         )
-            #     )
-            #     imsave = Image.fromarray(azim_grad_2)
-            #     imsave.save(
-            #         os.path.join(
-            #             output_directory,
-            #             "grads",
-            #             name + "-" + number + "_azim_grad_2.tif"
-            #         )
-            #     )
-            #     imsave = Image.fromarray(radial_grad_2)
-            #     imsave.save(
-            #         os.path.join(
-            #             output_directory,
-            #             "grads",
-            #             name + "-" + number + "_radial_grad_2.tif"
-            #         )
-            #     )
             if timing is not None:
                 timing_1 = time.time()
                 local_times.append(timing_1-timing_0)
@@ -468,26 +387,6 @@ def run_iteration(
     
     stats_prefix = os.path.join(output_directory, "stats", name)
     if calc_outlier:
-        # if calc_splitting:
-            # spots stats
-            # spots_table.to_csv(stats_prefix + "-" + number + "_spots_stats.csv")
-            
-            # ~ 950 KB for table
-            # 2d histogram: area, Q position
-            # ~7800 KB for 1000x1000 bin histogram
-            # 81 KB for 100x100 bin histogram
-
-            # cutting this out for now
-            # hist, x_edges, y_edges = np.histogram2d(
-            #     spots_table["area"].values, spots_table["intensity_mean"].values, 100
-            # )
-            # with open(
-            #     stats_prefix + "-" + number + "_spots_hist.npy", "wb"
-            # ) as outfile:
-            #     np.save(outfile, hist)
-            #     np.save(outfile, x_edges)
-            #     np.save(outfile, y_edges)
-
         # spottiness
         if calc_spot_stats or calc_grad_spottiness:
             if calc_spot_stats:
@@ -559,8 +458,6 @@ def run_iteration(
         outfile.write(
             "{first:0.9f}\t{prev:0.9f}\n".format(first=csim_f, prev=csim_p)
         )
-    # Also not safe for multiprocessing. Need to grab number-1 when it exists
-    # cache["Previous image"] = image_dict["image"]
 
     if timing is not None:
         timing_1 = time.time()

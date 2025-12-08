@@ -25,10 +25,13 @@ from watchdog.observers import Observer
 
 from GSASII_imports import *
 from pipeline import run_iteration
-from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
+from cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache
 from corrections_and_maps import get_Qbands
 
 class image_monitor(RegexMatchingEventHandler):
+    """
+    Watches for new images coming in
+    """
     def __init__(self, queue, include=None, exclude=None):
         # dir\name_number_ext.tif or dir\name-number_ext.tif
         #'number' may be 00000 or xxxxx_xxxxx or xxxxx-xxxxx
@@ -84,6 +87,10 @@ class image_monitor(RegexMatchingEventHandler):
 
 
 class file_select(QtWidgets.QWidget):
+    """
+    File/directory selection row widget, containing a button which pulls up a
+    file selection dialog and a label which fills with the selected result.
+    """
     def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None):
         super().__init__()
         self.setMinimumWidth(600)
@@ -120,6 +127,11 @@ class file_select(QtWidgets.QWidget):
 
 
 class imctrl_file_select(file_select):
+    """
+    Image control file selection dialog. Filters shown files to what is given in ext,
+    and emits a signal when a file is selected.
+    This signal is slotted in to the UI to read in a few modifiable values.
+    """
     imctrl_set = QtCore.Signal()
 
     def __init__(self, label, default_text=None, startdir=".", ext=None):
@@ -134,6 +146,30 @@ class imctrl_file_select(file_select):
 
 
 class CacheCreator(QtCore.QObject):
+    """
+    QObject which will run the cache creation routine in its own QThread.
+
+    :param cache: Dictionary to hold the cached information
+    :param input_directory: Location of the detector image files
+    :param output_directory: Location to output files from the pipeline
+    :param filename: Name of the first image file
+    :param imctrlname: Name of the image control file
+    :param flatfield: Name of the flatfield correction file, if any
+    :param imgmaskname: Name of the predefined experimental mask file, if any
+    :param bad_pixels: Name of the detector bad pixel mask file, if any
+    :param blkSize: Block size
+    :param calc_outlier: Calculate the outlier mask for each image and integrate using it
+    :param esdMul: Multiplier of median absolute deviation to be used to determine outliers
+    in each band
+    :param outChannels: Number of integration bins
+    :param calc_splitting: Calculate spot/texture classification and integrate using the
+    separated masks
+    :param azim_Q_shape_min: Minimum ratio of azimuthal to Q width for a cluster to be
+    considered texture
+    :param not_in_poni_settings: Any settings to be added or modified from what is in
+    a .imctrl image control file but not a .poni file
+    :param logging: Report timing information
+    """
     finished = QtCore.Signal()
 
     def __init__(
@@ -147,12 +183,10 @@ class CacheCreator(QtCore.QObject):
         imgmaskname,
         bad_pixels,
         blkSize,
-        calc_outlier = True,
         esdMul = 3.0,
         outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        calc_spottiness = False,
         not_in_poni_settings = {},
         logging=False,
     ):
@@ -167,12 +201,10 @@ class CacheCreator(QtCore.QObject):
         self.bad_pixels = bad_pixels
         self.blkSize = blkSize
         self.logging = logging
-        self.calc_outlier = calc_outlier
         self.esdMul = esdMul
         self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
-        self.calc_spottiness = calc_spottiness
         self.not_in_poni_settings = not_in_poni_settings
         self.stopEarly = False
 
@@ -337,7 +369,7 @@ class CacheCreator(QtCore.QObject):
             self.cache["raveled_pol"],
             self.cache["raveled_dist"],
             self.cache["tth_size"],
-        ) = prepare_qmaps(
+        ) = prepare_integration_maps(
             self.cache["pixelTAmap"],
             self.cache["polscalemap"],
             self.cache["pixelsampledistmap"],
@@ -375,6 +407,38 @@ class CacheCreator(QtCore.QObject):
 
 
 class SingleIterator(QtCore.QObject):
+    """
+    QObject which will process a single image in its own QThread.
+    Emits a signal when finished.
+
+    :param cache: Dictionary of cached information usable by all images
+    :param filename: Name of the image file to process
+    :param imctrlname: Name of the image control file
+    :param imgmaskname: Name of the predefined experimental mask file
+    :param input_directory: Directory holding the detector image files
+    :param output_directory: Directory to output files from the pipeline
+    :param name: Name of the dataset
+    :param number: Number of this image
+    :param ext: Image file extension
+    :param closing_method: Method used to expand the outlier mask. Default is
+    binary closing.
+    :param calc_outlier: Whether to calculate the outlier mask and integrate
+    using it
+    :param outChannels: Number of integration bins
+    :param calc_splitting: Whether to calculate spot/texture classification and
+    integrate using the separated masks
+    :param azim_Q_shape_min: Minimum ratio of azimuthal width to Q width for a
+    cluster to be considered texture
+    :param calc_spot_stats: Whether to calculate basic area, number, etc. statistics
+    on spot-tagged clusters. Adds <.1s to processing time.
+    :param calc_grad_spottiness: Whether to calculate mean, standard deviation, and
+    other statistics on each bin of the second azimuthal derivative. Adds 1-2s to
+    processing time.
+    :param csim_first_index: Index number for which image should be considered the first
+    in a dataset for cosine similarity comparison.
+    :param timing: Whether to return timing information for each step
+    :param timing_names: List of names to append to for each timing checkpoint
+    """
     finished = QtCore.Signal()
     progress = QtCore.Signal(int)
 
@@ -397,7 +461,6 @@ class SingleIterator(QtCore.QObject):
         calc_spot_stats = True,
         calc_grad_spottiness = False,
         csim_first_index = 0,
-        logging=False,
         timing=None,
         timing_names = None,
     ):
@@ -419,7 +482,6 @@ class SingleIterator(QtCore.QObject):
         self.calc_spot_stats = calc_spot_stats
         self.calc_grad_spottiness = calc_grad_spottiness
         self.csim_first_index = csim_first_index
-        self.logging = logging
         self.timing = timing
         self.timing_names = timing_names
 
@@ -432,7 +494,6 @@ class SingleIterator(QtCore.QObject):
             self.number,
             self.cache,
             self.ext,
-            return_steps = False,
             calc_outlier = self.calc_outlier,
             outChannels = self.outChannels,
             calc_splitting = self.calc_splitting,
@@ -447,7 +508,9 @@ class SingleIterator(QtCore.QObject):
 
 
 class AdvancedSettings(QtWidgets.QWidget):
-
+    """
+    Subwidget holding the advanced settings section of the UI
+    """
     def __init__(self, settings):
         super().__init__()
         self.settings = settings
@@ -559,13 +622,9 @@ class AdvancedSettings(QtWidgets.QWidget):
 
 
 class main_window(QtWidgets.QWidget):
-    # text box/file browser directory location
-    # ditto config file
-    # ditto predef mask
-    # start button
-    # clear queue button
-    # optional "choose existing files to run over" section
-    # default: none, shortcut button for all, else choose which files
+    """
+    Main UI window.
+    """
     def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None, bad_pixels=None):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
@@ -738,6 +797,10 @@ class main_window(QtWidgets.QWidget):
         self.show()
 
     def update_imctrl_data(self):
+        """
+        Load in some modifiable image controls. Called when an image control
+        file is selected.
+        """
         self.restore_default_config_options_button.setEnabled(True)
         local_controls = {}
         imctrl = self.config_widget.file_name.text()
@@ -778,6 +841,12 @@ class main_window(QtWidgets.QWidget):
             self.timer.start()
 
     def on_timeout(self):
+        """
+        Called regularly while the pipeline is running. Whenever there is a new
+        image in the queue, this will start up a thread for the cache (if not yet
+        run) or for processing the new image. Removes the processed image from
+        the queue.
+        """
         if self.keep_running:
             # block=True in Queue.get() tells it to wait until there is something in the queue to grab it
             # can also set a timeout value (in seconds) to wait before it throws an Empty exception
@@ -914,6 +983,11 @@ class main_window(QtWidgets.QWidget):
             self.timer.stop()
 
     def start_processing(self):
+        """
+        Called by the start button. Gathers the provided information,
+        creates the queue, starts the image directory monitor, and starts the timer
+        which runs on_timeout() periodically.
+        """
         self.input_directory = self.input_directory_widget.file_name.text()
         self.output_directory = self.output_directory_widget.file_name.text()
         self.imgctrl = self.config_widget.file_name.text()
@@ -1003,25 +1077,27 @@ class main_window(QtWidgets.QWidget):
         )
 
     def pause(self):
+        """
+        Prevents new images from being processed. Any image currently being processed
+        will continue. The image directory monitor will continue to run and populate
+        the queue.
+        Called when the Pause button is pressed.
+        """
         print("Pausing. If processing an image, that process will complete first.")
         self.keep_running = False
         # watchdog thread will still keep populating the queue
 
     def resume(self):
+        """
+        Resume after pausing.
+        """
         self.keep_running = True
         self.timer.start(100)
 
-    # def update_dir(self, input_directory):
-    #     self.pause()
-    #     self.clear_queue()
-    #     self.input_directory = input_directory
-    #     # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
-    #     self.observer = Observer()
-    #     self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
-    #     self.observer.start()
-    #     # self.resume()
-
     def advanced_settings_button_pressed(self):
+        """
+        Show/hide the advanced settings widget.
+        """
         if self.settings_shown:
             self.settings_shown = False
             self.settings_widget.hide()
@@ -1060,6 +1136,14 @@ class main_window(QtWidgets.QWidget):
         self.clear_queue()
 
     def stop_button_pressed(self):
+        """
+        Stop processing new images, clear the queue, and gather and
+        display any timing information. If the cache is running, sends
+        a signal to tell it to stop at the next checkpoint.
+        If a processing thread is still running, this also connects the
+        thread closing signal to the really_stopped() function which
+        resets the UI. Otherwise, this function is called directly.
+        """
         print("Stopping and clearing queue")
         # print(f"Length of timing list: {len(self.list_of_times)}")
         # print(f"Mean time: {np.mean(self.list_of_times):.4f} +/- {np.std(self.list_of_times):.4f}")
@@ -1098,6 +1182,10 @@ class main_window(QtWidgets.QWidget):
             self.really_stopped()
 
     def really_stopped(self):
+        """
+        Function called when processing has been fully stopped.
+        Resets the UI to be interactable again.
+        """
         # self.is_running_process = False
         print("Stopped")
         self.advanced_settings_button.setEnabled(True)
@@ -1117,6 +1205,11 @@ class main_window(QtWidgets.QWidget):
         self.poni_config_options.setEnabled(True)
 
     def closeEvent(self, evt):
+        """
+        Function called when hitting the X button in the corner to close
+        the window. Interrupts the action with a prompt if images are still
+        being processed.
+        """
         # if not self.is_running_process:
         #    evt.accept()
         if not self.stop_button.isEnabled():

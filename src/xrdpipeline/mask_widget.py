@@ -118,6 +118,13 @@ def get_save_file_location(ext):
 
 
 def check_in_bounds(pos, shape):
+    """
+    Check whether the given position is within the rectangle between
+    (0,0) and the given (x,y) in the shape parameter.
+
+    :param pos: Current position, either as a QPoint or a y,x iterable
+    :param shape: Iterable of the widths in y and x, providing a rectangular shape to compare to.
+    """
     if type(pos) == QtCore.QPoint:
         x = pos.x()
         y = pos.y()
@@ -132,6 +139,13 @@ def check_in_bounds(pos, shape):
     return in_bounds
 
 def find_closest_valid(pos, shape):
+    """
+    Find the closest point to the current position which is within bounds,
+    and return that point.
+
+    :param pos: QPoint, QPointF, or iterable (y,x). Current position to check.
+    :param shape: Width in (y,x) of the rectangle from the origin to determine the boundary.
+    """
     if check_in_bounds(pos, shape):
         return pos
     else:
@@ -211,6 +225,11 @@ help_text = {
 
 # change background color of edited item
 class Delegate(QtWidgets.QStyledItemDelegate):
+    """
+    Modified QStyledItemDelegate to give the selected item a white
+    background color and black text, so it is readable.
+    The default Editor was using black on black.
+    """
     def createEditor(self, parent, option, index):
         editor = super().createEditor(parent, option, index)
         editor.setStyleSheet('''

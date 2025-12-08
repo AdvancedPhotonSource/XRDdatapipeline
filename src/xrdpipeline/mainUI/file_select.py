@@ -15,6 +15,12 @@ from mainUI.UI_settings import Settings
 
 
 class FileSelectWindow(QtWidgets.QWidget):
+    """
+    Widget which pops up to display a directory and file select dialog for the
+    input directory, output directory, and image control file.
+    Updates the settings and sends a signal when all files are selected and "Okay"
+    is pressed.
+    """
 
     file_selected = pg.QtCore.Signal()
 

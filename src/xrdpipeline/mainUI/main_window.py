@@ -28,6 +28,13 @@ from corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
 
 
 class NavigationBar(QtWidgets.QWidget):
+    """
+    Mouse-based navigation between images.
+    There are buttons for the next and previous image in a dataset,
+    and there is a dropdown for selecting which dataset to show
+    from the directory.
+    Signals/slots are set up by the parent window.
+    """
     def __init__(self, settings: Settings):
         super().__init__()
         self.setMaximumHeight(50)
@@ -44,8 +51,15 @@ class NavigationBar(QtWidgets.QWidget):
 
 
 class KeyPressWindow(QtWidgets.QWidget):
+    """
+    Widget set to be the primary window of the results UI.
+    Handles most of the signals sent between widgets,
+    and sends update signals to child widgets whenever the current image
+    changes.
+    """
     def __init__(self, image_directory=".", output_directory = ".", imagecontrol=""):
         super().__init__()
+        # Instantiate the hidden settings and file select windows
         self.settings = Settings(
             image_directory, output_directory, imagecontrol, (10, 10), 0, 0, [], {}, 0, 0
         )
@@ -53,8 +67,6 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.file_select_widget.file_selected.connect(self.update_dir)
         self.settings_widget = SettingsWindow(self.settings)
         self.settings_widget.apply_settings.connect(self.update_settings)
-        # self.directory = directory
-        # self.update_tiflist()
         self.menubar = pg.QtWidgets.QMenuBar()
         self.menubar.setMaximumHeight(40)
         self.filemenu = self.menubar.addMenu("&File")
@@ -231,6 +243,7 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         self.timer = QtCore.QTimer()
 
+        # Prompt user for directory on startup
         self.choose_dir()
 
     # def start_cycling(self,tick=100):
@@ -345,6 +358,11 @@ class KeyPressWindow(QtWidgets.QWidget):
         return image.shape
 
     def check_for_updates(self):
+        """
+        Called regularly when the live update option is selected.
+        Updates the list of images and integrals, then displays the
+        most recent one.
+        """
         # global tiflist, keylist, curr_key, curr_pos
         # First thing saved: zero mask
         # Last things saved: integrals
@@ -383,6 +401,14 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.spottiness_widget.update_data()
 
     def update_user_data(self, data, location):
+        """
+        Used in conjunction with the user added data widget.
+        Adds an extra line of data to the selected canvas, and
+        removes that data from any other canvas.
+
+        :param data: Data to add
+        :param location: Canvas to target
+        """
         integral_plot = self.integral_widget.integral_view
         stats_plot = self.tabbed_area.stats_widget.stats_view
         if location != "Integral":
@@ -399,6 +425,13 @@ class KeyPressWindow(QtWidgets.QWidget):
                 stats_plot.addItem(data.plotitem)
 
     def remove_user_data(self, data):
+        """
+        Used in conjunction with the user added data widget.
+        Removes the plot item from whichever canvas it was
+        being shown in.
+
+        :param data: Data to remove
+        """
         integral_plot = self.integral_widget.integral_view
         stats_plot = self.tabbed_area.stats_widget.stats_view
         if data.plotitem in integral_plot.listDataItems():
@@ -430,6 +463,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_num = matches.group("number")
 
     def forward(self):
+        """
+        Move to the next image
+        """
         # global tiflist, keylist, curr_key, curr_pos
         self.settings.curr_pos += 1
         self.settings.curr_pos = self.settings.curr_pos % len(
@@ -440,6 +476,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def backward(self):
+        """
+        Move to the previous image
+        """
         # global tiflist, keylist, curr_key, curr_pos
         self.settings.curr_pos -= 1
         self.settings.curr_pos = self.settings.curr_pos % len(
@@ -450,6 +489,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         # self.setWindowTitle(tiflist[keylist[curr_key]][curr_pos])
 
     def prevkey(self):
+        """
+        Move to the previous dataset, resetting to the first image
+        in the list
+        """
         # global tiflist, keylist, curr_key, curr_pos
         self.settings.curr_pos = 0
         self.settings.curr_key -= 1
@@ -468,6 +511,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.navigation_bar.dataset_select.currentIndexChanged.connect(self.selectkey)
 
     def nextkey(self):
+        """
+        Move to the next dataset, resetting to the first image
+        in the list
+        """
         # global tiflist, keylist, curr_key, curr_pos
         self.settings.curr_pos = 0
         self.settings.curr_key += 1
@@ -486,6 +533,11 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.navigation_bar.dataset_select.currentIndexChanged.connect(self.selectkey)
 
     def selectkey(self, evt):
+        """
+        Move to the dataset selected by the QComboBox in the navigation bar
+
+        :param evt: Index of selected dataset
+        """
         self.settings.curr_pos = 0
         self.settings.curr_key = evt
         self.update_num()
@@ -497,6 +549,14 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.csim_widget.update_data()
 
     def mouseMovedImage(self, evt):
+        """
+        Slot for the signal emitted when the mouse moves over the main image.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
         pos = evt
         if self.imageview.view.sceneBoundingRect().contains(pos):
             mousePoint = self.imageview.view.vb.mapSceneToView(pos)
@@ -561,6 +621,14 @@ class KeyPressWindow(QtWidgets.QWidget):
                 #    self.tabbed_area.stats_widget.stats_line.setPos(tth)
 
     def mouseMovedIntegral(self, evt):
+        """
+        Slot for the signal emitted when the mouse moves over the integral graph.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
@@ -616,6 +684,15 @@ class KeyPressWindow(QtWidgets.QWidget):
     #    QtWidgets.QToolTip.showText(self.hoverpos.toPoint(),"test")
 
     def mouseMovedContour(self, evt):
+        """
+        Slot for the signal emitted when the mouse moves over the contour image in the
+        lower-right (part of the tabbed area).
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
         if (
             self.vLineCheckbox.isChecked()
             or self.circleCheckbox.isChecked()
@@ -660,6 +737,15 @@ class KeyPressWindow(QtWidgets.QWidget):
                 #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
     
     def mouseMovedLeftContour(self, evt):
+        """
+        Slot for the signal emitted when the mouse moves over the standalone contour
+        widget in the lower-left.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
         if (
             self.vLineCheckbox.isChecked()
             or self.circleCheckbox.isChecked()
@@ -705,6 +791,14 @@ class KeyPressWindow(QtWidgets.QWidget):
                 #     self.contourview.tth_line.setPos(mousePoint.x())
     
     def mouseMovedSpottiness(self, evt):
+        """
+        Slot for the signal emitted when the mouse moves over the spottiness canvas.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
         # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
@@ -748,6 +842,14 @@ class KeyPressWindow(QtWidgets.QWidget):
             #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
 
     def mouseMovedStats(self,evt):
+        """
+        Slot for the signal emitted when the mouse moves over the stats widget canvas.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
         if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
             pos = evt
             if self.tabbed_area.stats_widget.stats_view.sceneBoundingRect().contains(pos):
@@ -781,6 +883,12 @@ class KeyPressWindow(QtWidgets.QWidget):
                     self.imageview.update_tth_circle(tth)
 
     def mouseClickedContourChangeImage(self, evt):
+        """
+        Use the y axis value of the contour graph to swap to the image closest to
+        the cursor position.
+
+        :param evt: Mouse position
+        """
         # global tiflist, keylist, curr_key, curr_pos
         # evt.button() results = {1: left click, 2: right click, 4: middle click}
         # print(evt.button())
@@ -828,6 +936,12 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.updateImages()
     
     def mouseClickedLeftContourChangeImage(self, evt):
+        """
+        Use the y axis value of the contour graph to swap to the image closest to
+        the cursor position.
+
+        :param evt: Mouse position
+        """
         if (
             (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton) and
             (self.contourview.viewtype_select.currentIndex() == Viewtype.Contour.value)
@@ -878,6 +992,10 @@ class KeyPressWindow(QtWidgets.QWidget):
             )
 
     def linked_axes_checkbox_changed(self, evt):
+        """
+        Link or unlink the x axes of various canvases to the integral
+        canvas. This allows them to be zoomed and panned in tandem.
+        """
         if self.linked_axes_checkbox.isChecked():
             self.tabbed_area.contour_widget.view.setXLink(
                 self.integral_widget.integral_view.getViewBox()
@@ -895,6 +1013,12 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.tabbed_area.stats_widget.stats_view.setXLink(None)
 
     def x_axis_changed(self, evt):
+        """
+        Called when the x axis type QComboBox has a new value selected.
+        Swaps the x axes of various canvases between two-theta and Q.
+
+        :param evt: Index of the new axis type
+        """
         # Update integrals, contour graph
         # print(self.x_axis_choice.currentIndex())
         # print(evt)

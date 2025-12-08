@@ -17,6 +17,10 @@ from mainUI.UI_settings import Settings
 from corrections_and_maps import q_to_tth
 
 class SpottinessView(pg.GraphicsLayoutWidget):
+    """
+    Widget showing statistical information of the second
+    azimuthal derivative of the image, binned in two-theta.
+    """
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         self.setBackground("w")

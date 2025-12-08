@@ -18,6 +18,22 @@ from mainUI.UI_settings import ColorSettings, Settings
 
 @dataclass
 class UserAddedDataInstance:
+    """
+    Name, location, and style information for an instance of
+    user-added data, such as calculated profiles to compare to
+    experimental data.
+
+    :param str name: Name of the data as it will appear in the legend of
+        the target canvas
+    :param str file_name: File name of the data to import
+    :param np.array data: Imported array of data
+    :param pg.PlotDataItem plotitem: The PlotDataItem to display the data
+        in a target canvas
+    :param str x_type: Scale of the x values. Valid options are tth and Q
+    :param ColorSettings color: Holds color information for the displayed line
+    :param int offset: Offset to use when displaying the data on a canvas
+    :param float multiplier: Multiplier to use when displaying the data on a canvas
+    """
     name: str
     file_name: str
     data: np.array
@@ -35,6 +51,14 @@ class UserAddedDataInstance:
 
 
 def import_data_instance(file_name, name, x_type):
+    """
+    Function for importing data into a UserAddedDataInstance.
+    Data must be organized in columns for x and y.
+
+    :param file_name: Location of the file to import from
+    :param name: Name to use in the legend of the target canvas
+    :param x_type: Scale for x values. Valid options are tth and Q
+    """
     array_data = np.loadtxt(file_name)
     return UserAddedDataInstance(name=name, file_name=file_name, data=array_data, x_type=x_type)
 
@@ -47,6 +71,11 @@ locations = {
 x_types = ["tth", "Q"]
 
 class UserAddedDataInstanceWidget(QtWidgets.QWidget):
+    """
+    Row widget containing the name, location, and style information
+    for an instance of user-added data.
+    Sends a signal to the parent tab to delete its data when removed.
+    """
     delete_userdata_signal = pg.QtCore.Signal(QtWidgets.QWidget)
 
     def __init__(self, parent, data_instance: UserAddedDataInstance):
@@ -124,6 +153,12 @@ QPushButton:hover {{
 
 
 class UserAddedDataTab(QtWidgets.QWidget):
+    """
+    Tab widget which contains rows of user-added data in the form of
+    UserAddedDataInstanceWidgets.
+    Sends one signal to the parent window to update the target canvas to include the
+    new data, and one to delete the data from the canvas.
+    """
     update_userdata_signal = pg.QtCore.Signal(UserAddedDataInstance,str)
     remove_deleted_userdata_from_plot = pg.QtCore.Signal(UserAddedDataInstance)
 

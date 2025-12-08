@@ -12,13 +12,21 @@ from PIL import Image
 from GSASII_imports import *
 import torch
 import time
+from corrections_and_maps import tth_to_q
 
 
-def get_Qmap(Tmap, wavelength):
-    return 4 * np.pi * np.sin(Tmap / 2 * np.pi / 180) / wavelength
+def prepare_integration_maps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):
+    """
+    Prepare maps for torch integration
 
-
-def prepare_qmaps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):
+    :param tth_map: 2d array of 2theta values
+    :param pol_map: 2d array of polarization values
+    :param dist_map: 2d distance map
+    :param tth_min: Minimum 2theta integration bound
+    :param tth_max: Maximum 2theta integration bound
+    :param numChans: Number of integration bins
+    :param logging: return timing logs
+    """
     if logging:
         t0 = time.time()
     tth = tth_map.ravel()
@@ -57,39 +65,62 @@ def prepare_qmaps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, loggin
 # create and save TA[x] maps
 # from savemaps.py by Wenqian Xu
 def getmaps(
-    cache, imctrls, imctrlname, pathmaps, save=True
+    cache, imctrls, imctrlname, pathmaps
 ):  # fast integration using the same imctrl and mask
-    TA = Make2ThetaAzimuthMap(imctrls, (0, imctrls["size"][0]), (0, imctrls["size"][1]))
-    if save:
-        imctrlname = os.path.split(imctrlname)[1]
-        path1 = os.path.join(pathmaps, imctrlname)
+    """
+    Get output 2theta and azimuth maps from the GSASIIscriptable function,
+    calculate the corresponding Q map, and save all to disk and cache
 
-        im = Image.fromarray(TA[0])
-        im.save(os.path.splitext(path1)[0] + "_2thetamap.tif")
-        cache["pixelTAmap"] = TA[0]
-        im = Image.fromarray(TA[1])
-        im.save(os.path.splitext(path1)[0] + "_azmmap.tif")
-        cache["pixelAzmap"] = TA[1]
-        im = Image.fromarray(TA[2])
-        im.save(os.path.splitext(path1)[0] + "_pixelsampledistmap.tif")
-        cache["pixelsampledistmap"] = TA[2]
-        im = Image.fromarray(TA[3])
-        im.save(os.path.splitext(path1)[0] + "_polscalemap.tif")
-        cache["polscalemap"] = TA[3]
-        Qmap = get_Qmap(TA[0], imctrls["wavelength"])
-        im = Image.fromarray(Qmap)
-        im.save(os.path.splitext(path1)[0] + "_qmap.tif")
-        cache["pixelQmap"] = Qmap
+    :param cache: Dictionary to save to
+    :param imctrls: Dictionary of image controls
+    :param imctrlname: Name of image control file. Used for the output file names.
+    :param pathmaps: Directory path to save to
+    """
+    TA = Make2ThetaAzimuthMap(imctrls, (0, imctrls["size"][0]), (0, imctrls["size"][1]))
+    imctrlname = os.path.split(imctrlname)[1]
+    path1 = os.path.join(pathmaps, imctrlname)
+
+    im = Image.fromarray(TA[0])
+    im.save(os.path.splitext(path1)[0] + "_2thetamap.tif")
+    cache["pixelTAmap"] = TA[0]
+    im = Image.fromarray(TA[1])
+    im.save(os.path.splitext(path1)[0] + "_azmmap.tif")
+    cache["pixelAzmap"] = TA[1]
+    im = Image.fromarray(TA[2])
+    im.save(os.path.splitext(path1)[0] + "_pixelsampledistmap.tif")
+    cache["pixelsampledistmap"] = TA[2]
+    im = Image.fromarray(TA[3])
+    im.save(os.path.splitext(path1)[0] + "_polscalemap.tif")
+    cache["polscalemap"] = TA[3]
+    Qmap = tth_to_q(TA[0], imctrls["wavelength"])
+    im = Image.fromarray(Qmap)
+    im.save(os.path.splitext(path1)[0] + "_qmap.tif")
+    cache["pixelQmap"] = Qmap
     return
 
 
 def get_azimbands(azmap, numChansAzim):
+    """
+    Create and return an array of azimuthal band indices given
+    a 2d array of azimuthal values and a number of bins.
+
+    :param azmap: 2d array of azimuthal values in degrees
+    :param numChansAzim: Number of bins
+    """
     dazim = (360) / numChansAzim
     azimband = np.array(azmap / dazim, dtype=np.int32)
     return azimband
 
 
 def r_and_phi_hat(image_shape, center):
+    """
+    Calculate and return the r-hat and phi-hat vectors for each
+    pixel in an image with given shape and center.
+    This is used when calculating the radial and azimuthal derivatives.
+
+    :param image_shape: Shape of the image
+    :param center: Center of the image in pixel units
+    """
     pixels = np.indices(image_shape)
     a = np.array([center[0], center[1]])
     b = np.ones(image_shape)
@@ -104,15 +135,24 @@ def r_and_phi_hat(image_shape, center):
 
 
 def gradient_cache(image_shape, center, footprint):
+    """
+    Calculates the r-hat, phi-hat, and x and y kernels used for gradient
+    calculation. Returns a dict of these arrays.
+    The kernels allow derivative calculations to be performed as convolutions,
+    and the r-hat and phi-hat arrays convert the representation of the gradient
+    from x-y to r-phi.
+
+    :param image_shape: Shape of the image
+    :param center: Center of the image in pixel coordinates
+    :param footprint: 2d boolean array defining neighboring pixels for average
+    gradient calculation
+    """
     # calculate distances and x-y-basis angles once for each pixel in footprint
     t0 = time.time()
     if not all([i % 2 == 1 for i in footprint.shape]):
         raise ValueError("Footprint shape must be odd in each direction.")
     central_footprint_point = np.array([i // 2 for i in footprint.shape])
-    # print("central footprint point:", central_footprint_point)
     footprint[central_footprint_point[0], central_footprint_point[1]] = 0
-    # print("footprint")
-    # print(footprint)
     distances = np.zeros(footprint.shape)
     direction_vectors = np.zeros((2, footprint.shape[0], footprint.shape[1]))
     rel_coords = np.indices(footprint.shape) - central_footprint_point[
@@ -177,12 +217,10 @@ def gradient_cache(image_shape, center, footprint):
                     * y_dots[i, j]
                     / distances[i, j]
                 )
-    # print("central kernel calculation")
-    # print("Kernels calculated, getting convolutions")
     r_hat, phi_hat = r_and_phi_hat(image_shape, center)
     t1 = time.time()
     print(
-        "Gradient time spent on cache calculations: {0:.2f}s".format(
+        "Time spent on gradient cache calculations: {0:.2f}s".format(
             t1 - t0
         )
     )
