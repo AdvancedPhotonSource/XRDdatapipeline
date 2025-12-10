@@ -57,7 +57,7 @@ class KeyPressWindow(QtWidgets.QWidget):
     and sends update signals to child widgets whenever the current image
     changes.
     """
-    def __init__(self, image_directory=".", output_directory = ".", imagecontrol=""):
+    def __init__(self, image_directory=".", output_directory = ".", imagecontrol="", show_directory_prompt=True):
         super().__init__()
         # Instantiate the hidden settings and file select windows
         self.settings = Settings(
@@ -244,7 +244,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.timer = QtCore.QTimer()
 
         # Prompt user for directory on startup
-        self.choose_dir()
+        if show_directory_prompt:
+            self.choose_dir()
 
     # def start_cycling(self,tick=100):
     #    self.timer.start(tick) #interval in ms
@@ -266,22 +267,26 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.file_select_widget.update_shown_info()
         self.file_select_widget.show()
 
-    def update_dir(self):
+    def update_dir(self, reread_imctrl_wavelength = True, reread_imctrl_outChannels = True):
         self.settings.curr_key = 0
         self.settings.curr_pos = 0
-        if ".imctrl" in self.settings.imagecontrol:
-            with open(self.settings.imagecontrol, "r") as infile:
-                filetext = infile.read()
-            matches = re.findall("wavelength:([\d\.]+)", filetext)
-            self.settings.wavelength = float(matches[0])
-            matches = re.findall("outChannels:([\d.]+)", filetext)
-            self.settings.outChannels = int(matches[0])
-            # print(matches[0])
-        elif ".poni" in self.settings.imagecontrol:
-            with open(self.settings.imagecontrol, "r") as infile:
-                filetext = infile.read()
-            matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
-            self.settings.wavelength = float(matches[0]) * (10**10)
+        if reread_imctrl_wavelength or reread_imctrl_outChannels:
+            if ".imctrl" in self.settings.imagecontrol:
+                with open(self.settings.imagecontrol, "r") as infile:
+                    filetext = infile.read()
+                if reread_imctrl_wavelength:
+                    matches = re.findall("wavelength:([\d\.]+)", filetext)
+                    self.settings.wavelength = float(matches[0])
+                if reread_imctrl_outChannels:
+                    matches = re.findall("outChannels:([\d.]+)", filetext)
+                    self.settings.outChannels = int(matches[0])
+                # print(matches[0])
+            elif ".poni" in self.settings.imagecontrol:
+                with open(self.settings.imagecontrol, "r") as infile:
+                    filetext = infile.read()
+                if reread_imctrl_wavelength:
+                    matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
+                    self.settings.wavelength = float(matches[0]) * (10**10)
         self.update_tiflist()
         self.update_num()
         self.imageview.update_dir()
@@ -310,6 +315,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.curr_key = 0
         self.settings.curr_pos = 0
         self.update_tiflist()
+        self.update_num()
         self.imageview.update_dir()
         self.integral_widget.update_dir()
         self.tabbed_area.update_dir()
@@ -321,7 +327,6 @@ class KeyPressWindow(QtWidgets.QWidget):
                 ]
             )
         )
-        self.update_num()
 
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos

@@ -1375,19 +1375,139 @@ class NoImctrlWarning(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
 
-    
+class InitialFilesWindow(QtWidgets.QWidget):
+    """
+    Widget which pops up to display a file select dialog for the
+    test image, image control file, and immask file.
+    """
+
+    files_selected = pg.QtCore.Signal(str,str,str)
+
+    def __init__(self, image_file=None, imctrl_file=None, immask_file=None):
+        super().__init__()
+        self.image_file = image_file
+        self.imctrl_file = imctrl_file
+        self.immask_file = immask_file
+
+        self.test_image_label = QtWidgets.QLabel("Test image (required):")
+        self.test_image_text = QtWidgets.QLineEdit()
+        self.test_image_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.imctrl_file_label = QtWidgets.QLabel("Image Control File (optional, recommended):")
+        self.imctrl_file_text = QtWidgets.QLineEdit()
+        self.imctrl_file_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.immask_file_label = QtWidgets.QLabel("GSASII .immask file (optional):")
+        self.immask_file_text = QtWidgets.QLineEdit()
+        self.immask_file_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.okay_button = QtWidgets.QPushButton("Okay")
+        self.cancel_button = QtWidgets.QPushButton("Cancel")
+
+        self.file_select_layout = QtWidgets.QGridLayout()
+        self.file_select_layout.addWidget(self.test_image_label, 0, 0)
+        self.file_select_layout.addWidget(self.test_image_text, 0, 1)
+        self.file_select_layout.addWidget(self.test_image_browse_button, 0, 2)
+        self.file_select_layout.addWidget(self.imctrl_file_label, 1, 0)
+        self.file_select_layout.addWidget(self.imctrl_file_text, 1, 1)
+        self.file_select_layout.addWidget(self.imctrl_file_browse_button, 1, 2)
+        self.file_select_layout.addWidget(self.immask_file_label, 2, 0)
+        self.file_select_layout.addWidget(self.immask_file_text, 2, 1)
+        self.file_select_layout.addWidget(self.immask_file_browse_button, 2, 2)
+
+        self.button_layout = QtWidgets.QHBoxLayout()
+        self.button_layout.addWidget(self.okay_button)
+        self.button_layout.addWidget(self.cancel_button)
+
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout.addLayout(self.file_select_layout)
+        self.main_layout.addLayout(self.button_layout)
+        self.setLayout(self.main_layout)
+
+        self.test_image_browse_button.released.connect(self.browse_image)
+        self.imctrl_file_browse_button.released.connect(self.browse_imctrl)
+        self.immask_file_browse_button.released.connect(self.browse_immask)
+        self.okay_button.released.connect(self.okay_button_pressed)
+        self.cancel_button.released.connect(self.cancel_button_pressed)
+
+    def update_shown_info(self):
+        if self.image_file is not None:
+            self.test_image_text.setText(self.image_file)
+        if self.imctrl_file is not None:
+            self.imctrl_file_text.setText(self.imctrl_file)
+        if self.immask_file is not None:
+            self.immask_file_text.setText(self.immask_file)
+
+    def browse_image(self):
+        image_directory_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Select Test Image",
+            ".",
+            )
+        self.test_image_text.setText(image_directory_name[0])
+
+    def browse_imctrl(self):
+        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Choose Configuration File",
+            ".",
+            "Imctrl and PONI files (*.imctrl *.poni)"
+        )
+        self.imctrl_file_text.setText(imctrl_file_name[0])
+
+    def browse_immask(self):
+        output_directory_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Select Immask File",
+            ".",
+            "Immask files (*.immask)")
+        self.immask_file_text.setText(output_directory_name[0])
+
+    def apply_changes(self):
+        test_image = self.test_image_text.text()
+        imctrl = self.imctrl_file_text.text()
+        immask = self.immask_file_text.text()
+        self.files_selected.emit(test_image, imctrl, immask)
+
+    def okay_button_pressed(self):
+        self.apply_changes()
+        self.close()
+
+    def cancel_button_pressed(self):
+        self.close()
+
 
 class MainWindow(pg.GraphicsLayoutWidget):
-    def __init__(self):
+
+    mask_location = pg.QtCore.Signal(str)
+
+    def __init__(self, opened_from_pipeline=False, image_file=None, imctrl_file=None, immask_file=None):
         super().__init__()
+        self.opened_from_pipeline = opened_from_pipeline
+        self.image_file_name = image_file
+        self.imctrl_file_name = imctrl_file
+        self.immask_file_name = immask_file
         self.setMinimumSize(1000,600)
-        self.image_file_name = choose_file()
-        self.main_image = MainImage(self.image_file_name)
+        self.file_select_window = InitialFilesWindow(
+            image_file=self.image_file_name,
+            imctrl_file=self.imctrl_file_name,
+            immask_file=self.immask_file_name
+            )
+        self.file_select_window.files_selected.connect(self.load_files)
+        if self.image_file_name is not None:
+            self.file_select_window.test_image_text.setText(self.image_file_name)
+        if self.imctrl_file_name is not None:
+            self.file_select_window.imctrl_file_text.setText(self.imctrl_file_name)
+        if self.immask_file_name is not None:
+            self.file_select_window.immask_file_text.setText(self.immask_file_name)
+        self.main_image = MainImage()
         # Read/Write buttons
+        self.load_image_button = QtWidgets.QPushButton("Load test image")
+        self.load_image_button.released.connect(self.load_image_popup)
         self.load_immask_button = QtWidgets.QPushButton(
             "Load immask"
         )  # load in GSASII-compatible immask file
-        self.load_immask_button.released.connect(self.load_immask)
+        self.load_immask_button.released.connect(self.load_immask_file_popup)
         self.save_immask_button = QtWidgets.QPushButton("Save immask")
         self.save_immask_button.released.connect(self.save_immask)
         self.preview_mask_checkbox = QtWidgets.QCheckBox(
@@ -1395,7 +1515,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         )
         self.preview_mask_checkbox.setChecked(True)
         self.preview_mask_checkbox.checkStateChanged.connect(self.preview_mask_toggle)
-        self.mask_color_button = QtWidgets.QPushButton()
+        self.mask_color_button = QtWidgets.QPushButton("Change Color")
         self.mask_color_button.setStyleSheet(f"""
 QPushButton {{
     border-style: outset;
@@ -1423,7 +1543,11 @@ QPushButton:hover {{
         self.save_mask_button.released.connect(self.save_mask)
         # imctrl file options
         self.load_imctrl_button = QtWidgets.QPushButton("Load image control file") # load in GSASII-compatible imctrl file or pyfai poni file
-        self.load_imctrl_button.released.connect(self.load_imctrls)
+        self.load_imctrl_button.released.connect(self.load_imctrl_file_popup)
+        self.export_mask_button = QtWidgets.QPushButton(
+            "Save and Export to Pipeline"
+        )
+        self.export_mask_button.released.connect(self.export_mask)
         self.cache = None
         self.hasLoadedConfig = False
 
@@ -1537,20 +1661,47 @@ QPushButton:hover {{
 
         self.gridlayout = QtWidgets.QGridLayout()
         self.gridlayout.addWidget(self.main_image, 0, 0, 5, 5)
-        self.gridlayout.addWidget(self.load_immask_button, 0, 5)
-        self.gridlayout.addWidget(self.save_immask_button, 0, 6)
-        self.gridlayout.addWidget(self.load_imctrl_button, 0, 7)
+        self.gridlayout.addWidget(self.load_image_button, 0, 5)
+        self.gridlayout.addWidget(self.load_imctrl_button, 0, 6)
+        self.gridlayout.addWidget(self.load_immask_button, 0, 7)
         self.gridlayout.addWidget(self.object_list, 1, 5, 4, 3)
         self.gridlayout.addWidget(self.preview_mask_checkbox, 5, 0)
         self.gridlayout.addWidget(self.mask_color_button, 5, 1)
         self.gridlayout.addWidget(self.mask_opacity_label, 5, 2)
         self.gridlayout.addWidget(self.mask_opacity_box, 5, 3)
-        self.gridlayout.addWidget(self.save_mask_button, 5, 5)
+        if self.opened_from_pipeline:
+            self.gridlayout.addWidget(self.export_mask_button, 5, 5)
+        self.gridlayout.addWidget(self.save_mask_button, 5, 6)
+        self.gridlayout.addWidget(self.save_immask_button, 5, 7)
+
         self.setLayout(self.gridlayout)
         self.show()
+        self.file_select_window.show()
 
-    def load_imctrls(self):
+    # def show_startup_file_select_window(self):
+    #     if self.image_file_name is not None:
+    #         self.file_select_window.test_image_text.setText(self.image_file_name)
+    #     if self.imctrl_file_name is not None:
+    #         self.file_select_window.imctrl_file_text.setText(self.imctrl_file_name)
+    #     if self.immask_file_name is not None:
+    #         self.file_select_window.immask_file_text.setText(self.immask_file_name)
+    #     self.file_select_window.show()
+
+    def load_image_popup(self):
+        image_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Test Image",".")[0]
+        self.load_image(image_file_name=image_file_name)
+
+    def load_image(self, image_file_name):
+        self.image_file_name = image_file_name
+        self.main_image.load_image(image_file_name)
+        self.image_changed()
+
+    def load_imctrl_file_popup(self):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","imctrl files (*.imctrl)")[0]
+        if imctrl_file_name != "":
+            self.load_imctrls(imctrl_file_name=imctrl_file_name)
+
+    def load_imctrls(self, imctrl_file_name):
         self.cache = {}
         self.cache['size'] = self.main_image.image_data.shape
         # with tf.TiffFile(self.image_file_name) as tif:
@@ -1579,6 +1730,15 @@ QPushButton:hover {{
         self.imagescale_is_square = False
         if self.cache['pixelSize'][0] == self.cache['pixelSize'][1]:
             self.imagescale_is_square = True
+
+    def load_files(self, image, imctrl, immask):
+        print(image, imctrl, immask)
+        if os.path.exists(image):
+            self.load_image(image)
+        if (imctrl != "") and os.path.exists(imctrl):
+            self.load_imctrls(imctrl)
+        if (immask != "") and os.path.exists(immask):
+            self.load_immask(immask)
 
     def object_type_changed(self,evt):
         # ensure previous object loses focus
@@ -1841,9 +2001,12 @@ QPushButton:hover {{
             below_mins = np.nonzero(
                 self.main_image.image_data < self.min_intensity_threshold.value()
             )
-            above_maxs = np.nonzero(
-                self.main_image.image_data > self.max_intensity_threshold.value()
-            )
+            if self.max_intensity_threshold.value() != 0.0:
+                above_maxs = np.nonzero(
+                    self.main_image.image_data > self.max_intensity_threshold.value()
+                )
+            else:
+                above_maxs = np.zeros_like(self.main_image.image_data, dtype=bool)
             # self.predef_mask |= below_mins
             predef_mask[below_mins] = True
             # self.predef_mask |= above_maxs
@@ -1895,7 +2058,7 @@ QPushButton:hover {{
 }}
             """)
 
-    def save_mask(self):
+    def save_mask(self, return_location = False):
         if not self.preview_mask_checkbox.isChecked():
             self.preview_mask(override_checkbox = True)
         location = get_save_file_location(".tif")
@@ -1903,6 +2066,13 @@ QPushButton:hover {{
             tf.imwrite(location, self.main_image.predef_mask_data.mask_data)
         if not self.preview_mask_checkbox.isChecked():
             self.clear_mask_preview()
+        if return_location:
+            return location
+
+    def export_mask(self):
+        location = self.save_mask(return_location=True)
+        self.mask_location.emit(location)
+        self.close()
 
     def save_immask(self):
         outfilename = get_save_file_location(".immask")
@@ -2018,10 +2188,13 @@ QPushButton:hover {{
                     )
                 )
 
-    def load_immask(self):
+    def load_immask_file_popup(self):
         infilename = QtWidgets.QFileDialog.getOpenFileName(
             None, "Choose Image Mask", ".", "Immask files (*.immask)"
         )[0]
+        self.load_immask(infilename)
+
+    def load_immask(self, infilename):
         if not ((infilename is None) or (infilename == "")):
             print(f"Loading {infilename}")
             masks = readMasks(infilename)
@@ -2093,20 +2266,19 @@ QPushButton:hover {{
             self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
 
 
-    def image_changed(self, data):
-        # set image data
-        self.main_image.image_data = data
+    def image_changed(self):
+        data = self.main_image.image_data
         # reset min/max intensity
-        minimum = np.min(self.main_image.image_data)
+        minimum = np.min(data)
         min_oom = np.floor(np.log10(np.abs(minimum)))
-        maximum = np.max(self.main_image.image_data)
+        maximum = np.max(data)
         max_oom = np.floor(np.log10(np.abs(maximum)))
         self.min_intensity_threshold.setMinimum(-1 * 10**(min_oom +3))
         self.min_intensity_threshold.setMaximum(10**(max_oom + 3))
-        self.min_intensity_threshold.setValue(np.min(self.main_image.image_data))
+        self.min_intensity_threshold.setValue(np.min(data))
         self.max_intensity_threshold.setMinimum(-1 * 10**(min_oom + 3))
         self.max_intensity_threshold.setMaximum(10**(max_oom + 3))
-        self.max_intensity_threshold.setValue(np.max(self.main_image.image_data))
+        self.max_intensity_threshold.setValue(np.max(data))
 
     def clear_polygon(self, index):
         # clear points
@@ -2234,15 +2406,15 @@ QPushButton:hover {{
 
 
 class MainImage(pg.GraphicsLayoutWidget):
-    def __init__(self, image_file):
+    def __init__(self, image_file=None):
         super().__init__()
         self.view = self.addPlot()
         self.view.setAspectLocked(True)
         self.cmap = pg.colormap.get("gist_earth", source="matplotlib", skipCache=True)
-        # self.image_data = np.zeros((2880,2880))
-        self.image_file_name = image_file
-        self.image_data = tf.imread(self.image_file_name)
-        self.image_size = self.image_data.shape
+        if image_file is not None:
+            self.load_image(image_file)
+        else:
+            self.image_data = np.ones((10,10))
         self.image = pg.ImageItem(self.image_data)
         # self.predef_mask_data = np.zeros(
         #     (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
@@ -2280,6 +2452,14 @@ class MainImage(pg.GraphicsLayoutWidget):
 
         # self.polygon = QtGui.QPainter.drawPolygon()
         # self.show()
+
+    def load_image(self, image_file_name):
+        self.image_file_name = image_file_name
+        self.image_data = tf.imread(self.image_file_name)
+        self.image_size = self.image_data.shape
+        maxval = np.percentile(self.image_data, 99.9)
+        self.image.updateImage(self.image_data,autoRange=True,autoLevels=False)
+        self.intensityBar.setLevels(min=0.0, max=maxval)
 
     def add_polygon(self, isFrame = False):
         # bounds = QtCore.QRect(0,2880,2880,2880)

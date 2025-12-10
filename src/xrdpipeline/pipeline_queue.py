@@ -27,6 +27,8 @@ from GSASII_imports import *
 from pipeline import run_iteration
 from cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache
 from corrections_and_maps import get_Qbands
+from mainUI.main_window import KeyPressWindow
+from mask_widget import MainWindow
 
 class image_monitor(RegexMatchingEventHandler):
     """
@@ -91,7 +93,7 @@ class file_select(QtWidgets.QWidget):
     File/directory selection row widget, containing a button which pulls up a
     file selection dialog and a label which fills with the selected result.
     """
-    def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None):
+    def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None, free_last_column=False):
         super().__init__()
         self.setMinimumWidth(600)
         # self.label = QtWidgets.QLabel(label)
@@ -102,12 +104,12 @@ class file_select(QtWidgets.QWidget):
         self.startdir = startdir
         self.ext = ext
 
-        self.layout = QtWidgets.QGridLayout()
-        # self.layout.addWidget(self.label,0,0)
-        # self.layout.addWidget(self.file_select_button,0,1,1,3)
-        self.layout.addWidget(self.file_select_button, 0, 0)
-        self.layout.addWidget(self.file_name, 0, 1, 1, 3)
-        self.setLayout(self.layout)
+        self.setLayout(QtWidgets.QGridLayout())
+        self.layout().addWidget(self.file_select_button, 0, 0)
+        if free_last_column:
+            self.layout().addWidget(self.file_name, 0, 1, 1, 2)
+        else:
+            self.layout().addWidget(self.file_name, 0, 1, 1, 3)
 
         self.file_select_button.released.connect(self.select_file)
 
@@ -659,6 +661,7 @@ class main_window(QtWidgets.QWidget):
             "Experimental Mask:",
             default_text=imgmask,
             startdir=self.input_directory_widget.file_name.text(),
+            free_last_column=True,
         )
         self.bad_pixel_mask_widget = file_select(
             "Bad Pixel Mask:",
@@ -753,6 +756,11 @@ class main_window(QtWidgets.QWidget):
         self.list_of_times = []
         self.list_of_time_names = []
 
+        self.open_resultsUI_button = QtWidgets.QPushButton("Open Data Viewer")
+        self.open_resultsUI_button.released.connect(self.open_resultsUI)
+        self.open_maskwidget_button = QtWidgets.QPushButton("Open Mask Creation Program")
+        self.open_maskwidget_button.released.connect(self.open_maskwidget)
+
         # self.is_running_process = False
 
         self.poni_config_options_layout = QtWidgets.QGridLayout()
@@ -778,6 +786,7 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.poni_config_options, 3, 1, 3, 2)
         self.window_layout.addWidget(self.flatfield_widget, 6, 0, 1, 3)
         self.window_layout.addWidget(self.predef_mask_widget, 7, 0, 1, 3)
+        self.predef_mask_widget.layout().addWidget(self.open_maskwidget_button, 0, 3)
         self.window_layout.addWidget(self.bad_pixel_mask_widget, 8, 0, 1, 3)
         self.window_layout.addWidget(self.advanced_settings_button, 10, 0)
         self.window_layout.addWidget(self.start_button, 9, 0)
@@ -789,6 +798,7 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.process_both_radio, 12, 1)
         self.window_layout.addWidget(self.process_new_only_radio, 12, 2)
         self.window_layout.addWidget(self.queue_length_info, 13, 0)
+        self.window_layout.addWidget(self.open_resultsUI_button, 13, 2)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
         self.settings_widget.hide()
@@ -1203,6 +1213,57 @@ class main_window(QtWidgets.QWidget):
         self.process_both_radio.setEnabled(True)
         self.process_new_only_radio.setEnabled(True)
         self.poni_config_options.setEnabled(True)
+
+    def open_maskwidget(self):
+        """
+        Open the mask widget in a separate window and output its result back to the pipeline.
+        """
+        self.mask_widget = MainWindow(opened_from_pipeline=True, imctrl_file=self.config_widget.file_name.text())
+        self.mask_widget.show()
+        self.mask_widget.mask_location.connect(self.update_predef_mask)
+
+    def update_predef_mask(self, location):
+        self.predef_mask_widget.file_name.setText(location)
+
+    def open_resultsUI(self):
+        """
+        Open the results UI in a separate window.
+        """
+        # Read in input directory, output directory, and config file information
+        # Use local values to not interfere with the pipeline just in case
+        input_directory = self.input_directory_widget.file_name.text()
+        output_directory = self.output_directory_widget.file_name.text()
+        imgctrl = self.config_widget.file_name.text()
+        # Overwrite any modified settings
+        # UI checks for number of integration bins and wavelength
+        outChannels = self.outChannels.value()
+        # show the results UI
+        # If the pipeline is currently running, skip the directory prompt entirely
+        if not self.input_directory_widget.isEnabled():
+            self.resultsUI = KeyPressWindow(
+                image_directory=input_directory,
+                output_directory=output_directory,
+                imagecontrol=imgctrl,
+                show_directory_prompt=False,
+                )
+            self.resultsUI.show()
+            # pass along input data to the settings
+            if outChannels != 0.0:
+                self.resultsUI.settings.outChannels = outChannels
+                read_outChannels_from_imctrl = False
+            else:
+                read_outChannels_from_imctrl = True
+            self.resultsUI.update_settings()
+            self.resultsUI.update_dir(reread_imctrl_outChannels = read_outChannels_from_imctrl)
+        # Otherwise simply auto-fill the directory prompt
+        else:
+            self.resultsUI = KeyPressWindow(
+                image_directory=input_directory,
+                output_directory=output_directory,
+                imagecontrol=imgctrl,
+                show_directory_prompt=True,
+            )
+            self.resultsUI.show()
 
     def closeEvent(self, evt):
         """
