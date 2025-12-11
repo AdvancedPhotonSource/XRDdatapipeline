@@ -12,6 +12,7 @@ import argparse
 import glob
 import re
 import os, sys
+import subprocess
 import time
 import threading
 
@@ -1228,6 +1229,8 @@ class main_window(QtWidgets.QWidget):
     def open_resultsUI(self):
         """
         Open the results UI in a separate window.
+        Launches a new terminal which starts the current virtual environment and runs the results UI there
+        to avoid slowing down the processing speed for both the pipeline and the UI.
         """
         # Read in input directory, output directory, and config file information
         # Use local values to not interfere with the pipeline just in case
@@ -1237,33 +1240,37 @@ class main_window(QtWidgets.QWidget):
         # Overwrite any modified settings
         # UI checks for number of integration bins and wavelength
         outChannels = self.outChannels.value()
-        # show the results UI
+        # Pass along info
+        args = ""
+        if input_directory != "":
+            print(f"{input_directory=}")
+            args += f" -i \"{input_directory}\""
+        if output_directory != "":
+            args += f" -o \"{output_directory}\""
+        if imgctrl != "":
+            args += f" -c \"{imgctrl}\""
         # If the pipeline is currently running, skip the directory prompt entirely
         if not self.input_directory_widget.isEnabled():
-            self.resultsUI = KeyPressWindow(
-                image_directory=input_directory,
-                output_directory=output_directory,
-                imagecontrol=imgctrl,
-                show_directory_prompt=False,
-                )
-            self.resultsUI.show()
+            args += f" -s"
             # pass along input data to the settings
             if outChannels != 0.0:
-                self.resultsUI.settings.outChannels = outChannels
-                read_outChannels_from_imctrl = False
-            else:
-                read_outChannels_from_imctrl = True
-            self.resultsUI.update_settings()
-            self.resultsUI.update_dir(reread_imctrl_outChannels = read_outChannels_from_imctrl)
-        # Otherwise simply auto-fill the directory prompt
+                args += f" -r -b {outChannels}"
+        # Otherwise simply auto-fill the directory prompt (handled with arguments)
+        # Launch the results UI
+        current_venv_exe = sys.executable
+        venv_path = os.path.dirname(current_venv_exe)
+        directory = os.path.dirname(os.path.realpath(__file__))
+        results_UI_location = os.path.join(directory,"pyqtgraph_layout.py")
+        if sys.platform == "win32":
+            activate_cmd = os.path.join(venv_path, "activate.bat")
+            command = f"start cmd.exe /k \"{activate_cmd} && {current_venv_exe} {results_UI_location} {args}\""
+            subprocess.Popen(command, shell=True)
         else:
-            self.resultsUI = KeyPressWindow(
-                image_directory=input_directory,
-                output_directory=output_directory,
-                imagecontrol=imgctrl,
-                show_directory_prompt=True,
-            )
-            self.resultsUI.show()
+            activate_cmd = os.path.join(venv_path, "bin", "activate")
+            command = f"source {activate_cmd} && python {results_UI_location}"
+            # Need to test; can still run this command in a terminal manually
+            print(command)
+            # subprocess.Popen(['xterm', '--', 'bash', '-c', command])
 
     def closeEvent(self, evt):
         """
