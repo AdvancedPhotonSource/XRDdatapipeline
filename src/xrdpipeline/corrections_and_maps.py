@@ -12,6 +12,14 @@ import numpy as np
 
 # nonzeromask
 def nonzeromask(image, mask_negative=True):
+    """
+    Find all zero and, optionally, negative values in an image and mask them.
+    Always called as a basic mask on each image, this gets combined with the
+    predefined experimental mask at the start of the process.
+
+    :param image: Image array to check
+    :param mask_negative: Also mask negative values
+    """
     if mask_negative:
         # 1 if positive, 0 if zero or negative
         nonzeromask = image > 0
@@ -50,6 +58,17 @@ def tth_to_d(tth, wavelength):
 
 
 def get_Qbands(Qmap, LUtth, wavelength, numChans):
+    """
+    Split a 2d map of all Q values into a number of bands based on
+    the input two-theta min/max, the wavelength, and the number of
+    bins. Returns a 2d array of bin numbers, with 0 as the out-of-bounds
+    bin index.
+
+    :param Qmap: 2d array of Q values to bin
+    :param LUtth: Iterable of the min then max values in two-theta
+    :param wavelength: Wavelength of the beam used, to translate LUtth to Q
+    :param numChans: Number of bins to split the image into
+    """
     Qmin = tth_to_q(LUtth[0], wavelength)
     Qmax = tth_to_q(LUtth[1], wavelength)
     dQ = (Qmax - Qmin) / numChans
@@ -60,9 +79,4 @@ def get_Qbands(Qmap, LUtth, wavelength, numChans):
     # tth_list = np.arange(tth_min, tth_max + tth_delta / 2.0, tth_delta)
     # tth_val = ((tth_list[1:] + tth_list[:-1]) / 2.0).astype(np.float32)
     return Qband, bin_edges
-
-
-def Qmap(Tmap, wavelength):
-    return 4 * np.pi * np.sin(Tmap / 2 * np.pi / 180) / wavelength
-
 

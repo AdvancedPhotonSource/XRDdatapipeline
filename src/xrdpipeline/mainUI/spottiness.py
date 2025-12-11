@@ -17,6 +17,10 @@ from mainUI.UI_settings import Settings
 from corrections_and_maps import q_to_tth
 
 class SpottinessView(pg.GraphicsLayoutWidget):
+    """
+    Widget showing statistical information of the second
+    azimuthal derivative of the image, binned in two-theta.
+    """
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         self.setBackground("w")
@@ -67,7 +71,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             "stats",
             self.settings.keylist[self.settings.curr_key][:-6] + "_qbinedges.npy"
         )
-        # print(qbins_filename)
+        self.q_bins = []
         if os.path.exists(qbins_filename):
             with open(qbins_filename, 'rb') as infile:
                 self.q_bins = np.load(infile)
@@ -79,39 +83,37 @@ class SpottinessView(pg.GraphicsLayoutWidget):
                 self.q_bins = np.load(infile)
         else:
             print("Missing q bins file.")
-        self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
+        if len(self.q_bins) > 0:
+            self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
         self.update_data()
     
     def update_data(self):
-        filename_df = os.path.join(
-            self.settings.output_directory,
-            "stats",
-            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spots_stats_df.csv"
-        )
         filename_grad = os.path.join(
             self.settings.output_directory,
             "stats",
             self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spots_stats_grad.csv"
         )
-        df_stats = pd.read_csv(filename_df)
-        df_counts = df_stats["Qbin"].value_counts().sort_index()
-        grad_stats = pd.read_csv(filename_grad)
-        grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] < 0].index, inplace=True)
-        grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] >= len(self.q_bins)].index, inplace=True)
-        self.line_data["Grad median"] = grad_stats["median"]
-        self.line_data["Grad MAD"] = grad_stats["mad"]
-        self.line_data["Grad mean"] = grad_stats["mean"]
-        self.line_data["Grad STD"] = grad_stats["std"]
-        self.line_data["Grad MAD-STD"] = grad_stats["mad"] - grad_stats["std"]
-        self.line_data["Grad STD/MAD"] = grad_stats["std"] / grad_stats["mad"]
-        
-        if self.axis_type == "tth":
-            self.update_tth()
-        elif self.axis_type == "q":
-            self.update_q()
+        if os.path.exists(filename_grad):
+            grad_stats = pd.read_csv(filename_grad)
+            grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] < 0].index, inplace=True)
+            grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] >= len(self.q_bins)].index, inplace=True)
+            self.line_data["Grad median"] = grad_stats["median"]
+            self.line_data["Grad MAD"] = grad_stats["mad"]
+            self.line_data["Grad mean"] = grad_stats["mean"]
+            self.line_data["Grad STD"] = grad_stats["std"]
+            self.line_data["Grad MAD-STD"] = grad_stats["mad"] - grad_stats["std"]
+            self.line_data["Grad STD/MAD"] = grad_stats["std"] / grad_stats["mad"]
+
+            if self.axis_type == "tth":
+                self.update_tth()
+            elif self.axis_type == "q":
+                self.update_q()
+            else:
+                print("Spottiness: Unknown axis type. Defaulting to 2theta.")
+                self.update_tth()
         else:
-            print("Spottiness: Unknown axis type. Defaulting to 2theta.")
-            self.update_tth()
+            for k, v in self.line.items():
+                v.clear()
 
     def update_tth(self):
         self.line["Grad median"].setData(self.tth_bins, self.line_data["Grad median"].values)

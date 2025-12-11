@@ -27,12 +27,17 @@ class Integral:
 
 
 class IntegralView(pg.GraphicsLayoutWidget):
+    """
+    Widget showing the integrated pattern for the current image
+    as well as a set of checkboxes for displaying each integral.
+    The extra widgets are displayed in the main window instead of
+    this widget, but are contained here to keep the signals
+    localized.
+    """
     def __init__(self, parent, settings: Settings):
         # global tiflist, keylist, curr_key, curr_pos
         super().__init__()
-        # self.setMaximumSize(800,300) # for demo
         self.setMinimumHeight(250)
-        # self.directory = directory
         self.settings = settings
         self.setBackground("w")
 
@@ -48,22 +53,11 @@ class IntegralView(pg.GraphicsLayoutWidget):
         self.integral_view = self.addPlot(title="")
         self.axis_type = 0
 
-        # integral_infile_piece = self.settings.directory + "\\integrals\\" + self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
-        # self.integral_data = np.loadtxt(integral_infile_piece+"_base.xye",skiprows=3)
-        # self.masked_integral_data = np.loadtxt(integral_infile_piece+"_closed.xye",skiprows=3)
-        # self.spotmasked_integral_data = np.loadtxt(integral_infile_piece+"_closedspotsmasked.xye",skiprows=3)
-        # self.texturemasked_integral_data = np.loadtxt(integral_infile_piece+"_closedarcsmasked.xye",skiprows=3)
         self.integral_data = np.empty((self.settings.outChannels, 2))
         self.masked_integral_data = np.empty((self.settings.outChannels, 2))
         self.spotmasked_integral_data = np.empty((self.settings.outChannels, 2))
         self.texturemasked_integral_data = np.empty((self.settings.outChannels, 2))
 
-        # self.base_integral = self.integral_view.plot(self.integral_data[:,0],self.integral_data[:,1],pen="black")
-        # self.masked_integral = self.integral_view.plot(self.masked_integral_data[:,0],self.masked_integral_data[:,1] + self.integral_offset.value(),pen="green")
-        # self.spotmasked_integral = self.integral_view.plot(self.spotmasked_integral_data[:,0],self.spotmasked_integral_data[:,1] + 2*self.integral_offset.value(),pen="darkcyan")
-        # self.texturemasked_integral = self.integral_view.plot(self.texturemasked_integral_data[:,0],self.texturemasked_integral_data[:,1] + 3*self.integral_offset.value(),pen="maroon")
-        # self.spots_diff_integral = self.integral_view.plot(self.spotmasked_integral_data[:,0],self.integral_data[:,1]-self.spotmasked_integral_data[:,1],pen=(0,0,0,0)) #draw with an invisible pen to start off
-        # self.arcs_diff_integral = self.integral_view.plot(self.texturemasked_integral_data[:,0],self.integral_data[:,1]-self.texturemasked_integral_data[:,1],pen=(0,0,0,0))
         self.base_integral = self.integral_view.plot(
             pen=self.settings.colors["base_line"].color
         )
@@ -144,7 +138,6 @@ class IntegralView(pg.GraphicsLayoutWidget):
         self.legend.addItem(self.arcs_diff_integral, "Spot Phases")
 
     def update_dir(self):
-        # print("Integrals: updating directory")
         self.integral_data = np.empty((self.settings.outChannels, 2))
         self.masked_integral_data = np.empty((self.settings.outChannels, 2))
         self.spotmasked_integral_data = np.empty((self.settings.outChannels, 2))
@@ -158,8 +151,6 @@ class IntegralView(pg.GraphicsLayoutWidget):
         self.update_integral_data()
 
     def update_integral_data(self):
-        # print("Integrals: updating data")
-        # global tiflist, keylist, curr_key, curr_pos
         integral_infile_piece = os.path.join(
             self.settings.output_directory,
             "integrals",
@@ -170,10 +161,6 @@ class IntegralView(pg.GraphicsLayoutWidget):
             "_om.chi": self.masked_integral_data,
             "_spotsmasked.chi": self.spotmasked_integral_data,
             "_arcsmasked.chi": self.texturemasked_integral_data,
-            # "_closed.xye": self.closed_integral_data,
-            # "_closedarcsmasked.xye": self.closedarcs_integral_data,
-            # "_closedspotsmasked.xye": self.closedspots_integral_data,
-            # "_closed_pytorch.xye": self.pytorch_integral_data,
         }
         for ext, vals in integrals_dict.items():
             # print("Integrals: loading data for {0}".format(ext))
@@ -210,38 +197,32 @@ class IntegralView(pg.GraphicsLayoutWidget):
     def sqrt_toggle(self, evt):
         if self.sqrt_checkbox.isChecked():
             # Toggle offset
-            # self.integral_offset.valueChanged.disconnect()
-            # self.integral_offset.setValue(int(self.integral_offset.value()/10))
             self.integral_offset.setValue(
                 int(np.round(np.sqrt(self.integral_offset.value()), decimals=-1))
             )
-            # self.integral_offset.valueChanged.connect(self.update_integral_offset)
             self.integral_offset.setSingleStep(10)
             # Toggle data. Diff integrals have some negative values.
             self.set_integral_plot_data()
-            # self.spots_diff_integral.setData(self.spotmasked_integral_data[:,0],np.sqrt(self.integral_data[:,1]-self.spotmasked_integral_data[:,1]))
-            # self.arcs_diff_integral.setData(self.texturemasked_integral_data[:,0],np.sqrt(self.integral_data[:,1]-self.texturemasked_integral_data[:,1]))
 
         else:
             # Toggle offset
-            # self.integral_offset.setValue(self.integral_offset.value()*10)
             self.integral_offset.setValue(
                 int(np.round(self.integral_offset.value() ** 2, decimals=-2))
             )
             self.integral_offset.setSingleStep(100)
             # Toggle data. Diff integrals have some negative values.
             self.set_integral_plot_data()
-            # self.spots_diff_integral.setData(self.spotmasked_integral_data[:,0],self.integral_data[:,1]-self.spotmasked_integral_data[:,1])
-            # self.arcs_diff_integral.setData(self.texturemasked_integral_data[:,0],self.integral_data[:,1]-self.texturemasked_integral_data[:,1])
 
     def change_x_axis_type(self, axis_type):
         # Will be passed index of axis type
         # 2 theta = 0, Q = 1
         self.axis_type = axis_type
-        # self.wavelength = wavelength
         self.update_integral_data()
 
     def set_integral_plot_data(self):
+        """
+        Called after updating the data or any of its display options, such as the x axis type.
+        """
         base = Integral(self.base_integral, self.integral_data, 0)
         masked = Integral(self.masked_integral, self.masked_integral_data, 1)
         spot = Integral(self.spotmasked_integral, self.spotmasked_integral_data, 2)

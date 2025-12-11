@@ -25,10 +25,15 @@ viewtypes = [
 ]
 
 class ContourView(pg.GraphicsLayoutWidget):
+    """
+    Widget showing a contour or waterfall plot of all processed images in the current
+    dataset. The class also contains checkboxes and comboboxes which adjust the
+    display settings, but these are not displayed in a layout inside this widget.
+    They are instead displayed by the parent widget.
+    """
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         self.setMinimumHeight(150)
-        # self.directory = directory
         self.settings = settings
         self.live_max_lines_visible = 100
         self.live_spacing = 1
@@ -86,7 +91,6 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.tth_line_checkbox.stateChanged.connect(self.tth_line_checkbox_changed)
 
         self.integral_select = QtWidgets.QComboBox()
-        # self.integral_types = ["Base","Outlier Masked","Closed Mask"]
         self.integral_type_dict = {
             "Base": "_base.chi",
             "Outlier Mask": "_om.chi",
@@ -165,7 +169,9 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_controls_list.append(self.integral_step)
 
     def update_dir(self):
-        self.reset_integral_data(reset_z=True)
+        self.tthvals = []
+        self.qvals = []
+        self.reset_integral_data(reset_z=True, reset_xy=True)
 
     def update_integral_list(self, reset_z=False, manual = False):
         # global keylist, curr_key
@@ -183,7 +189,6 @@ class ContourView(pg.GraphicsLayoutWidget):
         )
         #Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
         #Test files showing 0.02 seconds from creation time to modification time
-        #print(os.path.getmtime(self.integral_filelist[-1]) - os.path.getctime(self.integral_filelist[-1]))
         if (len(self.integral_filelist) > 0) and (
             time.time() - os.path.getctime(self.integral_filelist[-1]) < 0.5
         ):
@@ -206,6 +211,10 @@ class ContourView(pg.GraphicsLayoutWidget):
                     self.view.removeItem(i)
 
     def auto_set_spacing(self):
+        """
+        Automatically adjust the step size between displayed integrals to avoid loading in too many
+        files at once while in live update mode.
+        """
         # while len(self.integral_filelist) >= (self.max_lines_visible + 1)*self.requested_spacing:
         #    self.requested_spacing *= 2
         self._temp_auto_spacing = self.live_spacing
@@ -294,9 +303,9 @@ class ContourView(pg.GraphicsLayoutWidget):
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
             self.update_waterfall_data()
 
-    def update_waterfall_data(self):
+    def update_waterfall_data(self, reset_xy=False):
         for i in self.contour_waterfall:
-                self.view.removeItem(i)
+            self.view.removeItem(i)
         self.contour_waterfall.clear()
         if self.x_axis_type == 0:
             xvals = self.tthvals
@@ -313,6 +322,8 @@ class ContourView(pg.GraphicsLayoutWidget):
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
             # see if there's an addItems
             [self.view.addItem(i) for i in self.contour_waterfall]
+            if reset_xy:
+                self.view.autoRange()
 
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
@@ -346,7 +357,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         #    if self._temp_auto_spacing % self.live_spacing == 0:
         #        self.integral_data = self.integral_data[]
 
-    def reset_integral_data(self, manual=False, reset_z = False):
+    def reset_integral_data(self, manual=False, reset_z = False, reset_xy = False):
         self.integral_data = []
         self.xvals = []
         self.yvals = []
@@ -365,7 +376,7 @@ class ContourView(pg.GraphicsLayoutWidget):
             )
             self.update_integral_list(reset_z=reset_z)
         if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
-            self.update_waterfall_data()
+            self.update_waterfall_data(reset_xy=reset_xy)
 
     def integral_type_changed(self, evt):
         self.integral_extension = self.integral_type_dict[self.integral_types[evt]]

@@ -20,17 +20,25 @@ from corrections_and_maps import q_to_tth
 
 
 class StatsView(pg.GraphicsLayoutWidget):
+    """
+    Widget holding the canvas which shows various statistical information
+    about spot-tagged clusters.
+    A second viewbox, spots_count_vb, allows the histogram of spot count
+    per bin to be overlaid on the other canvas and adjusted using the right
+    vertical axis.
+    """
     def __init__(self, parent, settings: Settings):
-        # global tiflist, keylist, curr_key, curr_pos
         super().__init__(parent)
-        # self.directory = directory
         self.settings = settings
         self.setBackground("w")
         self.stats_view = self.addPlot(title="")
+        # Create a second viewbox for the spot count histogram
         self.spots_count_vb = pg.ViewBox()
         self.stats_view.scene().addItem(self.spots_count_vb)
+        # Link scaling the right vertical axis to the new viewbox
         self.stats_view.showAxis('right')
         self.stats_view.getAxis('right').linkToView(self.spots_count_vb)
+        # Link the two x axes so they still scale together as expected
         self.spots_count_vb.setXLink(self.stats_view)
         self.stats_view.getAxis('right').setLabel('Spot Count')
 
@@ -63,21 +71,36 @@ class StatsView(pg.GraphicsLayoutWidget):
             "Mean Intensity": self.spots_scatter_intensitymean,
             "Summed Intensity": self.spots_scatter_intensitysum,
         }
+        # QComboBox does not accept dict.keys(), so make a list
         self.histogram_types = list(self.histogram_type_dict.keys())
-        # print(self.histogram_types)
         self.histogram_type_select.addItems(self.histogram_types)
         self.histogram_type_select.currentIndexChanged.connect(
             self.histogram_type_changed
         )
         self.histogram_type_select.setCurrentIndex(0)
         self.updateViews()
+        # Ensure the secondary viewbox is updated when the primary one is resized
         self.stats_view.vb.sigResized.connect(self.updateViews)
 
     def updateViews(self):
+        """
+        Updates the secondary viewbox holding the spots count histogram.
+        Called when the primary viewbox, stats_view.vb, is resized.
+        """
         self.spots_count_vb.setGeometry(self.stats_view.vb.sceneBoundingRect())
         self.spots_count_vb.linkedViewChanged(self.stats_view.vb, self.spots_count_vb.XAxis)
 
     def histogram_type_changed(self, evt):
+        """
+        Slots to the signal from the histogram type QComboBox.
+        When a new histogram type is selected on that dropdown, it passes the index
+        as an event. The canvas and legend are cleared, and the new histograms are
+        added in.
+        Also called when the directory is updated to ensure everything is cleared and
+        displayed properly.
+
+        :param evt: Index of the requested histogram type
+        """
         self.stats_view.clear()
         self.legend.clear()
         self.stats_view.addItem(self.histogram_type_dict[self.histogram_types[evt]])
@@ -104,39 +127,50 @@ class StatsView(pg.GraphicsLayoutWidget):
             self.update_q()
 
     def update_stats_data(self):
+        """
+        Read in and update the spot stats information for this image.
+        """
         stats_infile = os.path.join(
             self.settings.output_directory,
             "stats",
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_stats_df.csv"
         )
-        stats_df = pd.read_csv(stats_infile)
-        # spot_stat_label, area, medianQ, Qbin, on_arc
-        stats_df.drop(index = 0, inplace = True)
-        self.spots_histogram_Q = stats_df["Qbin"].value_counts().sort_index()
-        self.spots_count_data = np.zeros_like(self.tth_bins)
-        self.spots_count_data[self.spots_histogram_Q.index] = self.spots_histogram_Q.values
-        self.spots_area_data = stats_df["area"].values
-        self.spots_intensitymax_data = stats_df["intensity_max"].values
-        self.spots_intensitymean_data = stats_df["intensity_mean"].values
-        self.spots_intensitysum_data = stats_df["intensity_sum"].values
-        self.scatter_q_bins = stats_df["medianQ"].values
-        self.scatter_tth_bins = q_to_tth(self.scatter_q_bins, self.settings.wavelength)
-        if self.x_axis_type == "tth":
-            self.spots_count.setData(self.tth_bins, self.spots_count_data)
-            self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
-            self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
-            self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
-            self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
-        elif self.x_axis_type == "Q":
-            self.spots_count.setData(self.q_bins, self.spots_count_data)
-            self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
-            self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
-            self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
-            self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
-        # self.spots_histogram_area_Q.setImage(self.spots_stats_hist)
+        if os.path.exists(stats_infile):
+            stats_df = pd.read_csv(stats_infile)
+            # spot_stat_label, area, medianQ, Qbin, on_arc
+            stats_df.drop(index = 0, inplace = True)
+            self.spots_histogram_Q = stats_df["Qbin"].value_counts().sort_index()
+            self.spots_count_data = np.zeros_like(self.tth_bins)
+            self.spots_count_data[self.spots_histogram_Q.index] = self.spots_histogram_Q.values
+            self.spots_area_data = stats_df["area"].values
+            self.spots_intensitymax_data = stats_df["intensity_max"].values
+            self.spots_intensitymean_data = stats_df["intensity_mean"].values
+            self.spots_intensitysum_data = stats_df["intensity_sum"].values
+            self.scatter_q_bins = stats_df["medianQ"].values
+            self.scatter_tth_bins = q_to_tth(self.scatter_q_bins, self.settings.wavelength)
+            if self.x_axis_type == "tth":
+                self.spots_count.setData(self.tth_bins, self.spots_count_data)
+                self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
+                self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
+                self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
+                self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
+            elif self.x_axis_type == "Q":
+                self.spots_count.setData(self.q_bins, self.spots_count_data)
+                self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
+                self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
+                self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
+                self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
+        else:
+            # If the file for this image does not exist, clear the canvas.
+            self.spots_count.clear()
+            self.spots_scatter_area.clear()
+            self.spots_scatter_intensitymax.clear()
+            self.spots_scatter_intensitymean.clear()
+            self.spots_scatter_intensitysum.clear()
 
 
     def update_dir(self):
+        # First find the qbins file used for displaying the spot count histogram
         qbins_filename = os.path.join(
             self.settings.output_directory,
             "stats",
@@ -152,7 +186,8 @@ class StatsView(pg.GraphicsLayoutWidget):
             "stats",
             self.settings.keylist[self.settings.curr_key][:-6] + "_qbinedges.npy"
         )
-        # print(qbins_filename)
+        self.q_bins = []
+        self.tth_bins = []
         if os.path.exists(qbins_filename):
             with open(qbins_filename, 'rb') as infile:
                 self.q_bins = np.load(infile)
@@ -164,11 +199,11 @@ class StatsView(pg.GraphicsLayoutWidget):
                 self.q_bins = np.load(infile)
         else:
             print("Missing q bins file.")
-        # print(self.q_bins)
-        self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
+        if len(self.q_bins) > 0:
+            self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
+        # Then update and display the current image's stats data
         self.update_stats_data()
         self.histogram_type_changed(self.histogram_type_select.currentIndex())
-        return
     
     def update_tth(self):
         self.spots_count.setData(self.tth_bins, self.spots_count_data)

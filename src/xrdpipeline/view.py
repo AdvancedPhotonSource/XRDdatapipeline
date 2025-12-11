@@ -24,6 +24,11 @@ pg.setConfigOptions(imageAxisOrder="row-major")
 
 
 class ImageAndMask(QtWidgets.QWidget):
+    """
+    Widget containing a canvas, associated image and mask data,
+    z colorbar, and editable fields to input the name of the
+    specified image and masks to load in.
+    """
     def __init__(self, cmap, is_first_image=False):
         super().__init__()
         self.imview = pg.ImageView()
@@ -135,6 +140,11 @@ class ImageAndMask(QtWidgets.QWidget):
 
 
 class FileSelect(QtWidgets.QWidget):
+    """
+    File selection buttons, label showing the selected name,
+    and a file selection dialog.
+    Sends a signal when a file is selected.
+    """
     file_selected = pg.QtCore.Signal(str)
 
     def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None):
@@ -169,6 +179,9 @@ class FileSelect(QtWidgets.QWidget):
 
 
 class KeyPressWindow(QtWidgets.QMainWindow):
+    """
+    Main UI window.
+    """
     def __init__(self):
         super().__init__()
 

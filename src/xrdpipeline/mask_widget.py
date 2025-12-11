@@ -16,6 +16,8 @@ import pyqtgraph as pg
 import tifffile as tf
 from PIL import Image
 import re
+
+from mainUI.main_image import image_mask
 from GSASII_imports import *
 
 pg.setConfigOptions(imageAxisOrder="row-major")
@@ -116,6 +118,13 @@ def get_save_file_location(ext):
 
 
 def check_in_bounds(pos, shape):
+    """
+    Check whether the given position is within the rectangle between
+    (0,0) and the given (x,y) in the shape parameter.
+
+    :param pos: Current position, either as a QPoint or a y,x iterable
+    :param shape: Iterable of the widths in y and x, providing a rectangular shape to compare to.
+    """
     if type(pos) == QtCore.QPoint:
         x = pos.x()
         y = pos.y()
@@ -124,12 +133,19 @@ def check_in_bounds(pos, shape):
         y = pos[0]
     
     in_bounds = True
-    if x < 0 or y < 0 or x > shape[1] or y > shape[0]:
+    if x < 0 or y < 0 or x >= shape[1] or y >= shape[0]:
         in_bounds = False
         
     return in_bounds
 
 def find_closest_valid(pos, shape):
+    """
+    Find the closest point to the current position which is within bounds,
+    and return that point.
+
+    :param pos: QPoint, QPointF, or iterable (y,x). Current position to check.
+    :param shape: Width in (y,x) of the rectangle from the origin to determine the boundary.
+    """
     if check_in_bounds(pos, shape):
         return pos
     else:
@@ -166,7 +182,9 @@ help_text = {
         "If there are fewer than 3 vertices when clicking \"Complete Polygon\" or swapping to a new object, "
         "this polygon will be deleted.\n"
         "Once completed, you may still edit the locations of vertices by selecting the object "
-        "in the table above and dragging the vertex handles.",
+        "in the table above and dragging the vertex handles.\n"
+        "Note that the vertices of the polygon sit at the lower-left corner of the pixel they are associated with, "
+        "so the mask will extend above and to the right of the polygon lines and vertices.",
     "New Arc": "Arc masks require loading in a config file.\n"
         "Click on the image to initialize the arc around that center point. "
         "This will create a set of five handles: one for the center and two each for the "
@@ -207,6 +225,11 @@ help_text = {
 
 # change background color of edited item
 class Delegate(QtWidgets.QStyledItemDelegate):
+    """
+    Modified QStyledItemDelegate to give the selected item a white
+    background color and black text, so it is readable.
+    The default Editor was using black on black.
+    """
     def createEditor(self, parent, option, index):
         editor = super().createEditor(parent, option, index)
         editor.setStyleSheet('''
@@ -507,10 +530,10 @@ class Polygon(pg.PolyLineROI):
                 # print(xmin,xmax,ymin,ymax)
                 # the +1 for topRight is to let it visually move to the edge
                 # mask slicing is modified to shift back by one if it's out of bounds
-                top = int(self.image_size[1] + 1 - ymax)
+                top = int(self.image_size[1] - ymax)
                 bottom = int(0 - ymin)
                 left = int(0 - xmin)
-                right = int(self.image_size[0] + 1 - xmax)
+                right = int(self.image_size[0] - xmax)
                 bottomLeft = QtCore.QPoint(left, bottom)
                 topRight = QtCore.QPoint(right, top)
                 # print(QtCore.QRect(bottomLeft, topRight))
@@ -518,7 +541,26 @@ class Polygon(pg.PolyLineROI):
 
         super().setPoints(points, closed)
         if self.has_initialized:
+            points = self.getTranslatedPoints(points)
             self.table_item.setText(str(points))
+
+    def getTranslatedPoints(self, points, return_translation = False, reverse = False):
+        translation = (0, 0)
+        if hasattr(self,"preMoveState"):
+            translation = self.getGlobalTransform().getTranslation()
+            translation = (translation.x(), translation.y())
+            # translated = np.array(points) + np.array(translation)
+            # translated = list(zip(translated[:,0], translated[:,1]))
+            if not reverse:
+                points = np.array(points) + np.array(translation)
+                points = list(zip(points[:,0], points[:,1]))
+            else:
+                points = np.array(points) - np.array(translation)
+                points = list(zip(points[:,0], points[:,1]))
+        if return_translation:
+            return points, translation
+        else:
+            return points
 
 
     # reimplement movePoint() to go to edge if out of bounds
@@ -548,12 +590,12 @@ class Polygon(pg.PolyLineROI):
         p1 = p1.toPoint()
         if p1.x() < 0:
             p1.setX(0)
-        elif p1.x() > self.image_size[0]:
-            p1.setX(self.image_size[0])
+        elif p1.x() >= self.image_size[0]:
+            p1.setX(self.image_size[0] - 1)
         if p1.y() < 0:
             p1.setY(0)
-        elif p1.y() > self.image_size[1]:
-            p1.setY(self.image_size[1])
+        elif p1.y() >= self.image_size[1]:
+            p1.setY(self.image_size[1] - 1)
         # print(p1)
 
         ## Handles with a 'center' need to know their local position relative to the center point (lp0, lp1)
@@ -828,7 +870,8 @@ class Polygon(pg.PolyLineROI):
             elif y > self.image_size[1]:
                 y = self.image_size[1]
             newpoints.append((x,y))
-        self.setPoints(newpoints)
+        translatedpoints = self.getTranslatedPoints(newpoints, reverse=True)
+        self.setPoints(translatedpoints)
         
 
     def verifyState(self):
@@ -1332,32 +1375,179 @@ class NoImctrlWarning(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
 
-    
+class InitialFilesWindow(QtWidgets.QWidget):
+    """
+    Widget which pops up to display a file select dialog for the
+    test image, image control file, and immask file.
+    """
+
+    files_selected = pg.QtCore.Signal(str,str,str)
+
+    def __init__(self, image_file=None, imctrl_file=None, immask_file=None):
+        super().__init__()
+        self.image_file = image_file
+        self.imctrl_file = imctrl_file
+        self.immask_file = immask_file
+
+        self.test_image_label = QtWidgets.QLabel("Test image (required):")
+        self.test_image_text = QtWidgets.QLineEdit()
+        self.test_image_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.imctrl_file_label = QtWidgets.QLabel("Image Control File (optional, recommended):")
+        self.imctrl_file_text = QtWidgets.QLineEdit()
+        self.imctrl_file_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.immask_file_label = QtWidgets.QLabel("GSASII .immask file (optional):")
+        self.immask_file_text = QtWidgets.QLineEdit()
+        self.immask_file_browse_button = QtWidgets.QPushButton("Browse...")
+
+        self.okay_button = QtWidgets.QPushButton("Okay")
+        self.cancel_button = QtWidgets.QPushButton("Cancel")
+
+        self.file_select_layout = QtWidgets.QGridLayout()
+        self.file_select_layout.addWidget(self.test_image_label, 0, 0)
+        self.file_select_layout.addWidget(self.test_image_text, 0, 1)
+        self.file_select_layout.addWidget(self.test_image_browse_button, 0, 2)
+        self.file_select_layout.addWidget(self.imctrl_file_label, 1, 0)
+        self.file_select_layout.addWidget(self.imctrl_file_text, 1, 1)
+        self.file_select_layout.addWidget(self.imctrl_file_browse_button, 1, 2)
+        self.file_select_layout.addWidget(self.immask_file_label, 2, 0)
+        self.file_select_layout.addWidget(self.immask_file_text, 2, 1)
+        self.file_select_layout.addWidget(self.immask_file_browse_button, 2, 2)
+
+        self.button_layout = QtWidgets.QHBoxLayout()
+        self.button_layout.addWidget(self.okay_button)
+        self.button_layout.addWidget(self.cancel_button)
+
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout.addLayout(self.file_select_layout)
+        self.main_layout.addLayout(self.button_layout)
+        self.setLayout(self.main_layout)
+
+        self.test_image_browse_button.released.connect(self.browse_image)
+        self.imctrl_file_browse_button.released.connect(self.browse_imctrl)
+        self.immask_file_browse_button.released.connect(self.browse_immask)
+        self.okay_button.released.connect(self.okay_button_pressed)
+        self.cancel_button.released.connect(self.cancel_button_pressed)
+
+    def update_shown_info(self):
+        if self.image_file is not None:
+            self.test_image_text.setText(self.image_file)
+        if self.imctrl_file is not None:
+            self.imctrl_file_text.setText(self.imctrl_file)
+        if self.immask_file is not None:
+            self.immask_file_text.setText(self.immask_file)
+
+    def browse_image(self):
+        image_directory_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Select Test Image",
+            ".",
+            )
+        self.test_image_text.setText(image_directory_name[0])
+
+    def browse_imctrl(self):
+        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Choose Configuration File",
+            ".",
+            "Imctrl and PONI files (*.imctrl *.poni)"
+        )
+        self.imctrl_file_text.setText(imctrl_file_name[0])
+
+    def browse_immask(self):
+        output_directory_name = QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Select Immask File",
+            ".",
+            "Immask files (*.immask)")
+        self.immask_file_text.setText(output_directory_name[0])
+
+    def apply_changes(self):
+        test_image = self.test_image_text.text()
+        imctrl = self.imctrl_file_text.text()
+        immask = self.immask_file_text.text()
+        self.files_selected.emit(test_image, imctrl, immask)
+
+    def okay_button_pressed(self):
+        self.apply_changes()
+        self.close()
+
+    def cancel_button_pressed(self):
+        self.close()
+
 
 class MainWindow(pg.GraphicsLayoutWidget):
-    def __init__(self):
+
+    mask_location = pg.QtCore.Signal(str)
+
+    def __init__(self, opened_from_pipeline=False, image_file=None, imctrl_file=None, immask_file=None):
         super().__init__()
+        self.opened_from_pipeline = opened_from_pipeline
+        self.image_file_name = image_file
+        self.imctrl_file_name = imctrl_file
+        self.immask_file_name = immask_file
         self.setMinimumSize(1000,600)
-        self.image_file_name = choose_file()
-        self.main_image = MainImage(self.image_file_name)
+        self.file_select_window = InitialFilesWindow(
+            image_file=self.image_file_name,
+            imctrl_file=self.imctrl_file_name,
+            immask_file=self.immask_file_name
+            )
+        self.file_select_window.files_selected.connect(self.load_files)
+        if self.image_file_name is not None:
+            self.file_select_window.test_image_text.setText(self.image_file_name)
+        if self.imctrl_file_name is not None:
+            self.file_select_window.imctrl_file_text.setText(self.imctrl_file_name)
+        if self.immask_file_name is not None:
+            self.file_select_window.immask_file_text.setText(self.immask_file_name)
+        self.main_image = MainImage()
         # Read/Write buttons
+        self.load_image_button = QtWidgets.QPushButton("Load test image")
+        self.load_image_button.released.connect(self.load_image_popup)
         self.load_immask_button = QtWidgets.QPushButton(
             "Load immask"
         )  # load in GSASII-compatible immask file
-        self.load_immask_button.released.connect(self.load_immask)
+        self.load_immask_button.released.connect(self.load_immask_file_popup)
         self.save_immask_button = QtWidgets.QPushButton("Save immask")
         self.save_immask_button.released.connect(self.save_immask)
-        self.preview_mask_button = QtWidgets.QPushButton(
+        self.preview_mask_checkbox = QtWidgets.QCheckBox(
             "Preview Mask"
-        )  # hide UI of all ROIs, precalc and show mask
-        self.preview_mask_button.released.connect(self.preview_mask)
+        )
+        self.preview_mask_checkbox.setChecked(True)
+        self.preview_mask_checkbox.checkStateChanged.connect(self.preview_mask_toggle)
+        self.mask_color_button = QtWidgets.QPushButton("Change Color")
+        self.mask_color_button.setStyleSheet(f"""
+QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.main_image.predef_mask_data.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+        """)
+        self.mask_color_button.released.connect(self.open_color_dialog)
+        self.mask_opacity_label = QtWidgets.QLabel("Mask Opacity:")
+        self.mask_opacity_box = QtWidgets.QSpinBox()
+        self.mask_opacity_box.setMinimum(0)
+        self.mask_opacity_box.setMaximum(100)
+        self.mask_opacity_box.setSingleStep(10)
+        self.mask_opacity_box.setValue(100)
+        self.mask_opacity_box.valueChanged.connect(self.mask_opacity_changed)
         self.save_mask_button = QtWidgets.QPushButton(
             "Save Mask"
         )  # require user to preview first?
         self.save_mask_button.released.connect(self.save_mask)
         # imctrl file options
         self.load_imctrl_button = QtWidgets.QPushButton("Load image control file") # load in GSASII-compatible imctrl file or pyfai poni file
-        self.load_imctrl_button.released.connect(self.load_imctrls)
+        self.load_imctrl_button.released.connect(self.load_imctrl_file_popup)
+        self.export_mask_button = QtWidgets.QPushButton(
+            "Save and Export to Pipeline"
+        )
+        self.export_mask_button.released.connect(self.export_mask)
         self.cache = None
         self.hasLoadedConfig = False
 
@@ -1427,6 +1617,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.polygons_table.currentItemChanged.connect(self.highlightROI)
         # self.polygons_table.enter_pressed.connect(self.table_data_changed)
         # self.polygons_table.cellChanged.connect(self.table_data_changed)
+        self.polygons_table.itemChanged.connect(self.preview_mask)
 
         self.update_objects_from_table_button = QtWidgets.QPushButton("Update Objects from Table")
         self.update_objects_from_table_button.released.connect(self.update_objects_from_table)
@@ -1470,17 +1661,47 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
         self.gridlayout = QtWidgets.QGridLayout()
         self.gridlayout.addWidget(self.main_image, 0, 0, 5, 5)
-        self.gridlayout.addWidget(self.load_immask_button, 0, 5)
-        self.gridlayout.addWidget(self.save_immask_button, 0, 6)
-        self.gridlayout.addWidget(self.load_imctrl_button, 0, 7)
+        self.gridlayout.addWidget(self.load_image_button, 0, 5)
+        self.gridlayout.addWidget(self.load_imctrl_button, 0, 6)
+        self.gridlayout.addWidget(self.load_immask_button, 0, 7)
         self.gridlayout.addWidget(self.object_list, 1, 5, 4, 3)
-        self.gridlayout.addWidget(self.preview_mask_button, 5, 5)
+        self.gridlayout.addWidget(self.preview_mask_checkbox, 5, 0)
+        self.gridlayout.addWidget(self.mask_color_button, 5, 1)
+        self.gridlayout.addWidget(self.mask_opacity_label, 5, 2)
+        self.gridlayout.addWidget(self.mask_opacity_box, 5, 3)
+        if self.opened_from_pipeline:
+            self.gridlayout.addWidget(self.export_mask_button, 5, 5)
         self.gridlayout.addWidget(self.save_mask_button, 5, 6)
+        self.gridlayout.addWidget(self.save_immask_button, 5, 7)
+
         self.setLayout(self.gridlayout)
         self.show()
+        self.file_select_window.show()
 
-    def load_imctrls(self):
+    # def show_startup_file_select_window(self):
+    #     if self.image_file_name is not None:
+    #         self.file_select_window.test_image_text.setText(self.image_file_name)
+    #     if self.imctrl_file_name is not None:
+    #         self.file_select_window.imctrl_file_text.setText(self.imctrl_file_name)
+    #     if self.immask_file_name is not None:
+    #         self.file_select_window.immask_file_text.setText(self.immask_file_name)
+    #     self.file_select_window.show()
+
+    def load_image_popup(self):
+        image_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Test Image",".")[0]
+        self.load_image(image_file_name=image_file_name)
+
+    def load_image(self, image_file_name):
+        self.image_file_name = image_file_name
+        self.main_image.load_image(image_file_name)
+        self.image_changed()
+
+    def load_imctrl_file_popup(self):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","imctrl files (*.imctrl)")[0]
+        if imctrl_file_name != "":
+            self.load_imctrls(imctrl_file_name=imctrl_file_name)
+
+    def load_imctrls(self, imctrl_file_name):
         self.cache = {}
         self.cache['size'] = self.main_image.image_data.shape
         # with tf.TiffFile(self.image_file_name) as tif:
@@ -1509,6 +1730,15 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.imagescale_is_square = False
         if self.cache['pixelSize'][0] == self.cache['pixelSize'][1]:
             self.imagescale_is_square = True
+
+    def load_files(self, image, imctrl, immask):
+        print(image, imctrl, immask)
+        if os.path.exists(image):
+            self.load_image(image)
+        if (imctrl != "") and os.path.exists(imctrl):
+            self.load_imctrls(imctrl)
+        if (immask != "") and os.path.exists(immask):
+            self.load_immask(immask)
 
     def object_type_changed(self,evt):
         # ensure previous object loses focus
@@ -1691,38 +1921,36 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.main_image.objects.append(arc)
         self.main_image.current_arc = self.main_image.objects[-1]
 
-    def preview_mask(self):
-        if self.preview_mask_button.text() == "Preview Mask":
-            self.predef_mask = np.zeros_like(self.main_image.image_data, dtype=bool)
+    def preview_mask(self, item = None, override_checkbox = False):
+        # now connected to table wiget item changed signal, which sends the changed table widget item first
+        # need to catch that so it doesn't read in as override_checkbox = something therefore True
+        if self.preview_mask_checkbox.isChecked() or override_checkbox:
+            predef_mask = np.zeros_like(self.main_image.image_data, dtype=bool)
             for i in self.main_image.objects:
                 # poly_mask = i.getArrayRegion(np.ones_like(self.main_image.image_data,dtype=bool),self.main_image.image, returnMappedCoords=True)
                 # print(poly_mask, poly_mask[0].shape)
                 # print(poly_mask.pos()) # should be lower-left corner
                 # poly_mask = i.renderShapeMask(2880,2880) # mask is drawn to size given
                 # Play with transpose because this doesn't recognize row-major images, but still knows positions by x,y
-                if type(i) == Polygon:
-                    # print(i.getLocalHandlePositions())
-                    # print([tuple(h.pos()) for h in i.getHandles()])
-                    # print([(h[1].x(),h[1].y()) for h in i.getLocalHandlePositions()])
-                    points = [(h[1].x(), h[1].y()) for h in i.getLocalHandlePositions()]
-                    # i.clearPoints()
-                    corrected_points = points
-                    for it in range(len(corrected_points)):
-                        # print(corrected_points[it])
-                        if corrected_points[it][0] >= self.main_image.image_data.shape[0]:
-                            corrected_points[it] = (
-                                self.main_image.image_data.shape[0] - 1,
-                                corrected_points[it][1]
-                            )
-                        if corrected_points[it][1] >= self.main_image.image_data.shape[1]:
-                            corrected_points[it] = (
-                                corrected_points[it][0],
-                                self.main_image.image_data.shape[1] - 1
-                            )
-                        # print(corrected_points[it])
-                    # print("Corrected points:", corrected_points)
-                    i.setPoints(corrected_points)
-                    # i.stateChanged()
+                if (type(i) == Polygon) and (len(i.getHandles()) > 2):
+                    # points = [(h[1].x(), h[1].y()) for h in i.getLocalHandlePositions()]
+                    # translated_points, translation = i.getTranslatedPoints(points, True)
+                    # corrected_points = points
+                    # for it in range(len(corrected_points)):
+                    #     # print(corrected_points[it])
+                    #     if translated_points[it][0] >= self.main_image.image_data.shape[0]:
+                    #         corrected_points[it] = (
+                    #             self.main_image.image_data.shape[0] - 1 - translation[0],
+                    #             corrected_points[it][1]
+                    #         )
+                    #     if corrected_points[it][1] >= self.main_image.image_data.shape[1]:
+                    #         corrected_points[it] = (
+                    #             corrected_points[it][0],
+                    #             self.main_image.image_data.shape[1] - 1 - translation[1]
+                    #         )
+                    #     # print(corrected_points[it])
+                    # # print("Corrected points:", corrected_points)
+                    # i.setPoints(corrected_points)
                     array_slice = i.getArraySlice(
                         self.main_image.image_data, self.main_image.image, returnSlice=False
                     )
@@ -1737,25 +1965,21 @@ class MainWindow(pg.GraphicsLayoutWidget):
                     array_slice = i.getArraySlice(
                         self.main_image.image_data, self.main_image.image
                     )
-                    # print(array_slice)
-                    # print(array_slice[0][1],array_slice[0][0])
-                    # poly_mask[array_slice[0]] = small_poly_mask
                     poly_mask[(array_slice[0][1], array_slice[0][0])] = small_poly_mask
                     if i.isFrame:
-                        self.predef_mask = np.logical_or(self.predef_mask, ~poly_mask.T)
+                        predef_mask = np.logical_or(predef_mask, ~poly_mask.T)
                     else:
-                        self.predef_mask = np.logical_or(self.predef_mask, poly_mask.T)
-                    i.setPoints(points)
+                        predef_mask = np.logical_or(predef_mask, poly_mask.T)
                     # print(i.boundingRect(),i.parentBounds(),i.pos())
                 elif type(i) == Point:
-                    self.predef_mask[i.y(), i.x()] = True
+                    predef_mask[i.y(), i.x()] = True
                 elif type(i) == Arc:
-                    self.predef_mask = np.logical_or(self.predef_mask, i.mask_data)
+                    predef_mask = np.logical_or(predef_mask, i.mask_data)
                 elif type(i) == Line:
                     if i.orientation == "horizontal":
-                        self.predef_mask[i.position, :] = True
+                        predef_mask[i.position, :] = True
                     else:
-                        self.predef_mask[:, i.position] = True
+                        predef_mask[:, i.position] = True
                 elif type(i) == Spot:
                     x, y = np.mgrid[
                         0:self.main_image.image_data.shape[0],
@@ -1765,58 +1989,90 @@ class MainWindow(pg.GraphicsLayoutWidget):
                         (x-i.center[0])**2
                         + (y-i.center[1])**2
                     )
-                    self.predef_mask |= (dist < i.radius)
+                    predef_mask |= (dist < i.radius)
                 elif type(i) == Ring:
                     # temp = self.cache["pixelTAmap"] > (i.center_tth - 0.5 * i.tth_width)
                     # temp = np.logical_and(temp,self.cache["pixelTAmap"] < (i.center_tth + 0.5 * i.tth_width))
                     # self.predef_mask |= temp
                     # ~temp
-                    self.predef_mask = np.logical_or(self.predef_mask, i.mask_data)
+                    predef_mask = np.logical_or(predef_mask, i.mask_data)
 
             # intensity thresholds
             below_mins = np.nonzero(
                 self.main_image.image_data < self.min_intensity_threshold.value()
             )
-            above_maxs = np.nonzero(
-                self.main_image.image_data > self.max_intensity_threshold.value()
-            )
+            if self.max_intensity_threshold.value() != 0.0:
+                above_maxs = np.nonzero(
+                    self.main_image.image_data > self.max_intensity_threshold.value()
+                )
+            else:
+                above_maxs = np.zeros_like(self.main_image.image_data, dtype=bool)
             # self.predef_mask |= below_mins
-            self.predef_mask[below_mins] = True
+            predef_mask[below_mins] = True
             # self.predef_mask |= above_maxs
-            self.predef_mask[above_maxs] = True
+            predef_mask[above_maxs] = True
 
             # tth thresholds
             if self.cache is not None:
                 below_mins = np.nonzero(self.cache["pixelTAmap"] < self.min_tth_threshold.value())
                 above_maxs = np.nonzero(self.cache["pixelTAmap"] > self.max_tth_threshold.value())
-                self.predef_mask[below_mins] = True
-                self.predef_mask[above_maxs] = True
+                predef_mask[below_mins] = True
+                predef_mask[above_maxs] = True
             
             # set mask image data
-            # self.main_image.predef_mask.setData(np.array(self.predef_mask,dtype=np.uint8))
-            self.poly_mask_rgba = (
-                np.ones(
-                    (self.predef_mask.shape[0], self.predef_mask.shape[1], 4),
-                    dtype=np.uint8,
-                )
-                * 255
-            )
-            self.poly_mask_rgba[:, :, 3] = self.predef_mask * 255
-            self.main_image.predef_mask.updateImage(self.poly_mask_rgba)
-            # self.main_image.image.updateImage(np.array(self.predef_mask,dtype=np.uint8))
+            self.main_image.predef_mask_data.set_data(predef_mask)
+            self.main_image.predef_mask.updateImage(self.main_image.predef_mask_data.full_data)
 
-            self.preview_mask_button.setText("Clear Preview")
-        elif self.preview_mask_button.text() == "Clear Preview":
-            self.poly_mask_rgba[:, :, 3] = 0
-            self.main_image.predef_mask.updateImage(self.poly_mask_rgba)
-            self.preview_mask_button.setText("Preview Mask")
+    def clear_mask_preview(self):
+        self.main_image.predef_mask_data.set_data(np.zeros_like(self.main_image.predef_mask_data.mask_data))
+        self.main_image.predef_mask.updateImage(self.main_image.predef_mask_data.full_data)
 
-    def save_mask(self):
-        if self.preview_mask_button.text() == "Preview Mask":
+    def preview_mask_toggle(self, state):
+        if state == pg.QtCore.Qt.CheckState.Checked:
             self.preview_mask()
+        elif state == pg.QtCore.Qt.CheckState.Unchecked:
+            self.clear_mask_preview()
+
+    def mask_opacity_changed(self, evt):
+        self.main_image.predef_mask_data.set_opacity(evt / 100)
+        self.main_image.predef_mask.updateImage(self.main_image.predef_mask_data.full_data)
+
+    def open_color_dialog(self):
+        newcolor = pg.QtWidgets.QColorDialog.getColor()
+        # Clicking Cancel on the dialog returns an empty color.
+        # This becomes interpreted as black if used as a color, but is not equal to black.
+        if newcolor != pg.QtGui.QColor():
+            self.main_image.predef_mask_data.set_color(newcolor.name())
+            self.main_image.predef_mask.setImage(self.main_image.predef_mask_data.full_data)
+            self.mask_color_button.setStyleSheet(f"""
+ QPushButton {{
+    border-style: outset;
+    border-width: 1px;
+    border-color: #000000;
+    border-radius: 6px;
+    background-color: {self.main_image.predef_mask_data.color};
+}}
+QPushButton:hover {{
+    border-width: 3px;
+    border-color: #444444;
+}}
+            """)
+
+    def save_mask(self, return_location = False):
+        if not self.preview_mask_checkbox.isChecked():
+            self.preview_mask(override_checkbox = True)
         location = get_save_file_location(".tif")
         if location is not None:
-            tf.imwrite(location, self.predef_mask)
+            tf.imwrite(location, self.main_image.predef_mask_data.mask_data)
+        if not self.preview_mask_checkbox.isChecked():
+            self.clear_mask_preview()
+        if return_location:
+            return location
+
+    def export_mask(self):
+        location = self.save_mask(return_location=True)
+        self.mask_location.emit(location)
+        self.close()
 
     def save_immask(self):
         outfilename = get_save_file_location(".immask")
@@ -1932,10 +2188,13 @@ class MainWindow(pg.GraphicsLayoutWidget):
                     )
                 )
 
-    def load_immask(self):
+    def load_immask_file_popup(self):
         infilename = QtWidgets.QFileDialog.getOpenFileName(
             None, "Choose Image Mask", ".", "Immask files (*.immask)"
         )[0]
+        self.load_immask(infilename)
+
+    def load_immask(self, infilename):
         if not ((infilename is None) or (infilename == "")):
             print(f"Loading {infilename}")
             masks = readMasks(infilename)
@@ -2007,20 +2266,19 @@ class MainWindow(pg.GraphicsLayoutWidget):
             self.max_intensity_threshold.setValue(masks["Thresholds"][1][1])
 
 
-    def image_changed(self, data):
-        # set image data
-        self.main_image.image_data = data
+    def image_changed(self):
+        data = self.main_image.image_data
         # reset min/max intensity
-        minimum = np.min(self.main_image.image_data)
+        minimum = np.min(data)
         min_oom = np.floor(np.log10(np.abs(minimum)))
-        maximum = np.max(self.main_image.image_data)
+        maximum = np.max(data)
         max_oom = np.floor(np.log10(np.abs(maximum)))
         self.min_intensity_threshold.setMinimum(-1 * 10**(min_oom +3))
         self.min_intensity_threshold.setMaximum(10**(max_oom + 3))
-        self.min_intensity_threshold.setValue(np.min(self.main_image.image_data))
+        self.min_intensity_threshold.setValue(np.min(data))
         self.max_intensity_threshold.setMinimum(-1 * 10**(min_oom + 3))
         self.max_intensity_threshold.setMaximum(10**(max_oom + 3))
-        self.max_intensity_threshold.setValue(np.max(self.main_image.image_data))
+        self.max_intensity_threshold.setValue(np.max(data))
 
     def clear_polygon(self, index):
         # clear points
@@ -2148,20 +2406,23 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
 
 class MainImage(pg.GraphicsLayoutWidget):
-    def __init__(self, image_file):
+    def __init__(self, image_file=None):
         super().__init__()
         self.view = self.addPlot()
         self.view.setAspectLocked(True)
         self.cmap = pg.colormap.get("gist_earth", source="matplotlib", skipCache=True)
-        # self.image_data = np.zeros((2880,2880))
-        self.image_file_name = image_file
-        self.image_data = tf.imread(self.image_file_name)
-        self.image_size = self.image_data.shape
+        if image_file is not None:
+            self.load_image(image_file)
+        else:
+            self.image_data = np.ones((10,10))
         self.image = pg.ImageItem(self.image_data)
-        self.predef_mask_data = np.zeros(
-            (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
+        # self.predef_mask_data = np.zeros(
+        #     (self.image_data.shape[0], self.image_data.shape[1], 4), dtype=np.uint8
+        # )
+        self.predef_mask_data = image_mask(
+            self.image_data.shape, "white"
         )
-        self.predef_mask = pg.ImageItem(self.predef_mask_data, levels=None)
+        self.predef_mask = pg.ImageItem(self.predef_mask_data.full_data, levels=None)
         # self.qpicture = None
         self.current_polygon = None
         self.current_point = None
@@ -2191,6 +2452,14 @@ class MainImage(pg.GraphicsLayoutWidget):
 
         # self.polygon = QtGui.QPainter.drawPolygon()
         # self.show()
+
+    def load_image(self, image_file_name):
+        self.image_file_name = image_file_name
+        self.image_data = tf.imread(self.image_file_name)
+        self.image_size = self.image_data.shape
+        maxval = np.percentile(self.image_data, 99.9)
+        self.image.updateImage(self.image_data,autoRange=True,autoLevels=False)
+        self.intensityBar.setLevels(min=0.0, max=maxval)
 
     def add_polygon(self, isFrame = False):
         # bounds = QtCore.QRect(0,2880,2880,2880)

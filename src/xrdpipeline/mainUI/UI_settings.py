@@ -16,6 +16,13 @@ import re
 
 @dataclass
 class ColorSettings:
+    """
+    Holds the current and default color of an item
+
+    :param str name: name of the item
+    :param str color: color code of current color
+    :param str default_color: color code of initialized color
+    """
     name: str
     color: str
     default_color: str = field(init=False)
@@ -26,6 +33,10 @@ class ColorSettings:
 
 @dataclass
 class Settings:
+    """
+    Holds the settings for the main window, including file locations
+    and all color settings
+    """
     image_directory: str
     output_directory: str
     imagecontrol: str
@@ -61,6 +72,11 @@ class Settings:
 
 
 class ColorWidget(QtWidgets.QWidget):
+    """
+    Colored preview button for a particular color item.
+    Clicking it will bring up a color dialog window to select a new color.
+    The color item will be updated when the new color is selected.
+    """
     def __init__(self, coloritem: ColorSettings):
         super().__init__()
         self.coloritem = coloritem
@@ -140,6 +156,10 @@ QPushButton:hover {{
         """)
 
 class SettingsWindow(QtWidgets.QWidget):
+    """
+    Pop-up widget showing the current settings, including color settings.
+    Sends a signal to the main window when the values are changed and accepted.
+    """
     # apply_settings = pg.QtCore.pyqtSignal()
     apply_settings = pg.QtCore.Signal()
 

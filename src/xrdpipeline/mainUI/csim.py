@@ -17,6 +17,11 @@ from mainUI.UI_settings import Settings
 
 
 class CSimView(pg.GraphicsLayoutWidget):
+    """
+    Widget showing the cosine similarity lines for all images as compared to
+    the first image in the set or the previous image in the set.
+    Updates when a new directory or dataset is chosen.
+    """
     def __init__(self, parent, settings: Settings):
         super().__init__(parent)
         # global tiflist, keylist, curr_key, curr_pos

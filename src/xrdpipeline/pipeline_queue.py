@@ -9,10 +9,10 @@ This file defines the UI and base functionality of the analysis pipeline.
 
 from collections import deque
 import argparse
-import copy
 import glob
 import re
 import os, sys
+import subprocess
 import time
 import threading
 
@@ -21,17 +21,20 @@ from PIL import Image
 import PySide6
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from scipy import spatial
-
 from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
 from GSASII_imports import *
 from pipeline import run_iteration
-from cache_creation import getmaps, get_azimbands, prepare_qmaps, gradient_cache
+from cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache
 from corrections_and_maps import get_Qbands
+from mainUI.main_window import KeyPressWindow
+from mask_widget import MainWindow
 
 class image_monitor(RegexMatchingEventHandler):
+    """
+    Watches for new images coming in
+    """
     def __init__(self, queue, include=None, exclude=None):
         # dir\name_number_ext.tif or dir\name-number_ext.tif
         #'number' may be 00000 or xxxxx_xxxxx or xxxxx-xxxxx
@@ -87,7 +90,11 @@ class image_monitor(RegexMatchingEventHandler):
 
 
 class file_select(QtWidgets.QWidget):
-    def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None):
+    """
+    File/directory selection row widget, containing a button which pulls up a
+    file selection dialog and a label which fills with the selected result.
+    """
+    def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None, free_last_column=False):
         super().__init__()
         self.setMinimumWidth(600)
         # self.label = QtWidgets.QLabel(label)
@@ -98,12 +105,12 @@ class file_select(QtWidgets.QWidget):
         self.startdir = startdir
         self.ext = ext
 
-        self.layout = QtWidgets.QGridLayout()
-        # self.layout.addWidget(self.label,0,0)
-        # self.layout.addWidget(self.file_select_button,0,1,1,3)
-        self.layout.addWidget(self.file_select_button, 0, 0)
-        self.layout.addWidget(self.file_name, 0, 1, 1, 3)
-        self.setLayout(self.layout)
+        self.setLayout(QtWidgets.QGridLayout())
+        self.layout().addWidget(self.file_select_button, 0, 0)
+        if free_last_column:
+            self.layout().addWidget(self.file_name, 0, 1, 1, 2)
+        else:
+            self.layout().addWidget(self.file_name, 0, 1, 1, 3)
 
         self.file_select_button.released.connect(self.select_file)
 
@@ -123,6 +130,11 @@ class file_select(QtWidgets.QWidget):
 
 
 class imctrl_file_select(file_select):
+    """
+    Image control file selection dialog. Filters shown files to what is given in ext,
+    and emits a signal when a file is selected.
+    This signal is slotted in to the UI to read in a few modifiable values.
+    """
     imctrl_set = QtCore.Signal()
 
     def __init__(self, label, default_text=None, startdir=".", ext=None):
@@ -137,6 +149,30 @@ class imctrl_file_select(file_select):
 
 
 class CacheCreator(QtCore.QObject):
+    """
+    QObject which will run the cache creation routine in its own QThread.
+
+    :param cache: Dictionary to hold the cached information
+    :param input_directory: Location of the detector image files
+    :param output_directory: Location to output files from the pipeline
+    :param filename: Name of the first image file
+    :param imctrlname: Name of the image control file
+    :param flatfield: Name of the flatfield correction file, if any
+    :param imgmaskname: Name of the predefined experimental mask file, if any
+    :param bad_pixels: Name of the detector bad pixel mask file, if any
+    :param blkSize: Block size
+    :param calc_outlier: Calculate the outlier mask for each image and integrate using it
+    :param esdMul: Multiplier of median absolute deviation to be used to determine outliers
+    in each band
+    :param outChannels: Number of integration bins
+    :param calc_splitting: Calculate spot/texture classification and integrate using the
+    separated masks
+    :param azim_Q_shape_min: Minimum ratio of azimuthal to Q width for a cluster to be
+    considered texture
+    :param not_in_poni_settings: Any settings to be added or modified from what is in
+    a .imctrl image control file but not a .poni file
+    :param logging: Report timing information
+    """
     finished = QtCore.Signal()
 
     def __init__(
@@ -150,12 +186,10 @@ class CacheCreator(QtCore.QObject):
         imgmaskname,
         bad_pixels,
         blkSize,
-        calc_outlier = True,
         esdMul = 3.0,
         outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        calc_spottiness = False,
         not_in_poni_settings = {},
         logging=False,
     ):
@@ -170,12 +204,10 @@ class CacheCreator(QtCore.QObject):
         self.bad_pixels = bad_pixels
         self.blkSize = blkSize
         self.logging = logging
-        self.calc_outlier = calc_outlier
         self.esdMul = esdMul
         self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
-        self.calc_spottiness = calc_spottiness
         self.not_in_poni_settings = not_in_poni_settings
         self.stopEarly = False
 
@@ -183,8 +215,12 @@ class CacheCreator(QtCore.QObject):
         cache_time = time.time()
         if self.logging:
             print("Creating cache")
+            t0 = time.time()
         image_dict = read_image(self.filename)
-        # img.loadControls(imctrlname)   # set controls/calibrations/masks
+        if self.logging:
+            t1 = time.time()
+            print(f"read_image(): {(t1-t0):.2f}")
+            t0 = time.time()
         if os.path.splitext(self.imctrlname)[1] == ".imctrl":
             with open(self.imctrlname, "r") as imctrlfile:
                 lines = imctrlfile.readlines()
@@ -195,10 +231,16 @@ class CacheCreator(QtCore.QObject):
                 LoadControlsPONI(lines, image_dict["Image Controls"])
         for k, v in self.not_in_poni_settings.items():
             image_dict["Image Controls"][k] = v
-        # cache['Image Controls'] = img.getControls() # save controls & masks contents for quick reload
-        # self.cache['image'] = tf.imread(self.filename)
+        if self.logging:
+            t1 = time.time()
+            print(f"LoadControls(): {(t1-t0):.2f}")
+            t0 = time.time()
         self.cache["image"] = load_image(self.filename)
         if self.stopEarly: return
+        if self.logging:
+            t1 = time.time()
+            print(f"load_image(): {(t1-t0):.2f}")
+            t0 = time.time()
 
         predef_mask = {}
         if (self.imgmaskname is not None) and (self.imgmaskname != ""):
@@ -226,11 +268,11 @@ class CacheCreator(QtCore.QObject):
             flatfield_image = load_image(self.flatfield)
         self.cache["flatfield"] = flatfield_image
         if self.stopEarly: return
+        if self.logging:
+            t1 = time.time()
+            print(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
+            t0 = time.time()
         
-        # imctrlname = imctrlname.split("\\")[-1].split('/')[-1]
-        # path1 =  os.path.join(pathmaps,imctrlname)
-        # im = Image.fromarray(TA[0])
-        # im.save(os.path.splitext(path1)[0] + '_2thetamap.tif')
         imsave = Image.fromarray(predef_mask["image"])
         imsave.save(
             os.path.join(
@@ -248,69 +290,80 @@ class CacheCreator(QtCore.QObject):
                     os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"
                 )
             )
-        self.cache["Image Controls"] = image_dict["Image Controls"]
-        # TODO: Look at image size?
-        # img.setControl('pixelSize',[150.0,150.0])
+        if self.logging:
+            t1 = time.time()
+            print(f"predef, flatfield save: {(t1-t0):.2f}")
+            t0 = time.time()
+        if self.logging:
+            t1 = time.time()
+            print(f"Image controls: {(t1-t0):.2f}")
+            t0 = time.time()
         _, tifdata, _, _ = GetTifData(self.filename)
         image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
-        self.cache["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
-        # cache['Masks'] = img.getMasks()
-        # self.cache['Masks'] = image_dict['Masks']
-        # cache['intMaskMap'] = img.IntMaskMap() # calc mask & TA arrays to save for integrations
-        # for k,v in img_copy['Image Controls'].items():
-        #    print(k)
-        # for k in img.data['Image Controls'].keys():
-        #    if k not in img_copy['Image Controls'].keys():
-        #        print(k, img.data['Image Controls'][k])
-        # Missing 5: size, samplechangerpos, det2theta, ImageTag, formatName
-        # [2880,2880] None 0.0 None GSAS-II known TIF image
-        # only size seems to be holding anything meaningful at this time, though det2theta and samplechangerpos could hold something later
+        if self.logging:
+            t1 = time.time()
+            print(f"GetTifData(): {(t1-t0):.2f}")
+            t0 = time.time()
         if self.stopEarly: return
         
-        # self.cache["intMaskMap"] = MakeUseMask(
-        #     image_dict["Image Controls"],image_dict["Masks"], blkSize=self.blkSize
-        # )
-        # cache['intTAmap'] = img.IntThetaAzMap()
-        self.cache["intTAmap"] = MakeUseTA(image_dict["Image Controls"],self.blkSize)
         if self.stopEarly: return
-        # cache['FrameMask'] = img.MaskFrameMask() # calc Frame mask & T array to save for Pixel masking
-        self.cache["FrameMask"] = MaskFrameMask(image_dict)
+        if self.logging:
+            t1 = time.time()
+            print(f"Make2ThetaAzimuthMap(): {(t1-t0):.2f}")
+            t0 = time.time()
+        getmaps(self.cache, image_dict["Image Controls"], self.imctrlname, os.path.join(self.output_directory, "maps"))
+        if self.logging:
+            t1 = time.time()
+            print(f"getmaps(): {(t1-t0):.2f}")
+            t0 = time.time()
+        self.cache["AzimMask"] = np.logical_or(
+            self.cache["pixelAzmap"] < image_dict["Image Controls"]["LRazimuth"][0],
+            self.cache["pixelAzmap"] > image_dict["Image Controls"]["LRazimuth"][1]
+            )
         if self.stopEarly: return
-        # cache['maskTmap'] = img.MaskThetaMap()
-        self.cache["maskTmap"] = Make2ThetaAzimuthMap(
-            image_dict["Image Controls"],
-            (0, image_dict["Image Controls"]["size"][0]),
-            (0, image_dict["Image Controls"]["size"][1])
-        )[0]
-        if self.stopEarly: return
-        getmaps(self.cache, self.imctrlname, os.path.join(self.output_directory, "maps"))
-        self.cache["AzimMask"] = np.logical_or(self.cache["pixelAzmap"] < self.cache["Image Controls"]["LRazimuth"][0], self.cache["pixelAzmap"] > self.cache["Image Controls"]["LRazimuth"][1])
-        if self.stopEarly: return
+        if self.logging:
+            t1 = time.time()
+            print(f"AzimMask: {(t1-t0):.2f}")
+            t0 = time.time()
         # 2th fairly linear along center; calc 2th - pixelsize conversion
-        center = self.cache["Image Controls"]["center"]
-        center[0] = center[0] * 1000.0 / self.cache["Image Controls"]["pixelSize"][0]
-        center[1] = center[1] * 1000.0 / self.cache["Image Controls"]["pixelSize"][1]
-        self.cache["center"] = center
+        center = image_dict["Image Controls"]["center"]
+        center[0] = center[0] * 1000.0 / image_dict["Image Controls"]["pixelSize"][0]
+        center[1] = center[1] * 1000.0 / image_dict["Image Controls"]["pixelSize"][1]
         image_dict["center"] = center
-        # self.cache['d2th'] = (self.cache['pixelTAmap'][int(center[1]),0] - self.cache['pixelTAmap'][int(center[1]),99])/100
         self.cache["esdMul"] = self.esdMul
         image_dict["Masks"]["SpotMask"]["esdMul"] = self.esdMul
+        if self.logging:
+            t1 = time.time()
+            print(f"pix size, center, esdMul: {(t1-t0):.2f}")
+            t0 = time.time()
         numChansAzim = 360
         self.cache["azimband"] = get_azimbands(self.cache["pixelAzmap"], numChansAzim)
         if self.stopEarly: return
+        if self.logging:
+            t1 = time.time()
+            print(f"get_azimbands(): {(t1-t0):.2f}")
+            t0 = time.time()
 
         # numChans
-        LUtth = np.array(self.cache["Image Controls"]["IOtth"])
-        wave = self.cache["Image Controls"]["wavelength"]
+        LUtth = np.array(image_dict["Image Controls"]["IOtth"])
+        wave = image_dict["Image Controls"]["wavelength"]
         dsp0 = wave / (2.0 * sind(LUtth[0] / 2.0))
         dsp1 = wave / (2.0 * sind(LUtth[1] / 2.0))
-        x0 = GetDetectorXY2(dsp0, 0.0, self.cache["Image Controls"])[0]
-        x1 = GetDetectorXY2(dsp1, 0.0, self.cache["Image Controls"])[0]
+        x0 = GetDetectorXY2(dsp0, 0.0, image_dict["Image Controls"])[0]
+        x1 = GetDetectorXY2(dsp1, 0.0, image_dict["Image Controls"])[0]
         if not np.any(x0) or not np.any(x1):
             raise Exception
-        numChans = int(1000 * (x1 - x0) / self.cache["Image Controls"]["pixelSize"][0]) // 2
+        numChans = int(1000 * (x1 - x0) / image_dict["Image Controls"]["pixelSize"][0]) // 2
         self.cache["numChans"] = numChans
+        if self.logging:
+            t1 = time.time()
+            print(f"numChans: {(t1-t0):.2f}")
+            t0 = time.time()
         self.cache["Qbins"], self.cache["QbinEdges"] = get_Qbands(self.cache["pixelQmap"], LUtth, wave, numChans)
+        if self.logging:
+            t1 = time.time()
+            print(f"get_Qbands(): {(t1-t0):.2f}")
+            t0 = time.time()
 
         # pytorch integration
         (
@@ -319,23 +372,36 @@ class CacheCreator(QtCore.QObject):
             self.cache["raveled_pol"],
             self.cache["raveled_dist"],
             self.cache["tth_size"],
-        ) = prepare_qmaps(
+        ) = prepare_integration_maps(
             self.cache["pixelTAmap"],
             self.cache["polscalemap"],
             self.cache["pixelsampledistmap"],
-            self.cache["Image Controls"]["IOtth"][0],
-            self.cache["Image Controls"]["IOtth"][1],
-            self.cache["Image Controls"]["outChannels"],
+            image_dict["Image Controls"]["IOtth"][0],
+            image_dict["Image Controls"]["IOtth"][1],
+            image_dict["Image Controls"]["outChannels"],
         )
 
         if self.stopEarly: return
+        if self.logging:
+            t1 = time.time()
+            print(f"prepare_qmaps(): {(t1-t0):.2f}")
+            t0 = time.time()
 
         # gradient info
         self.cache["gradient"] = gradient_cache(
             predef_mask["image"].shape, center, np.ones((3, 3), dtype=np.uint)
         )
+        if self.logging:
+            t1 = time.time()
+            print(f"gradient_cache(): {(t1-t0):.2f}")
+            t0 = time.time()
 
+        # store this in cache to include corrections made
         self.cache["image_dict"] = image_dict
+        if self.logging:
+            t1 = time.time()
+            print(f"image_dict: {(t1-t0):.2f}")
+            t0 = time.time()
 
         cache_time = time.time() - cache_time
         print(cache_time)
@@ -344,6 +410,38 @@ class CacheCreator(QtCore.QObject):
 
 
 class SingleIterator(QtCore.QObject):
+    """
+    QObject which will process a single image in its own QThread.
+    Emits a signal when finished.
+
+    :param cache: Dictionary of cached information usable by all images
+    :param filename: Name of the image file to process
+    :param imctrlname: Name of the image control file
+    :param imgmaskname: Name of the predefined experimental mask file
+    :param input_directory: Directory holding the detector image files
+    :param output_directory: Directory to output files from the pipeline
+    :param name: Name of the dataset
+    :param number: Number of this image
+    :param ext: Image file extension
+    :param closing_method: Method used to expand the outlier mask. Default is
+    binary closing.
+    :param calc_outlier: Whether to calculate the outlier mask and integrate
+    using it
+    :param outChannels: Number of integration bins
+    :param calc_splitting: Whether to calculate spot/texture classification and
+    integrate using the separated masks
+    :param azim_Q_shape_min: Minimum ratio of azimuthal width to Q width for a
+    cluster to be considered texture
+    :param calc_spot_stats: Whether to calculate basic area, number, etc. statistics
+    on spot-tagged clusters. Adds <.1s to processing time.
+    :param calc_grad_spottiness: Whether to calculate mean, standard deviation, and
+    other statistics on each bin of the second azimuthal derivative. Adds 1-2s to
+    processing time.
+    :param csim_first_index: Index number for which image should be considered the first
+    in a dataset for cosine similarity comparison.
+    :param timing: Whether to return timing information for each step
+    :param timing_names: List of names to append to for each timing checkpoint
+    """
     finished = QtCore.Signal()
     progress = QtCore.Signal(int)
 
@@ -363,8 +461,9 @@ class SingleIterator(QtCore.QObject):
         outChannels = 0,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        calc_spottiness = False,
-        logging=False,
+        calc_spot_stats = True,
+        calc_grad_spottiness = False,
+        csim_first_index = 0,
         timing=None,
         timing_names = None,
     ):
@@ -383,8 +482,9 @@ class SingleIterator(QtCore.QObject):
         self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
-        self.calc_spottiness = calc_spottiness
-        self.logging = logging
+        self.calc_spot_stats = calc_spot_stats
+        self.calc_grad_spottiness = calc_grad_spottiness
+        self.csim_first_index = csim_first_index
         self.timing = timing
         self.timing_names = timing_names
 
@@ -397,12 +497,13 @@ class SingleIterator(QtCore.QObject):
             self.number,
             self.cache,
             self.ext,
-            return_steps = False,
             calc_outlier = self.calc_outlier,
             outChannels = self.outChannels,
             calc_splitting = self.calc_splitting,
             azim_Q_shape_min = self.azim_Q_shape_min,
-            calc_spottiness = self.calc_spottiness,
+            calc_spot_stats = self.calc_spot_stats,
+            calc_grad_spottiness = self.calc_grad_spottiness,
+            csim_first_index = self.csim_first_index,
             timing = self.timing,
             timing_names = self.timing_names,
         )
@@ -410,7 +511,9 @@ class SingleIterator(QtCore.QObject):
 
 
 class AdvancedSettings(QtWidgets.QWidget):
-
+    """
+    Subwidget holding the advanced settings section of the UI
+    """
     def __init__(self, settings):
         super().__init__()
         self.settings = settings
@@ -446,6 +549,10 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.azim_q.setMinimum(0)
         self.azim_q.setMaximum(1000)
         self.azim_q.setValue(self.azim_q_default)
+        self.csim_first_label = QtWidgets.QLabel("Cosine Similarity: First image index for comparison")
+        self.csim_first_default = 0
+        self.csim_first_spinbox = QtWidgets.QSpinBox()
+        self.csim_first_spinbox.setValue(self.csim_first_default)
 
         self.calc_outlier_checkbox = QtWidgets.QCheckBox("Perform outlier masking")
         self.calc_outlier_default = True
@@ -454,9 +561,16 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_splitting_checkbox = QtWidgets.QCheckBox("Perform spot/texture outlier mask splitting")
         self.calc_splitting_default = True
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
-        self.calc_spottiness_checkbox = QtWidgets.QCheckBox("Calculate Spottiness of Rings")
-        self.calc_spottiness_default = True
-        self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
+        self.calc_spottiness_label = QtWidgets.QLabel("Calculate Spottiness of Rings")
+        self.calc_spottiness_combobox = QtWidgets.QComboBox()
+        self.calc_spottiness_types = [
+            "None",
+            "Spot Area Stats Only",
+            "Gradient Statistics",
+        ]
+        self.calc_spottiness_combobox.addItems(self.calc_spottiness_types)
+        self.calc_spottiness_default = 1
+        self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
 
         self.regex_include_label = QtWidgets.QLabel("Only include filenames with:")
         self.regex_include_text = QtWidgets.QLineEdit()
@@ -475,7 +589,9 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.settings_layout.addWidget(self.regex_include_text, 0, 1)
         self.settings_layout.addWidget(self.regex_exclude_label, 1, 0)
         self.settings_layout.addWidget(self.regex_exclude_text, 1, 1)
-        self.settings_layout.addWidget(self.calc_outlier_checkbox, 2, 0, 1, 2)
+        self.settings_layout.addWidget(self.csim_first_label, 2, 0)
+        self.settings_layout.addWidget(self.csim_first_spinbox, 2, 1)
+        self.settings_layout.addWidget(self.calc_outlier_checkbox, 3, 0, 1, 2)
         self.outlier_layout.addWidget(self.override_label, 0, 0, 1, 2)
         self.outlier_layout.addWidget(self.madmult_override, 1, 0)
         self.outlier_layout.addWidget(self.madmult, 1, 1)
@@ -484,9 +600,10 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.calc_splitting_checkbox, 3, 0, 1, 2)
         self.outlier_layout.addWidget(self.azim_q_override, 4, 0)
         self.outlier_layout.addWidget(self.azim_q, 4, 1)
-        self.outlier_layout.addWidget(self.calc_spottiness_checkbox, 5, 0, 1, 2)
-        self.settings_layout.addWidget(self.outlier_settings, 3, 0, 6, 2)
-        self.settings_layout.addWidget(self.defaults_button, 9, 0)
+        self.outlier_layout.addWidget(self.calc_spottiness_label, 5, 0)
+        self.outlier_layout.addWidget(self.calc_spottiness_combobox, 5, 1)
+        self.settings_layout.addWidget(self.outlier_settings, 4, 0, 6, 2)
+        self.settings_layout.addWidget(self.defaults_button, 10, 0)
 
         self.setLayout(self.settings_layout)
 
@@ -503,17 +620,14 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.nbins_om.setValue(self.nbins_om_default)
         self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
-        self.calc_spottiness_checkbox.setChecked(self.calc_spottiness_default)
+        self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
+        self.csim_first_spinbox.setValue(self.csim_first_default)
 
 
 class main_window(QtWidgets.QWidget):
-    # text box/file browser directory location
-    # ditto config file
-    # ditto predef mask
-    # start button
-    # clear queue button
-    # optional "choose existing files to run over" section
-    # default: none, shortcut button for all, else choose which files
+    """
+    Main UI window.
+    """
     def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None, bad_pixels=None):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
@@ -548,6 +662,7 @@ class main_window(QtWidgets.QWidget):
             "Experimental Mask:",
             default_text=imgmask,
             startdir=self.input_directory_widget.file_name.text(),
+            free_last_column=True,
         )
         self.bad_pixel_mask_widget = file_select(
             "Bad Pixel Mask:",
@@ -571,7 +686,7 @@ class main_window(QtWidgets.QWidget):
         self.azim_max.setMaximum(360)
         self.outChannels_label = QtWidgets.QLabel("Number of Integration Bins:")
         self.outChannels = QtWidgets.QSpinBox()
-        self.outChannels.setMaximum(10000)
+        self.outChannels.setMaximum(100000)
         self.outChannels.setSingleStep(100)
         self.PolaVal_label = QtWidgets.QLabel("Polarization:")
         self.PolaVal = QtWidgets.QDoubleSpinBox()
@@ -642,6 +757,11 @@ class main_window(QtWidgets.QWidget):
         self.list_of_times = []
         self.list_of_time_names = []
 
+        self.open_resultsUI_button = QtWidgets.QPushButton("Open Data Viewer")
+        self.open_resultsUI_button.released.connect(self.open_resultsUI)
+        self.open_maskwidget_button = QtWidgets.QPushButton("Open Mask Creation Program")
+        self.open_maskwidget_button.released.connect(self.open_maskwidget)
+
         # self.is_running_process = False
 
         self.poni_config_options_layout = QtWidgets.QGridLayout()
@@ -667,6 +787,7 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.poni_config_options, 3, 1, 3, 2)
         self.window_layout.addWidget(self.flatfield_widget, 6, 0, 1, 3)
         self.window_layout.addWidget(self.predef_mask_widget, 7, 0, 1, 3)
+        self.predef_mask_widget.layout().addWidget(self.open_maskwidget_button, 0, 3)
         self.window_layout.addWidget(self.bad_pixel_mask_widget, 8, 0, 1, 3)
         self.window_layout.addWidget(self.advanced_settings_button, 10, 0)
         self.window_layout.addWidget(self.start_button, 9, 0)
@@ -678,6 +799,7 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.process_both_radio, 12, 1)
         self.window_layout.addWidget(self.process_new_only_radio, 12, 2)
         self.window_layout.addWidget(self.queue_length_info, 13, 0)
+        self.window_layout.addWidget(self.open_resultsUI_button, 13, 2)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
         self.settings_widget.hide()
@@ -686,6 +808,10 @@ class main_window(QtWidgets.QWidget):
         self.show()
 
     def update_imctrl_data(self):
+        """
+        Load in some modifiable image controls. Called when an image control
+        file is selected.
+        """
         self.restore_default_config_options_button.setEnabled(True)
         local_controls = {}
         imctrl = self.config_widget.file_name.text()
@@ -726,6 +852,12 @@ class main_window(QtWidgets.QWidget):
             self.timer.start()
 
     def on_timeout(self):
+        """
+        Called regularly while the pipeline is running. Whenever there is a new
+        image in the queue, this will start up a thread for the cache (if not yet
+        run) or for processing the new image. Removes the processed image from
+        the queue.
+        """
         if self.keep_running:
             # block=True in Queue.get() tells it to wait until there is something in the queue to grab it
             # can also set a timeout value (in seconds) to wait before it throws an Empty exception
@@ -758,7 +890,9 @@ class main_window(QtWidgets.QWidget):
                                 ext,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
+                                calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
+                                csim_first_index = self.settings_widget.csim_first_spinbox.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
                             )
@@ -776,7 +910,8 @@ class main_window(QtWidgets.QWidget):
                                 azim_Q_shape_min = self.settings_widget.azim_q.value(),
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spottiness = self.settings_widget.calc_spottiness_checkbox.isChecked(),
+                                calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
+                                calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
                             )
@@ -859,6 +994,11 @@ class main_window(QtWidgets.QWidget):
             self.timer.stop()
 
     def start_processing(self):
+        """
+        Called by the start button. Gathers the provided information,
+        creates the queue, starts the image directory monitor, and starts the timer
+        which runs on_timeout() periodically.
+        """
         self.input_directory = self.input_directory_widget.file_name.text()
         self.output_directory = self.output_directory_widget.file_name.text()
         self.imgctrl = self.config_widget.file_name.text()
@@ -948,25 +1088,27 @@ class main_window(QtWidgets.QWidget):
         )
 
     def pause(self):
+        """
+        Prevents new images from being processed. Any image currently being processed
+        will continue. The image directory monitor will continue to run and populate
+        the queue.
+        Called when the Pause button is pressed.
+        """
         print("Pausing. If processing an image, that process will complete first.")
         self.keep_running = False
         # watchdog thread will still keep populating the queue
 
     def resume(self):
+        """
+        Resume after pausing.
+        """
         self.keep_running = True
         self.timer.start(100)
 
-    # def update_dir(self, input_directory):
-    #     self.pause()
-    #     self.clear_queue()
-    #     self.input_directory = input_directory
-    #     # self.watchdog_thread = threading.Thread(target=watchdog_observer,args=(self.directory,self.event_handler),daemon=True)
-    #     self.observer = Observer()
-    #     self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
-    #     self.observer.start()
-    #     # self.resume()
-
     def advanced_settings_button_pressed(self):
+        """
+        Show/hide the advanced settings widget.
+        """
         if self.settings_shown:
             self.settings_shown = False
             self.settings_widget.hide()
@@ -1005,6 +1147,14 @@ class main_window(QtWidgets.QWidget):
         self.clear_queue()
 
     def stop_button_pressed(self):
+        """
+        Stop processing new images, clear the queue, and gather and
+        display any timing information. If the cache is running, sends
+        a signal to tell it to stop at the next checkpoint.
+        If a processing thread is still running, this also connects the
+        thread closing signal to the really_stopped() function which
+        resets the UI. Otherwise, this function is called directly.
+        """
         print("Stopping and clearing queue")
         # print(f"Length of timing list: {len(self.list_of_times)}")
         # print(f"Mean time: {np.mean(self.list_of_times):.4f} +/- {np.std(self.list_of_times):.4f}")
@@ -1043,6 +1193,10 @@ class main_window(QtWidgets.QWidget):
             self.really_stopped()
 
     def really_stopped(self):
+        """
+        Function called when processing has been fully stopped.
+        Resets the UI to be interactable again.
+        """
         # self.is_running_process = False
         print("Stopped")
         self.advanced_settings_button.setEnabled(True)
@@ -1061,7 +1215,69 @@ class main_window(QtWidgets.QWidget):
         self.process_new_only_radio.setEnabled(True)
         self.poni_config_options.setEnabled(True)
 
+    def open_maskwidget(self):
+        """
+        Open the mask widget in a separate window and output its result back to the pipeline.
+        """
+        self.mask_widget = MainWindow(opened_from_pipeline=True, imctrl_file=self.config_widget.file_name.text())
+        self.mask_widget.show()
+        self.mask_widget.mask_location.connect(self.update_predef_mask)
+
+    def update_predef_mask(self, location):
+        self.predef_mask_widget.file_name.setText(location)
+
+    def open_resultsUI(self):
+        """
+        Open the results UI in a separate window.
+        Launches a new terminal which starts the current virtual environment and runs the results UI there
+        to avoid slowing down the processing speed for both the pipeline and the UI.
+        """
+        # Read in input directory, output directory, and config file information
+        # Use local values to not interfere with the pipeline just in case
+        input_directory = self.input_directory_widget.file_name.text()
+        output_directory = self.output_directory_widget.file_name.text()
+        imgctrl = self.config_widget.file_name.text()
+        # Overwrite any modified settings
+        # UI checks for number of integration bins and wavelength
+        outChannels = self.outChannels.value()
+        # Pass along info
+        args = ""
+        if input_directory != "":
+            print(f"{input_directory=}")
+            args += f" -i \"{input_directory}\""
+        if output_directory != "":
+            args += f" -o \"{output_directory}\""
+        if imgctrl != "":
+            args += f" -c \"{imgctrl}\""
+        # If the pipeline is currently running, skip the directory prompt entirely
+        if not self.input_directory_widget.isEnabled():
+            args += f" -s"
+            # pass along input data to the settings
+            if outChannels != 0.0:
+                args += f" -r -b {outChannels}"
+        # Otherwise simply auto-fill the directory prompt (handled with arguments)
+        # Launch the results UI
+        current_venv_exe = sys.executable
+        venv_path = os.path.dirname(current_venv_exe)
+        directory = os.path.dirname(os.path.realpath(__file__))
+        results_UI_location = os.path.join(directory,"pyqtgraph_layout.py")
+        if sys.platform == "win32":
+            activate_cmd = os.path.join(venv_path, "activate.bat")
+            command = f"start cmd.exe /k \"{activate_cmd} && {current_venv_exe} {results_UI_location} {args}\""
+            subprocess.Popen(command, shell=True)
+        else:
+            activate_cmd = os.path.join(venv_path, "bin", "activate")
+            command = f"source {activate_cmd} && python {results_UI_location}"
+            # Need to test; can still run this command in a terminal manually
+            print(command)
+            # subprocess.Popen(['xterm', '--', 'bash', '-c', command])
+
     def closeEvent(self, evt):
+        """
+        Function called when hitting the X button in the corner to close
+        the window. Interrupts the action with a prompt if images are still
+        being processed.
+        """
         # if not self.is_running_process:
         #    evt.accept()
         if not self.stop_button.isEnabled():
