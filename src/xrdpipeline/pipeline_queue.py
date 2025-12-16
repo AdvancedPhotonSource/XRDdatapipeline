@@ -30,8 +30,9 @@ from cache_creation import getmaps, get_azimbands, prepare_integration_maps, gra
 from corrections_and_maps import get_Qbands
 from mainUI.main_window import KeyPressWindow
 from mask_widget import MainWindow
+from general.file_selection import FileSelectRowWidget
 
-class image_monitor(RegexMatchingEventHandler):
+class ImageMonitor(RegexMatchingEventHandler):
     """
     Watches for new images coming in
     """
@@ -89,47 +90,7 @@ class image_monitor(RegexMatchingEventHandler):
         # self.queue.put([event.src_path,results.group("name"),results.group("number")])
 
 
-class file_select(QtWidgets.QWidget):
-    """
-    File/directory selection row widget, containing a button which pulls up a
-    file selection dialog and a label which fills with the selected result.
-    """
-    def __init__(self, label, default_text=None, isdir=False, startdir=".", ext=None, free_last_column=False):
-        super().__init__()
-        self.setMinimumWidth(600)
-        # self.label = QtWidgets.QLabel(label)
-        self.file_select_button = QtWidgets.QPushButton(label)
-        # self.file_select_button = QtWidgets.QPushButton(self.default_text)
-        self.file_name = QtWidgets.QLabel(default_text)
-        self.isdir = isdir
-        self.startdir = startdir
-        self.ext = ext
-
-        self.setLayout(QtWidgets.QGridLayout())
-        self.layout().addWidget(self.file_select_button, 0, 0)
-        if free_last_column:
-            self.layout().addWidget(self.file_name, 0, 1, 1, 2)
-        else:
-            self.layout().addWidget(self.file_name, 0, 1, 1, 3)
-
-        self.file_select_button.released.connect(self.select_file)
-
-    def select_file(self):
-        if self.isdir:
-            location = QtWidgets.QFileDialog.getExistingDirectory(
-                None, "Select Directory"
-            )
-            # self.file_select_button.setText(location)
-            self.file_name.setText(location)
-        else:
-            location = QtWidgets.QFileDialog.getOpenFileName(
-                None, "Select File", self.startdir, self.ext
-            )
-            # self.file_select_button.setText(location[0])
-            self.file_name.setText(location[0])
-
-
-class imctrl_file_select(file_select):
+class ImctrlFileSelect(FileSelectRowWidget):
     """
     Image control file selection dialog. Filters shown files to what is given in ext,
     and emits a signal when a file is selected.
@@ -632,19 +593,19 @@ class main_window(QtWidgets.QWidget):
         super().__init__()
         # self.directory_text = QtWidgets.QPushButton("Directory:")
         # self.directory_loc = QtWidgets.QLabel()
-        self.input_directory_widget = file_select(
+        self.input_directory_widget = FileSelectRowWidget(
             "Input Directory:",
             default_text=input_directory,
             isdir=True,
         )
-        self.output_directory_widget = file_select(
+        self.output_directory_widget = FileSelectRowWidget(
             "Output Directory:",
             default_text=output_directory,
             isdir=True,
         )
         # self.config_text = QtWidgets.QPushButton("Config file:")
         # self.config_loc = QtWidgets.QLabel()
-        self.config_widget = imctrl_file_select(
+        self.config_widget = ImctrlFileSelect(
             "Config file:",
             default_text=imctrl,
             startdir=self.input_directory_widget.file_name.text(),
@@ -653,18 +614,18 @@ class main_window(QtWidgets.QWidget):
         self.config_widget.imctrl_set.connect(self.update_imctrl_data)
         # self.predef_mask_text = QtWidgets.QPushButton("Predefined Mask:")
         # self.predef_mask_loc = QtWidgets.QLabel()
-        self.flatfield_widget = file_select(
+        self.flatfield_widget = FileSelectRowWidget(
             "Flat-field file:",
             default_text=flatfield,
             startdir=self.input_directory_widget.file_name.text()
         )
-        self.predef_mask_widget = file_select(
+        self.predef_mask_widget = FileSelectRowWidget(
             "Experimental Mask:",
             default_text=imgmask,
             startdir=self.input_directory_widget.file_name.text(),
             free_last_column=True,
         )
-        self.bad_pixel_mask_widget = file_select(
+        self.bad_pixel_mask_widget = FileSelectRowWidget(
             "Bad Pixel Mask:",
             default_text=bad_pixels,
             startdir=self.input_directory_widget.file_name.text(),
@@ -1067,7 +1028,7 @@ class main_window(QtWidgets.QWidget):
 
         if self.process_new_only_radio.isChecked() or self.process_both_radio.isChecked():
             self.observer = Observer()
-            self.event_handler = image_monitor(self.queue, include = self.include_regex, exclude = self.exclude_regex)
+            self.event_handler = ImageMonitor(self.queue, include = self.include_regex, exclude = self.exclude_regex)
             self.observer.schedule(self.event_handler, self.input_directory, recursive=False)
             self.observer.start()
 
