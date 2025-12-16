@@ -497,7 +497,7 @@ class ContourView(pg.GraphicsLayoutWidget):
 
     def tth_line_checkbox_changed(self):
         if self.tth_line_checkbox.isChecked():
-            self.tth_line.setPen(255, 255, 255, 150)
+            self.tth_line.setPen(200, 200, 100)
         else:
             self.tth_line.setPen(0, 0, 0, 0)
 
