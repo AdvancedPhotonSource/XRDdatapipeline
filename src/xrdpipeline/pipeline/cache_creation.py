@@ -9,10 +9,10 @@ This file defines the cache creation routine for the analysis pipeline.
 
 
 from PIL import Image
-from GSASII_imports import *
+from general.GSASII_imports import *
 import torch
 import time
-from corrections_and_maps import tth_to_q
+from general.corrections_and_maps import tth_to_q
 
 
 def prepare_integration_maps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):

@@ -16,7 +16,7 @@ import time
 from enum import Enum
 
 from mainUI.UI_settings import Settings
-from corrections_and_maps import tth_to_q
+from general.corrections_and_maps import tth_to_q
 
 Viewtype = Enum('Viewtype', names=[('Contour',0),('Waterfall',1)])
 viewtypes = [

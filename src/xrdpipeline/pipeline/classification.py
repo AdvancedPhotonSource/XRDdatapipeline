@@ -13,7 +13,7 @@ import pandas as pd
 import time
 from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
 
-from spottiness import spottiness_azim_grad, spottiness_df_stats
+from pipeline.spottiness import spottiness_azim_grad, spottiness_df_stats
 
 
 def remove_overlaps(labeled_cuts, predef_mask):

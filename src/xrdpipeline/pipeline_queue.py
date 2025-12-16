@@ -24,11 +24,10 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
-from GSASII_imports import *
-from pipeline import run_iteration
-from cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache
-from corrections_and_maps import get_Qbands
-from mainUI.main_window import KeyPressWindow
+from general.GSASII_imports import *
+from pipeline.pipeline import run_iteration
+from pipeline.cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache
+from general.corrections_and_maps import get_Qbands
 from mask_widget import MainWindow
 from general.file_selection import FileSelectRowWidget
 

@@ -14,7 +14,7 @@ import numpy as np
 import os
 
 from mainUI.UI_settings import Settings
-from corrections_and_maps import tth_to_q
+from general.corrections_and_maps import tth_to_q
 
 from dataclasses import dataclass
 import warnings

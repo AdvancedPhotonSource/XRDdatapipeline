@@ -18,7 +18,7 @@ from PIL import Image
 import re
 
 from mainUI.main_image import image_mask
-from GSASII_imports import *
+from general.GSASII_imports import *
 
 pg.setConfigOptions(imageAxisOrder="row-major")
 

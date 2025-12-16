@@ -18,9 +18,9 @@ import skimage as ski
 import torch
 from PIL import Image
 
-from classification import current_splitting_method
-from corrections_and_maps import *
-from GSASII_imports import *
+from pipeline.classification import current_splitting_method
+from general.corrections_and_maps import *
+from general.GSASII_imports import *
 
 
 # recreating xye export function

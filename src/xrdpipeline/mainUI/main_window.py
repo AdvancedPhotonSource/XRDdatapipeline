@@ -24,7 +24,7 @@ from mainUI.integrals import IntegralView
 from mainUI.main_image import MainImageView
 from mainUI.tabbed_area import TabbedArea
 
-from corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
+from general.corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
 
 
 class NavigationBar(QtWidgets.QWidget):

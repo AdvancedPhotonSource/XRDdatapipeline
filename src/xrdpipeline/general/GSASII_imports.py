@@ -17,7 +17,8 @@ import time
 
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
-bindist_dir = os.path.join(script_dir, "bindist")
+mid_dir = os.path.split(script_dir)[0]
+bindist_dir = os.path.join(mid_dir, "bindist")
 # Add 'bindist' to the beginning of sys.path
 print(bindist_dir)
 sys.path.insert(0, bindist_dir)

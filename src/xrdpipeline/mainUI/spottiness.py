@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from mainUI.UI_settings import Settings
-from corrections_and_maps import q_to_tth
+from general.corrections_and_maps import q_to_tth
 
 class SpottinessView(pg.GraphicsLayoutWidget):
     """
