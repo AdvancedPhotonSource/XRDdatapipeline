@@ -43,7 +43,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         self.legend = self.view.addLegend(offset=(-1,1))
         for k,v in self.methods.items():
             self.line[k] = self.view.plot()
-            self.line_data[k] = []
+            self.line_data[k] = None
             self.legend.addItem(self.line[k], k)
         self.line["Grad median"].setPen("hotpink")
         self.line["Grad MAD"].setPen("cyan")
@@ -114,22 +114,26 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         else:
             for k, v in self.line.items():
                 v.clear()
+            for k, v in self.line_data.items():
+                v = None
 
     def update_tth(self):
-        self.line["Grad median"].setData(self.tth_bins, self.line_data["Grad median"].values)
-        self.line["Grad MAD"].setData(self.tth_bins, self.line_data["Grad MAD"].values)
-        self.line["Grad mean"].setData(self.tth_bins, self.line_data["Grad mean"].values)
-        self.line["Grad STD"].setData(self.tth_bins, self.line_data["Grad STD"].values)
-        self.line["Grad MAD-STD"].setData(self.tth_bins, self.line_data["Grad MAD-STD"].values)
-        self.line["Grad STD/MAD"].setData(self.tth_bins, self.line_data["Grad STD/MAD"].values)
+        if len(self.tth_bins > 0) and self.line_data["Grad median"] is not None:
+            self.line["Grad median"].setData(self.tth_bins, self.line_data["Grad median"].values)
+            self.line["Grad MAD"].setData(self.tth_bins, self.line_data["Grad MAD"].values)
+            self.line["Grad mean"].setData(self.tth_bins, self.line_data["Grad mean"].values)
+            self.line["Grad STD"].setData(self.tth_bins, self.line_data["Grad STD"].values)
+            self.line["Grad MAD-STD"].setData(self.tth_bins, self.line_data["Grad MAD-STD"].values)
+            self.line["Grad STD/MAD"].setData(self.tth_bins, self.line_data["Grad STD/MAD"].values)
 
     def update_q(self):
-        self.line["Grad median"].setData(self.q_bins, self.line_data["Grad median"].values)
-        self.line["Grad MAD"].setData(self.q_bins, self.line_data["Grad MAD"].values)
-        self.line["Grad mean"].setData(self.q_bins, self.line_data["Grad mean"].values)
-        self.line["Grad STD"].setData(self.q_bins, self.line_data["Grad STD"].values)
-        self.line["Grad MAD-STD"].setData(self.q_bins, self.line_data["Grad MAD-STD"].values)
-        self.line["Grad STD/MAD"].setData(self.q_bins, self.line_data["Grad STD/MAD"].values)
+        if len(self.q_bins > 0) and self.line_data["Grad median"] is not None:
+            self.line["Grad median"].setData(self.q_bins, self.line_data["Grad median"].values)
+            self.line["Grad MAD"].setData(self.q_bins, self.line_data["Grad MAD"].values)
+            self.line["Grad mean"].setData(self.q_bins, self.line_data["Grad mean"].values)
+            self.line["Grad STD"].setData(self.q_bins, self.line_data["Grad STD"].values)
+            self.line["Grad MAD-STD"].setData(self.q_bins, self.line_data["Grad MAD-STD"].values)
+            self.line["Grad STD/MAD"].setData(self.q_bins, self.line_data["Grad STD/MAD"].values)
 
     def change_x_axis_type(self, axis_type):
         if axis_type == 0:
