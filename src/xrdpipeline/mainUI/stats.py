@@ -140,37 +140,46 @@ class StatsView(pg.GraphicsLayoutWidget):
             # spot_stat_label, area, medianQ, Qbin, on_arc
             stats_df.drop(index = 0, inplace = True)
             self.spots_histogram_Q = stats_df["Qbin"].value_counts().sort_index()
-            self.spots_count_data = np.zeros_like(self.tth_bins)
-            self.spots_count_data[self.spots_histogram_Q.index] = self.spots_histogram_Q.values
-            self.spots_area_data = stats_df["area"].values
-            self.spots_intensitymax_data = stats_df["intensity_max"].values
-            self.spots_intensitymean_data = stats_df["intensity_mean"].values
-            self.spots_intensitysum_data = stats_df["intensity_sum"].values
-            self.scatter_q_bins = stats_df["medianQ"].values
-            self.scatter_tth_bins = q_to_tth(self.scatter_q_bins, self.settings.wavelength)
-            if self.x_axis_type == "tth":
-                self.spots_count.setData(self.tth_bins, self.spots_count_data)
-                self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
-                self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
-                self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
-                self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
-            elif self.x_axis_type == "Q":
-                self.spots_count.setData(self.q_bins, self.spots_count_data)
-                self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
-                self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
-                self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
-                self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
+            # Check that tth_bins were read in
+            # (Launching while the pipeline forms the cache can cause this to not be the case)
+            if len(self.tth_bins) == 0 and len(self.spots_histogram_Q) != 0:
+                self.update_bins()
+            # If the bin edge file still can't be found, skip
+            if len(self.tth_bins) != 0:
+                self.spots_count_data = np.zeros_like(self.tth_bins)
+                self.spots_count_data[self.spots_histogram_Q.index] = self.spots_histogram_Q.values
+                self.spots_area_data = stats_df["area"].values
+                self.spots_intensitymax_data = stats_df["intensity_max"].values
+                self.spots_intensitymean_data = stats_df["intensity_mean"].values
+                self.spots_intensitysum_data = stats_df["intensity_sum"].values
+                self.scatter_q_bins = stats_df["medianQ"].values
+                self.scatter_tth_bins = q_to_tth(self.scatter_q_bins, self.settings.wavelength)
+                if self.x_axis_type == "tth":
+                    self.spots_count.setData(self.tth_bins, self.spots_count_data)
+                    self.spots_scatter_area.setData(self.scatter_tth_bins, self.spots_area_data)
+                    self.spots_scatter_intensitymax.setData(self.scatter_tth_bins, self.spots_intensitymax_data)
+                    self.spots_scatter_intensitymean.setData(self.scatter_tth_bins, self.spots_intensitymean_data)
+                    self.spots_scatter_intensitysum.setData(self.scatter_tth_bins, self.spots_intensitysum_data)
+                elif self.x_axis_type == "Q":
+                    self.spots_count.setData(self.q_bins, self.spots_count_data)
+                    self.spots_scatter_area.setData(self.scatter_q_bins, self.spots_area_data)
+                    self.spots_scatter_intensitymax.setData(self.scatter_q_bins, self.spots_intensitymax_data)
+                    self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
+                    self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
+            else:
+                self.clear_canvas()
         else:
             # If the file for this image does not exist, clear the canvas.
-            self.spots_count.clear()
-            self.spots_scatter_area.clear()
-            self.spots_scatter_intensitymax.clear()
-            self.spots_scatter_intensitymean.clear()
-            self.spots_scatter_intensitysum.clear()
+            self.clear_canvas()
 
+    def clear_canvas(self):
+        self.spots_count.clear()
+        self.spots_scatter_area.clear()
+        self.spots_scatter_intensitymax.clear()
+        self.spots_scatter_intensitymean.clear()
+        self.spots_scatter_intensitysum.clear()
 
-    def update_dir(self):
-        # First find the qbins file used for displaying the spot count histogram
+    def update_bins(self):
         qbins_filename = os.path.join(
             self.settings.output_directory,
             "stats",
@@ -201,6 +210,10 @@ class StatsView(pg.GraphicsLayoutWidget):
             print("Missing q bins file.")
         if len(self.q_bins) > 0:
             self.tth_bins = q_to_tth(self.q_bins, self.settings.wavelength)
+
+    def update_dir(self):
+        # First find the qbins file used for displaying the spot count histogram
+        self.update_bins()
         # Then update and display the current image's stats data
         self.update_stats_data()
         self.histogram_type_changed(self.histogram_type_select.currentIndex())

@@ -70,6 +70,7 @@ class MainImageView(pg.GraphicsLayoutWidget):
         # global tiflist, keylist, curr_key, curr_pos
         super().__init__(parent)
         self.settings = settings
+        self.maps_loaded = False
         self.view = self.addPlot(title="")
         self.view.setAspectLocked(True)
         self.cmap = pg.colormap.get("gist_earth", source="matplotlib", skipCache=True)
@@ -178,16 +179,20 @@ class MainImageView(pg.GraphicsLayoutWidget):
         self.tth_circle = pg.ImageItem(self.tth_circle_data.full_data, levels=None)
         self.view.addItem(self.tth_circle)
 
+    def load_maps(self):
+        tth_maps = glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_2thetamap.tif")
+        azim_maps = glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_azmmap.tif")
+        if len(tth_maps) > 0 and len(azim_maps) > 0:
+            self.tth_map = tf.imread(tth_maps[0])
+            self.azim_map = tf.imread(azim_maps[0])
+            self.maps_loaded = True
+
     def update_dir(self):
         # Levels: z min and max
         # Range: x, y min and max
         # HistogramRange: visible axis range for z
-        self.tth_map = tf.imread(
-            glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_2thetamap.tif")[0]
-        )
-        self.azim_map = tf.imread(
-            glob.glob(os.path.join(self.settings.output_directory,"maps")+os.sep+"*_azmmap.tif")[0]
-        )
+        self.maps_loaded = False
+        self.load_maps()
         self.predef_mask_data.set_color(self.settings.colors["predef_mask"].color)
         self.nonpositive_mask_data.set_color(
             self.settings.colors["nonpositive_mask"].color
@@ -196,9 +201,10 @@ class MainImageView(pg.GraphicsLayoutWidget):
         self.outlier_mask_only_data.set_color(self.settings.colors["outlier_mask"].color)
         self.arcs_mask_data.set_color(self.settings.colors["arcs_mask"].color)
         self.spot_mask_data.set_color(self.settings.colors["spot_mask"].color)
-        self.tth_circle_data.set_color(self.settings.colors["tth_circle_mask"].color)
-        self.tth_circle_data.set_shape(self.settings.image_size)
-        self.tth_circle.updateImage(self.tth_circle_data.full_data)
+        if self.maps_loaded:
+            self.tth_circle_data.set_color(self.settings.colors["tth_circle_mask"].color)
+            self.tth_circle_data.set_shape(self.settings.image_size)
+            self.tth_circle.updateImage(self.tth_circle_data.full_data)
         self.update_image_data(xy_reset=True, z_reset=True)
         self.update_masks_data()
 

@@ -173,6 +173,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
                     )
                 )
                 vals[:, :] = 0
+                new_vals = vals
             if new_vals.shape != vals.shape:
                 print(
                     "Shape of incoming data {0} not equal to config shape {1} for integral {2}. Setting values to 0. If the config shape looks incorrect, go to Settings->outChannels and set it to {3}.".format(

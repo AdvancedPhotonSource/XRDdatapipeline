@@ -328,25 +328,25 @@ class ContourView(pg.GraphicsLayoutWidget):
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
         self.x_axis_type = axis_type
-        # self.wavelength = wavelength
-        if axis_type == 0:
-            self.contour_image.setRect(
-                self.tthvals[0],
-                self.yvals[0],
-                self.tthvals[-1] - self.tthvals[0],
-                self.yvals[-1] + self.live_spacing - self.yvals[0],
-            )
-        elif axis_type == 1:
-            if len(self.qvals) == 0:
-                self.qvals = tth_to_q(self.tthvals, self.settings.wavelength)
-            self.contour_image.setRect(
-                self.qvals[0],
-                self.yvals[0],
-                self.qvals[-1] - self.qvals[0],
-                self.yvals[-1] + self.live_spacing - self.yvals[0],
-            )
-        if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
-            self.update_waterfall_data()
+        if len(self.tthvals) != 0:
+            if axis_type == 0:
+                self.contour_image.setRect(
+                    self.tthvals[0],
+                    self.yvals[0],
+                    self.tthvals[-1] - self.tthvals[0],
+                    self.yvals[-1] + self.live_spacing - self.yvals[0],
+                )
+            elif axis_type == 1:
+                # if len(self.qvals) == 0:
+                #     self.qvals = tth_to_q(self.tthvals, self.settings.wavelength)
+                self.contour_image.setRect(
+                    self.qvals[0],
+                    self.yvals[0],
+                    self.qvals[-1] - self.qvals[0],
+                    self.yvals[-1] + self.live_spacing - self.yvals[0],
+                )
+            if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+                self.update_waterfall_data()
 
     def update_integral_data_manual(self):
         # self.live_spacing = self.integral_step.value()

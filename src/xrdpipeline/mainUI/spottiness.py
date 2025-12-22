@@ -118,7 +118,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
                 v = None
 
     def update_tth(self):
-        if len(self.tth_bins > 0) and self.line_data["Grad median"] is not None:
+        if len(self.tth_bins) > 0 and self.line_data["Grad median"] is not None:
             self.line["Grad median"].setData(self.tth_bins, self.line_data["Grad median"].values)
             self.line["Grad MAD"].setData(self.tth_bins, self.line_data["Grad MAD"].values)
             self.line["Grad mean"].setData(self.tth_bins, self.line_data["Grad mean"].values)
@@ -127,7 +127,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.line["Grad STD/MAD"].setData(self.tth_bins, self.line_data["Grad STD/MAD"].values)
 
     def update_q(self):
-        if len(self.q_bins > 0) and self.line_data["Grad median"] is not None:
+        if len(self.q_bins) > 0 and self.line_data["Grad median"] is not None:
             self.line["Grad median"].setData(self.q_bins, self.line_data["Grad median"].values)
             self.line["Grad MAD"].setData(self.q_bins, self.line_data["Grad MAD"].values)
             self.line["Grad mean"].setData(self.q_bins, self.line_data["Grad mean"].values)
