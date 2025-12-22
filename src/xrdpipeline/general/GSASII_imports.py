@@ -135,7 +135,6 @@ def read_image(imagename):
     Data["range"] = [(0, Imax), [0, Imax]]
     # size, samplechangerpos, det2theta, ImageTag, formatName
     Data["size"] = [image_data.shape[0], image_data.shape[1]]
-    print(Data["size"])
     Data["samplechangerpos"] = None
     Data["det2theta"] = 0.0
     ImgDict = {}

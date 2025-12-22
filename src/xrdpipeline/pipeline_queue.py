@@ -209,7 +209,6 @@ class CacheCreator(QtCore.QObject):
             if suffix == "immask":
                 readMasks(self.imgmaskname, image_dict["Masks"], False)
             elif suffix == "tif":
-                print(self.imgmaskname)
                 predef_mask = read_image(self.imgmaskname)
         else:
             predef_mask["image"] = np.zeros_like(image_dict["image"], dtype=bool)
@@ -364,7 +363,7 @@ class CacheCreator(QtCore.QObject):
             t0 = time.time()
 
         cache_time = time.time() - cache_time
-        print(cache_time)
+        print(f"Cache completed in {cache_time:.2f}s.")
 
         self.finished.emit()
 
@@ -899,7 +898,7 @@ class main_window(QtWidgets.QWidget):
                         self.timer.stop()
                         self.cache_thread = QtCore.QThread()
                         filename = self.queue[0][0]
-                        print(filename)
+                        # print(filename)
                         esdMul = self.settings_widget.madmult_default
                         if self.settings_widget.madmult_override.isChecked():
                             esdMul = self.settings_widget.madmult.value()
@@ -914,7 +913,6 @@ class main_window(QtWidgets.QWidget):
                                 self.azim_min.value(),
                                 self.azim_max.value()
                             ]
-                            print(f"azim range: {not_in_poni_settings['LRazimuth']}")
                         if self.outChannels.value() != 0.0:
                             not_in_poni_settings["outChannels"] = self.outChannels.value()
                         if self.PolaVal.value() != 0.0:
@@ -1203,7 +1201,6 @@ class main_window(QtWidgets.QWidget):
         # Pass along info
         args = ""
         if input_directory != "":
-            print(f"{input_directory=}")
             args += f" -i \"{input_directory}\""
         if output_directory != "":
             args += f" -o \"{output_directory}\""
