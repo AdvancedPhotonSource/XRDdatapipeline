@@ -15,6 +15,7 @@ import os, sys
 import subprocess
 import time
 import threading
+import logging
 
 from PIL import Image
 
@@ -403,6 +404,8 @@ class SingleIterator(QtCore.QObject):
     """
     finished = QtCore.Signal()
     progress = QtCore.Signal(int)
+    succeeded = QtCore.Signal()
+    failed = QtCore.Signal()
 
     def __init__(
         self,
@@ -448,24 +451,29 @@ class SingleIterator(QtCore.QObject):
         self.timing_names = timing_names
 
     def run(self):
-        run_iteration(
-            self.filename,
-            self.input_directory,
-            self.output_directory,
-            self.name,
-            self.number,
-            self.cache,
-            self.ext,
-            calc_outlier = self.calc_outlier,
-            outChannels = self.outChannels,
-            calc_splitting = self.calc_splitting,
-            azim_Q_shape_min = self.azim_Q_shape_min,
-            calc_spot_stats = self.calc_spot_stats,
-            calc_grad_spottiness = self.calc_grad_spottiness,
-            csim_first_index = self.csim_first_index,
-            timing = self.timing,
-            timing_names = self.timing_names,
-        )
+        try:
+            run_iteration(
+                self.filename,
+                self.input_directory,
+                self.output_directory,
+                self.name,
+                self.number,
+                self.cache,
+                self.ext,
+                calc_outlier = self.calc_outlier,
+                outChannels = self.outChannels,
+                calc_splitting = self.calc_splitting,
+                azim_Q_shape_min = self.azim_Q_shape_min,
+                calc_spot_stats = self.calc_spot_stats,
+                calc_grad_spottiness = self.calc_grad_spottiness,
+                csim_first_index = self.csim_first_index,
+                timing = self.timing,
+                timing_names = self.timing_names,
+            )
+            self.succeeded.emit()
+        except:
+            logging.getLogger('').exception(f"Exception in file {self.filename}")
+            self.failed.emit()
         self.finished.emit()
 
 
@@ -589,8 +597,17 @@ class main_window(QtWidgets.QWidget):
     """
     def __init__(self, input_directory=None, output_directory=None, imctrl=None, flatfield=None, imgmask=None, bad_pixels=None):
         super().__init__()
-        # self.directory_text = QtWidgets.QPushButton("Directory:")
-        # self.directory_loc = QtWidgets.QLabel()
+        # Set up logging
+        logging.getLogger('').setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        self.formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s',datefmt='%m/%d/%Y %H:%M:%S')
+        ch.setFormatter(self.formatter)
+        logging.getLogger('').addHandler(ch)
+
+        self.num_success = 0
+        self.num_failed = 0
+
         self.input_directory_widget = FileSelectRowWidget(
             "Input Directory:",
             default_text=input_directory,
@@ -710,7 +727,13 @@ class main_window(QtWidgets.QWidget):
         # self.cache_thread = QtCore.QThread()
 
         self.queue_length_info = QtWidgets.QLabel(
-            "Queue is {0} items long".format(len(self.queue))
+            f"Queue is {len(self.queue)} items long"
+        )
+        self.num_success_info = QtWidgets.QLabel(
+            f"Files completed: {self.num_success}"
+        )
+        self.num_failed_info = QtWidgets.QLabel(
+            f"Errored files: {self.num_failed}"
         )
 
         self.list_of_times = []
@@ -758,7 +781,9 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.process_both_radio, 12, 1)
         self.window_layout.addWidget(self.process_new_only_radio, 12, 2)
         self.window_layout.addWidget(self.queue_length_info, 13, 0)
-        self.window_layout.addWidget(self.open_resultsUI_button, 13, 2)
+        self.window_layout.addWidget(self.num_success_info, 13, 1)
+        self.window_layout.addWidget(self.num_failed_info, 13, 2)
+        self.window_layout.addWidget(self.open_resultsUI_button, 14, 2)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
         self.settings_widget.hide()
@@ -824,7 +849,13 @@ class main_window(QtWidgets.QWidget):
             # filename,name,number = queue.get(block=True,timeout=30)
             if self.queue:
                 self.queue_length_info.setText(
-                    "Queue is {0} items long".format(len(self.queue))
+                    f"Queue is {len(self.queue)} items long"
+                )
+                self.num_success_info.setText(
+                    f"Files completed: {self.num_success}"
+                )
+                self.num_failed_info.setText(
+                    f"Errored files: {self.num_failed}"
                 )
                 if self.has_made_cache:
                     # ensure it's been some time since the file was modified
@@ -881,6 +912,12 @@ class main_window(QtWidgets.QWidget):
                         )
                         self.iteration_worker.finished.connect(
                             self.iteration_worker.deleteLater
+                        )
+                        self.iteration_worker.succeeded.connect(
+                            self.increment_successful_completion
+                        )
+                        self.iteration_worker.failed.connect(
+                            self.increment_failed_completion
                         )
                         # self.iteration_thread.finished.connect(self.iteration_thread.deleteLater)
                         self.iteration_thread.finished.connect(
@@ -941,6 +978,12 @@ class main_window(QtWidgets.QWidget):
                         self.cache_thread.start()
             else:
                 self.queue_length_info.setText("Queue is 0 items long")
+                self.num_success_info.setText(
+                    f"Files completed: {self.num_success}"
+                )
+                self.num_failed_info.setText(
+                    f"Errored files: {self.num_failed}"
+                )
                 if self.process_existing_only_radio.isChecked():
                     self.stop_button_pressed()
             # else:
@@ -970,13 +1013,24 @@ class main_window(QtWidgets.QWidget):
         # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
         # self.process = main_process(dir_name,ctrl_name,predef_mask)
         # create subdirectories if needed
-        newdirs = ["maps", "masks", "integrals", "stats", "grads"]
+        newdirs = ["maps", "masks", "integrals", "stats", "logs"]
         if not ((self.flatfield is None) or (self.flatfield == "")):
             newdirs.append("flatfield")
         for newdir in newdirs:
             path = os.path.join(self.output_directory, newdir)  # store maps with the images
             if not os.path.exists(path):
                 os.mkdir(path)
+
+        # Set up logging
+        curtime = time.strftime('%Y_%m_%d_%H_%M_%S')
+        self.logging_filepath = os.path.join(self.output_directory, 'logs', f'{curtime}.log')
+        fh = logging.FileHandler(self.logging_filepath)
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(self.formatter)
+        logging.getLogger('').addHandler(fh)
+
+        self.num_success = 0
+        self.num_failed = 0
 
         # Grab existing file names and add them to the queue if option checked
         if self.process_both_radio.isChecked() or self.process_existing_only_radio.isChecked():
@@ -1042,7 +1096,13 @@ class main_window(QtWidgets.QWidget):
     def clear_queue(self):
         self.queue.clear()
         self.queue_length_info.setText(
-            "Queue is {0} items long".format(len(self.queue))
+            f"Queue is {len(self.queue)} items long"
+        )
+        self.num_success_info.setText(
+            f"Files completed: {self.num_success}"
+        )
+        self.num_failed_info.setText(
+            f"Errored files: {self.num_failed}"
         )
 
     def pause(self):
@@ -1116,10 +1176,14 @@ class main_window(QtWidgets.QWidget):
         print("Stopping and clearing queue")
         # print(f"Length of timing list: {len(self.list_of_times)}")
         # print(f"Mean time: {np.mean(self.list_of_times):.4f} +/- {np.std(self.list_of_times):.4f}")
-        means = np.mean(self.list_of_times, axis=0)
-        std = np.std(self.list_of_times, axis=0)
-        for i in range(len(self.list_of_time_names)):
-            print(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
+        if len(self.list_of_times) > 0:
+            try:
+                means = np.mean(self.list_of_times, axis=0)
+                std = np.std(self.list_of_times, axis=0)
+                for i in range(len(self.list_of_time_names)):
+                    print(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
+            except:
+                logging.getLogger('').warning("Problem printing out timing info")
         self.list_of_times = []
         self.list_of_time_names = []
         self.stop_button.setText("Stopping...")
@@ -1154,6 +1218,7 @@ class main_window(QtWidgets.QWidget):
         """
         Function called when processing has been fully stopped.
         Resets the UI to be interactable again.
+        Also checks if the log file is empty; if so, it is deleted.
         """
         # self.is_running_process = False
         print("Stopped")
@@ -1173,6 +1238,13 @@ class main_window(QtWidgets.QWidget):
         self.process_new_only_radio.setEnabled(True)
         self.poni_config_options.setEnabled(True)
 
+        # Remove file handler
+        if len(logging.getLogger('').handlers) > 1:
+            logging.getLogger('').removeHandler(logging.getLogger('').handlers[1])
+        # If file is empty, delete
+        if os.path.isfile(self.logging_filepath) and os.path.getsize(self.logging_filepath) == 0:
+            os.remove(self.logging_filepath)
+
     def open_maskwidget(self):
         """
         Open the mask widget in a separate window and output its result back to the pipeline.
@@ -1183,6 +1255,12 @@ class main_window(QtWidgets.QWidget):
 
     def update_predef_mask(self, location):
         self.predef_mask_widget.file_name.setText(location)
+
+    def increment_successful_completion(self):
+        self.num_success += 1
+
+    def increment_failed_completion(self):
+        self.num_failed += 1
 
     def open_resultsUI(self):
         """
