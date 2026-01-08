@@ -1039,14 +1039,12 @@ class main_window(QtWidgets.QWidget):
 
         # Grab existing file names and add them to the queue if option checked
         if self.process_both_radio.isChecked() or self.process_existing_only_radio.isChecked():
-            # existing_files = glob.glob(self.directory+"/*.metadata")
-            existing_files = glob.glob(self.input_directory + "/*.tif")
-            # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif.metadata$"
-            # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif$"
+            existing_files = sorted(
+                glob.glob(self.input_directory + "/*.tif"),
+                # ctime is not platform-independent, so using mtime
+                key = os.path.getmtime
+            )
             reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
-            # number -> actual int
-            # number_int = results[0].group("number").remove("-").remove("_")
-            # number_int = int(number_int)
             if (self.include_regex is not None) and (self.include_regex.strip() != ""):
                 reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(self.include_regex) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
                 regs = reg_include
@@ -1056,10 +1054,7 @@ class main_window(QtWidgets.QWidget):
             if (self.exclude_regex is not None) and (self.exclude_regex.strip() != ""):
                 ignore_regs = r".*" + re.escape(self.exclude_regex) + r".*"
             for filename in existing_files:
-                # Add file path to queue, stripping ".metadata"
                 results = re.match(regs, filename)
-                # Regex observer uses re.findall(), so it needs results[0].
-                # self.queue.append([filename[:-9],results.group("name"),results.group("number")])
                 if results is not None and ignore_regs is not None:
                     if re.match(ignore_regs, filename):
                         continue
