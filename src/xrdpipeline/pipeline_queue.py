@@ -599,11 +599,11 @@ class main_window(QtWidgets.QWidget):
         super().__init__()
         # Set up logging
         logging.getLogger('').setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
+        self.ch = logging.StreamHandler()
+        self.ch.setLevel(logging.INFO)
         self.formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s',datefmt='%m/%d/%Y %H:%M:%S')
-        ch.setFormatter(self.formatter)
-        logging.getLogger('').addHandler(ch)
+        self.ch.setFormatter(self.formatter)
+        logging.getLogger('').addHandler(self.ch)
 
         self.num_success = 0
         self.num_failed = 0
@@ -700,6 +700,11 @@ class main_window(QtWidgets.QWidget):
         self.regex_label = QtWidgets.QLabel("Regex for existing images:")
         self.existing_images_regex = QtWidgets.QTextEdit()
 
+        self.process_existing_only_radio.released.connect(self.toggle_skip_processed_checkbox)
+        self.process_both_radio.released.connect(self.toggle_skip_processed_checkbox)
+        self.process_new_only_radio.released.connect(self.toggle_skip_processed_checkbox)
+        self.skip_processed_files = QtWidgets.QCheckBox("Skip already-processed files")
+
         self.settings = {}
         self.settings_widget = AdvancedSettings(settings=self.settings)
         self.settings_shown = False
@@ -776,14 +781,14 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.clear_queue_button, 9, 1)
         self.window_layout.addWidget(self.stop_button, 9, 2)
         self.window_layout.addWidget(self.settings_widget, 11, 0, 1, 3)
-        # self.window_layout.addWidget(self.process_existing_images_checkbox, 12, 0)
         self.window_layout.addWidget(self.process_existing_only_radio, 12, 0)
         self.window_layout.addWidget(self.process_both_radio, 12, 1)
         self.window_layout.addWidget(self.process_new_only_radio, 12, 2)
-        self.window_layout.addWidget(self.queue_length_info, 13, 0)
-        self.window_layout.addWidget(self.num_success_info, 13, 1)
-        self.window_layout.addWidget(self.num_failed_info, 13, 2)
-        self.window_layout.addWidget(self.open_resultsUI_button, 14, 2)
+        self.window_layout.addWidget(self.skip_processed_files, 13, 0)
+        self.window_layout.addWidget(self.queue_length_info, 14, 0)
+        self.window_layout.addWidget(self.num_success_info, 14, 1)
+        self.window_layout.addWidget(self.num_failed_info, 14, 2)
+        self.window_layout.addWidget(self.open_resultsUI_button, 15, 2)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
         self.settings_widget.hide()
@@ -1024,10 +1029,10 @@ class main_window(QtWidgets.QWidget):
         # Set up logging
         curtime = time.strftime('%Y_%m_%d_%H_%M_%S')
         self.logging_filepath = os.path.join(self.output_directory, 'logs', f'{curtime}.log')
-        fh = logging.FileHandler(self.logging_filepath)
-        fh.setLevel(logging.INFO)
-        fh.setFormatter(self.formatter)
-        logging.getLogger('').addHandler(fh)
+        self.fh = logging.FileHandler(self.logging_filepath)
+        self.fh.setLevel(logging.INFO)
+        self.fh.setFormatter(self.formatter)
+        logging.getLogger('').addHandler(self.fh)
 
         self.num_success = 0
         self.num_failed = 0
@@ -1057,6 +1062,16 @@ class main_window(QtWidgets.QWidget):
                 # self.queue.append([filename[:-9],results.group("name"),results.group("number")])
                 if results is not None and ignore_regs is not None:
                     if re.match(ignore_regs, filename):
+                        continue
+                # If skipping already-processed files, check for an existing integral file for that name+number
+                if self.skip_processed_files.isChecked():
+                    integral_filename = os.path.join(
+                        self.output_directory,
+                        "integrals",
+                        results.group("name") + "-" + results.group("number") + "_base.chi"
+                    )
+                    if os.path.exists(integral_filename):
+                        logging.getLogger('').info(f"Skipping {filename}")
                         continue
                 if results is not None:
                     self.queue.append(
@@ -1180,9 +1195,16 @@ class main_window(QtWidgets.QWidget):
             try:
                 means = np.mean(self.list_of_times, axis=0)
                 std = np.std(self.list_of_times, axis=0)
+                logging.getLogger('').info(f"Finished successfully processing {self.num_success} files. {self.num_failed} files encountered an error.")
+                formatter = logging.Formatter('%(message)s')
+                self.fh.setFormatter(formatter)
+                self.ch.setFormatter(formatter)
                 for i in range(len(self.list_of_time_names)):
-                    print(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
+                    logging.getLogger('').info(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
+                self.fh.setFormatter(self.formatter)
+                self.ch.setFormatter(self.formatter)
             except:
+                self.fh.setFormatter(self.formatter)
                 logging.getLogger('').warning("Problem printing out timing info")
         self.list_of_times = []
         self.list_of_time_names = []
@@ -1241,9 +1263,6 @@ class main_window(QtWidgets.QWidget):
         # Remove file handler
         if len(logging.getLogger('').handlers) > 1:
             logging.getLogger('').removeHandler(logging.getLogger('').handlers[1])
-        # If file is empty, delete
-        if os.path.isfile(self.logging_filepath) and os.path.getsize(self.logging_filepath) == 0:
-            os.remove(self.logging_filepath)
 
     def open_maskwidget(self):
         """
@@ -1255,6 +1274,12 @@ class main_window(QtWidgets.QWidget):
 
     def update_predef_mask(self, location):
         self.predef_mask_widget.file_name.setText(location)
+
+    def toggle_skip_processed_checkbox(self):
+        if self.process_existing_only_radio.isChecked() or self.process_both_radio.isChecked():
+            self.skip_processed_files.setEnabled(True)
+        elif self.process_new_only_radio.isChecked():
+            self.skip_processed_files.setEnabled(False)
 
     def increment_successful_completion(self):
         self.num_success += 1
