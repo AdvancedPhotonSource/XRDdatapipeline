@@ -1298,34 +1298,93 @@ class main_window(QtWidgets.QWidget):
         outChannels = self.outChannels.value()
         # Pass along info
         args = ""
+        args_list = []
         if input_directory != "":
             args += f" -i \"{input_directory}\""
+            args_list.append("-i")
+            args_list.append(input_directory)
         if output_directory != "":
             args += f" -o \"{output_directory}\""
+            args_list.append("-o")
+            args_list.append(output_directory)
         if imgctrl != "":
             args += f" -c \"{imgctrl}\""
+            args_list.append("-c")
+            args_list.append(imgctrl)
         # If the pipeline is currently running, skip the directory prompt entirely
         if not self.input_directory_widget.isEnabled():
             args += f" -s"
+            args_list.append("-s")
             # pass along input data to the settings
             if outChannels != 0.0:
                 args += f" -r -b {outChannels}"
+                args_list.append("-r")
+                args_list.append("-b")
+                args_list.append(str(outChannels))
         # Otherwise simply auto-fill the directory prompt (handled with arguments)
         # Launch the results UI
         current_venv_exe = sys.executable
         venv_path = os.path.dirname(current_venv_exe)
         directory = os.path.dirname(os.path.realpath(__file__))
         results_UI_location = os.path.join(directory,"pyqtgraph_layout.py")
-        if sys.platform == "win32":
+        if sys.platform.startswith("win"):
             activate_cmd = os.path.join(venv_path, "activate.bat")
             command = f"start cmd.exe /k \"{activate_cmd} && {current_venv_exe} {results_UI_location} {args}\""
             subprocess.Popen(command, shell=True)
+        elif sys.platform == "linux":
+            # Check if this is a conda env
+            if os.path.exists(os.path.join(sys.prefix, 'conda-meta')):
+                # find current environment name
+                conda_env = os.environ['CONDA_PREFIX']
+                # terminal_command = f"conda activate {conda_env} && python {results_UI_location} {args}"
+                terminal_command = ["conda","run","-p",conda_env,"python",results_UI_location,*args_list]
+            else:
+                activate_cmd = os.path.join(venv_path, "activate")
+                terminal_command = f"source {activate_cmd} && python {results_UI_location} {args}"
+            # Find which terminal emulator is installed
+            for term in ("lxterminal", "gnome-terminal", "konsole", "xterm",
+                         "terminator", "terminology", "tilix"):
+                try:
+                    found_terminal = shutil.which(term)
+                    if not found: continue
+                except AttributeError:
+                    logging.getLogger('').exception(f"Error running shutil.which({term}). Skipping.")
+                if term == "xterm":
+                    # subprocess_command = f"xterm -e {terminal_command}"
+                    subprocess_command = ["xterm","-e"]
+                    # subprocess_command = f"xterm -hold -e {terminal_command}"
+                    break
+                elif term == "gnome-terminal":
+                    subprocess_command = f"gnome-terminal {terminal_command}"
+                    break
+                # rest not yet tested
+                elif term == "lxterminal":
+                    subprocess_command = f"lxterminal -e {terminal_command}"
+                    break
+                elif term == "terminator":
+                    subprocess_command = f"terminator -x {terminal_command}"
+                    break
+                elif term == "konsole":
+                    subprocess_command = f"konsole -p --hold -e {terminal_command}"
+                    break
+                elif term == "tilix":
+                    subprocess_command = f"tilix -e {terminal_command}"
+                    break
+                elif term == "terminology":
+                    subprocess_command = f"terminology --hold -e {terminal_command}"
+                    break
+                else:
+                    logging.getLogger('').warning(f"No terminal emulator found for Linux environment. Cannot open new terminal.")
+                    return
+            try:
+                if term == "xterm":
+                    subprocess.Popen([*subprocess_command, *terminal_command], start_new_session=True)
+                else:
+                    subprocess.Popen(subprocess_command, shell=True)
+            except:
+                logging.getLogger('').exception(f"Problem launching new subprocess terminal with command {subprocess_command}.")
         else:
-            activate_cmd = os.path.join(venv_path, "bin", "activate")
-            command = f"source {activate_cmd} && python {results_UI_location}"
-            # Need to test; can still run this command in a terminal manually
-            print(command)
-            # subprocess.Popen(['xterm', '--', 'bash', '-c', command])
+            print("Platform not yet supported.")
 
     def closeEvent(self, evt):
         """
