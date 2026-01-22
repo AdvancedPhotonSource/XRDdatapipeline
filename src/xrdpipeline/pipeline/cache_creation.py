@@ -286,6 +286,7 @@ def create_cache(
         t0 = time.time()
 
     predef_mask = {}
+    save_predef = False
     if (imgmaskname is not None) and (imgmaskname != ""):
         # img.loadMasks(imgmaskname)
         suffix = imgmaskname.split(".")[1]
@@ -293,6 +294,7 @@ def create_cache(
             readMasks(imgmaskname, image_dict["Masks"], False)
         elif suffix == "tif":
             predef_mask = read_image(imgmaskname)
+        save_predef = True
     else:
         predef_mask["image"] = np.zeros_like(image_dict["image"], dtype=bool)
     if (bad_pixels is not None) and (bad_pixels != ""):
@@ -313,21 +315,22 @@ def create_cache(
         print(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
         t0 = time.time()
 
-    imsave = Image.fromarray(predef_mask["image"])
-    imsave.save(
-        os.path.join(
-            output_directory,
-            "maps",
-            os.path.splitext(os.path.split(imctrlname)[1])[0] + "_predef.tif" # TODO: rename
+    if save_predef:
+        imsave = Image.fromarray(predef_mask["image"])
+        imsave.save(
+            os.path.join(
+                output_directory,
+                "maps",
+                os.path.splitext(os.path.split(imgmaskname)[1])[0] + ".tif"
+            )
         )
-    )
     if (flatfield is not None) and (flatfield != ""):
         imsave = Image.fromarray(flatfield_image)
         imsave.save(
             os.path.join(
                 output_directory,
                 "maps",
-                os.path.splitext(os.path.split(imctrlname)[1])[0] + "_flatfield.tif"
+                os.path.splitext(os.path.split(flatfield)[1])[0] + ".tif"
             )
         )
     if verbose:
@@ -440,13 +443,14 @@ def create_cache(
             "maps",
             os.path.splitext(os.path.split(imctrlname)[1])[0]
         )
-        cache_location += f"_iotth_{image_dict['Image Controls']['IOtth']}"
-        cache_location += f"_LRazimuth_{image_dict['Image Controls']['LRazimuth']}"
-        cache_location += f"_outChannels_{image_dict['Image Controls']['outChannels']}"
-        cache_location += f"_PolaVal_{image_dict['Image Controls']['PolaVal'][0]}"
-        cache_location += f"_esdMul_{cache['esdMul']}"
-        cache_location += ".npy"
-    print("cache location is " + cache_location)
+        cache_location_append = f"_iotth_{image_dict['Image Controls']['IOtth'][0]}_{image_dict['Image Controls']['IOtth'][1]}"
+        cache_location_append += f"_LRazimuth_{image_dict['Image Controls']['LRazimuth'][0]}_{image_dict['Image Controls']['LRazimuth'][1]}"
+        cache_location_append += f"_outChannels_{image_dict['Image Controls']['outChannels']}"
+        cache_location_append += f"_PolaVal_{image_dict['Image Controls']['PolaVal'][0]}"
+        cache_location_append += f"_esdMul_{cache['esdMul']}"
+        cache_location_append = cache_location_append.replace(".","p")
+        cache_location += cache_location_append + ".npy"
+
     np.save(cache_location, cache)
 
     return cache_location
