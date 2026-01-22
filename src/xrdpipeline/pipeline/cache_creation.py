@@ -12,7 +12,8 @@ from PIL import Image
 from general.GSASII_imports import *
 import torch
 import time
-from general.corrections_and_maps import tth_to_q
+import numpy as np
+from general.corrections_and_maps import tth_to_q, get_Qbands
 
 
 def prepare_integration_maps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):
@@ -231,3 +232,213 @@ def gradient_cache(image_shape, center, footprint):
         "kernel_y": kernel_y,
     }
     return return_dict
+
+def create_cache(
+        cache,
+        filename,
+        imctrlname,
+        output_directory,
+        tth_integration_range=None,
+        azim_integration_range=None,
+        n_integration_bins=None,
+        polarization=None,
+        imgmaskname = None,
+        bad_pixels = None,
+        flatfield = None,
+        esdMul = 3.0,
+        cache_location = None,
+        verbose = False,
+):
+
+    if verbose:
+        print("Creating cache")
+        t0 = time.time()
+    image_dict = read_image(filename)
+    if verbose:
+        t1 = time.time()
+        print(f"read_image(): {(t1-t0):.2f}")
+        t0 = time.time()
+    if os.path.splitext(imctrlname)[1] == ".imctrl":
+        with open(imctrlname, "r") as imctrlfile:
+            lines = imctrlfile.readlines()
+            LoadControls(lines, image_dict["Image Controls"])
+    else:
+        with open(imctrlname, "r") as imctrlfile:
+            lines = imctrlfile.readlines()
+            LoadControlsPONI(lines, image_dict["Image Controls"])
+    if tth_integration_range is not None:
+        image_dict["Image Controls"]["IOtth"] = tth_integration_range
+    if azim_integration_range is not None:
+        image_dict["Image Controls"]["LRazimuth"] = azim_integration_range
+    if n_integration_bins is not None:
+        image_dict["Image Controls"]["outChannels"] = n_integration_bins
+    if polarization is not None:
+        # check matches format [float, bool]
+        image_dict["Image Controls"]["PolaVal"] = polarization
+    if verbose:
+        t1 = time.time()
+        print(f"LoadControls(): {(t1-t0):.2f}")
+        t0 = time.time()
+    cache["image"] = load_image(filename)
+    if verbose:
+        t1 = time.time()
+        print(f"load_image(): {(t1-t0):.2f}")
+        t0 = time.time()
+
+    predef_mask = {}
+    if (imgmaskname is not None) and (imgmaskname != ""):
+        # img.loadMasks(imgmaskname)
+        suffix = imgmaskname.split(".")[1]
+        if suffix == "immask":
+            readMasks(imgmaskname, image_dict["Masks"], False)
+        elif suffix == "tif":
+            predef_mask = read_image(imgmaskname)
+    else:
+        predef_mask["image"] = np.zeros_like(image_dict["image"], dtype=bool)
+    if (bad_pixels is not None) and (bad_pixels != ""):
+        suffix = bad_pixels.split(".")[1]
+        if suffix == "tif":
+            bad_pixel_mask = read_image(bad_pixels)
+            predef_mask |= bad_pixel_mask
+        else:
+            print("Unsupported bad pixel mask image type. Skipping file read. Any zero-intensity pixels will automatically be masked.")
+    cache["predef_mask"] = predef_mask
+
+    flatfield_image = None
+    if (flatfield is not None) and (flatfield != ""):
+        flatfield_image = load_image(flatfield)
+    cache["flatfield"] = flatfield_image
+    if verbose:
+        t1 = time.time()
+        print(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
+        t0 = time.time()
+
+    imsave = Image.fromarray(predef_mask["image"])
+    imsave.save(
+        os.path.join(
+            output_directory,
+            "maps",
+            os.path.splitext(os.path.split(imctrlname)[1])[0] + "_predef.tif" # TODO: rename
+        )
+    )
+    if (flatfield is not None) and (flatfield != ""):
+        imsave = Image.fromarray(flatfield_image)
+        imsave.save(
+            os.path.join(
+                output_directory,
+                "maps",
+                os.path.splitext(os.path.split(imctrlname)[1])[0] + "_flatfield.tif"
+            )
+        )
+    if verbose:
+        t1 = time.time()
+        print(f"predef, flatfield save: {(t1-t0):.2f}")
+        t0 = time.time()
+    if verbose:
+        t1 = time.time()
+        print(f"Image controls: {(t1-t0):.2f}")
+        t0 = time.time()
+    _, tifdata, _, _ = GetTifData(filename)
+    image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
+    if verbose:
+        t1 = time.time()
+        print(f"GetTifData(): {(t1-t0):.2f}")
+        t0 = time.time()
+
+    getmaps(cache, image_dict["Image Controls"], imctrlname, os.path.join(output_directory, "maps"))
+    if verbose:
+        t1 = time.time()
+        print(f"getmaps(): {(t1-t0):.2f}")
+        t0 = time.time()
+    cache["AzimMask"] = np.logical_or(
+        cache["pixelAzmap"] < image_dict["Image Controls"]["LRazimuth"][0],
+        cache["pixelAzmap"] > image_dict["Image Controls"]["LRazimuth"][1]
+        )
+    if verbose:
+        t1 = time.time()
+        print(f"AzimMask: {(t1-t0):.2f}")
+        t0 = time.time()
+    # 2th fairly linear along center; calc 2th - pixelsize conversion
+    center = image_dict["Image Controls"]["center"]
+    center[0] = center[0] * 1000.0 / image_dict["Image Controls"]["pixelSize"][0]
+    center[1] = center[1] * 1000.0 / image_dict["Image Controls"]["pixelSize"][1]
+    image_dict["center"] = center
+    cache["esdMul"] = esdMul
+    image_dict["Masks"]["SpotMask"]["esdMul"] = esdMul
+    if verbose:
+        t1 = time.time()
+        print(f"pix size, center, esdMul: {(t1-t0):.2f}")
+        t0 = time.time()
+    numChansAzim = 360
+    cache["azimband"] = get_azimbands(cache["pixelAzmap"], numChansAzim)
+    if verbose:
+        t1 = time.time()
+        print(f"get_azimbands(): {(t1-t0):.2f}")
+        t0 = time.time()
+
+    # numChans
+    LUtth = np.array(image_dict["Image Controls"]["IOtth"])
+    wave = image_dict["Image Controls"]["wavelength"]
+    dsp0 = wave / (2.0 * sind(LUtth[0] / 2.0))
+    dsp1 = wave / (2.0 * sind(LUtth[1] / 2.0))
+    x0 = GetDetectorXY2(dsp0, 0.0, image_dict["Image Controls"])[0]
+    x1 = GetDetectorXY2(dsp1, 0.0, image_dict["Image Controls"])[0]
+    if not np.any(x0) or not np.any(x1):
+        raise Exception
+    numChans = int(1000 * (x1 - x0) / image_dict["Image Controls"]["pixelSize"][0]) // 2
+    cache["numChans"] = numChans
+    if verbose:
+        t1 = time.time()
+        print(f"numChans: {(t1-t0):.2f}")
+        t0 = time.time()
+    cache["Qbins"], cache["QbinEdges"] = get_Qbands(cache["pixelQmap"], LUtth, wave, numChans)
+    if verbose:
+        t1 = time.time()
+        print(f"get_Qbands(): {(t1-t0):.2f}")
+        t0 = time.time()
+
+    # pytorch integration
+    (
+        cache["tth_idx"],
+        cache["tth_val"],
+        cache["raveled_pol"],
+        cache["raveled_dist"],
+        cache["tth_size"],
+    ) = prepare_integration_maps(
+        cache["pixelTAmap"],
+        cache["polscalemap"],
+        cache["pixelsampledistmap"],
+        image_dict["Image Controls"]["IOtth"][0],
+        image_dict["Image Controls"]["IOtth"][1],
+        image_dict["Image Controls"]["outChannels"],
+    )
+
+    if verbose:
+        t1 = time.time()
+        print(f"prepare_qmaps(): {(t1-t0):.2f}")
+        t0 = time.time()
+
+    # gradient info
+    cache["gradient"] = gradient_cache(
+        predef_mask["image"].shape, center, np.ones((3, 3), dtype=np.uint)
+    )
+    if verbose:
+        t1 = time.time()
+        print(f"gradient_cache(): {(t1-t0):.2f}")
+        t0 = time.time()
+
+    # store this in cache to include corrections made
+    cache["image_dict"] = image_dict
+    if verbose:
+        t1 = time.time()
+        print(f"image_dict: {(t1-t0):.2f}")
+        t0 = time.time()
+
+    if cache_location is None:
+        cache_location = os.path.join(
+            output_directory,
+            "maps",
+            os.path.splitext(os.path.split(imctrlname)[1])[0] + ".npy"
+        )
+    print("cache location is " + cache_location)
+    np.save(cache_location, cache)

@@ -27,7 +27,7 @@ from watchdog.observers import Observer
 
 from general.GSASII_imports import *
 from pipeline.pipeline import run_iteration
-from pipeline.cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache
+from pipeline.cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache, create_cache
 from general.corrections_and_maps import get_Qbands
 from mask_widget import MainWindow
 from general.file_selection import FileSelectRowWidget
@@ -130,8 +130,10 @@ class CacheCreator(QtCore.QObject):
     separated masks
     :param azim_Q_shape_min: Minimum ratio of azimuthal to Q width for a cluster to be
     considered texture
-    :param not_in_poni_settings: Any settings to be added or modified from what is in
-    a .imctrl image control file but not a .poni file
+    :param tth_integration_range: 2theta integration range in the form [min, max], if this should be changed from the value in the image control file
+    :param azim_integration_range: Azimuthal integration range in the form [min, max], if this should be changed from the value in the image control file
+    :param n_integration_bins: Number of integration bins, if this should be changed from the value in the image control file
+    :param polarization: Polarization of the image, if this should be changed from the value in the image control file
     :param logging: Report timing information
     """
     finished = QtCore.Signal()
@@ -151,7 +153,10 @@ class CacheCreator(QtCore.QObject):
         outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        not_in_poni_settings = {},
+        tth_integration_range=None,
+        azim_integration_range=None,
+        n_integration_bins=None,
+        polarization=None,
         logging=False,
     ):
         super().__init__()
@@ -169,199 +174,29 @@ class CacheCreator(QtCore.QObject):
         self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
-        self.not_in_poni_settings = not_in_poni_settings
+        self.tth_integration_range=tth_integration_range
+        self.azim_integration_range=azim_integration_range
+        self.n_integration_bins=n_integration_bins
+        self.polarization=polarization
         self.stopEarly = False
 
     def run(self):
         cache_time = time.time()
-        if self.logging:
-            print("Creating cache")
-            t0 = time.time()
-        image_dict = read_image(self.filename)
-        if self.logging:
-            t1 = time.time()
-            print(f"read_image(): {(t1-t0):.2f}")
-            t0 = time.time()
-        if os.path.splitext(self.imctrlname)[1] == ".imctrl":
-            with open(self.imctrlname, "r") as imctrlfile:
-                lines = imctrlfile.readlines()
-                LoadControls(lines, image_dict["Image Controls"])
-        else:
-            with open(self.imctrlname, "r") as imctrlfile:
-                lines = imctrlfile.readlines()
-                LoadControlsPONI(lines, image_dict["Image Controls"])
-        for k, v in self.not_in_poni_settings.items():
-            image_dict["Image Controls"][k] = v
-        if self.logging:
-            t1 = time.time()
-            print(f"LoadControls(): {(t1-t0):.2f}")
-            t0 = time.time()
-        self.cache["image"] = load_image(self.filename)
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"load_image(): {(t1-t0):.2f}")
-            t0 = time.time()
-
-        predef_mask = {}
-        if (self.imgmaskname is not None) and (self.imgmaskname != ""):
-            # img.loadMasks(imgmaskname)
-            suffix = self.imgmaskname.split(".")[1]
-            if suffix == "immask":
-                readMasks(self.imgmaskname, image_dict["Masks"], False)
-            elif suffix == "tif":
-                predef_mask = read_image(self.imgmaskname)
-        else:
-            predef_mask["image"] = np.zeros_like(image_dict["image"], dtype=bool)
-        if (self.bad_pixels is not None) and (self.bad_pixels != ""):
-            suffix = self.bad_pixels.split(".")[1]
-            if suffix == "tif":
-                bad_pixel_mask = read_image(self.bad_pixels)
-                predef_mask |= bad_pixel_mask
-            else:
-                print("Unsupported bad pixel mask image type. Skipping file read. Any zero-intensity pixels will automatically be masked.")
-        self.cache["predef_mask"] = predef_mask
-
-        flatfield_image = None
-        if (self.flatfield is not None) and (self.flatfield != ""):
-            # flatfield_image = tf.imread(self.flatfield)
-            flatfield_image = load_image(self.flatfield)
-        self.cache["flatfield"] = flatfield_image
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
-            t0 = time.time()
-        
-        imsave = Image.fromarray(predef_mask["image"])
-        imsave.save(
-            os.path.join(
-                self.output_directory,
-                "maps",
-                os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_predef.tif"
-            )
+        create_cache(
+            self.cache,
+            self.filename,
+            self.imctrlname,
+            self.output_directory,
+            self.tth_integration_range,
+            self.azim_integration_range,
+            self.n_integration_bins,
+            self.polarization,
+            self.imgmaskname,
+            self.bad_pixels,
+            self.flatfield,
+            self.esdMul,
+            verbose=False,
         )
-        if (self.flatfield is not None) and (self.flatfield != ""):
-            imsave = Image.fromarray(flatfield_image)
-            imsave.save(
-                os.path.join(
-                    self.output_directory,
-                    "maps",
-                    os.path.splitext(os.path.split(self.imctrlname)[1])[0] + "_flatfield.tif"
-                )
-            )
-        if self.logging:
-            t1 = time.time()
-            print(f"predef, flatfield save: {(t1-t0):.2f}")
-            t0 = time.time()
-        if self.logging:
-            t1 = time.time()
-            print(f"Image controls: {(t1-t0):.2f}")
-            t0 = time.time()
-        _, tifdata, _, _ = GetTifData(self.filename)
-        image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
-        if self.logging:
-            t1 = time.time()
-            print(f"GetTifData(): {(t1-t0):.2f}")
-            t0 = time.time()
-        if self.stopEarly: return
-        
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"Make2ThetaAzimuthMap(): {(t1-t0):.2f}")
-            t0 = time.time()
-        getmaps(self.cache, image_dict["Image Controls"], self.imctrlname, os.path.join(self.output_directory, "maps"))
-        if self.logging:
-            t1 = time.time()
-            print(f"getmaps(): {(t1-t0):.2f}")
-            t0 = time.time()
-        self.cache["AzimMask"] = np.logical_or(
-            self.cache["pixelAzmap"] < image_dict["Image Controls"]["LRazimuth"][0],
-            self.cache["pixelAzmap"] > image_dict["Image Controls"]["LRazimuth"][1]
-            )
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"AzimMask: {(t1-t0):.2f}")
-            t0 = time.time()
-        # 2th fairly linear along center; calc 2th - pixelsize conversion
-        center = image_dict["Image Controls"]["center"]
-        center[0] = center[0] * 1000.0 / image_dict["Image Controls"]["pixelSize"][0]
-        center[1] = center[1] * 1000.0 / image_dict["Image Controls"]["pixelSize"][1]
-        image_dict["center"] = center
-        self.cache["esdMul"] = self.esdMul
-        image_dict["Masks"]["SpotMask"]["esdMul"] = self.esdMul
-        if self.logging:
-            t1 = time.time()
-            print(f"pix size, center, esdMul: {(t1-t0):.2f}")
-            t0 = time.time()
-        numChansAzim = 360
-        self.cache["azimband"] = get_azimbands(self.cache["pixelAzmap"], numChansAzim)
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"get_azimbands(): {(t1-t0):.2f}")
-            t0 = time.time()
-
-        # numChans
-        LUtth = np.array(image_dict["Image Controls"]["IOtth"])
-        wave = image_dict["Image Controls"]["wavelength"]
-        dsp0 = wave / (2.0 * sind(LUtth[0] / 2.0))
-        dsp1 = wave / (2.0 * sind(LUtth[1] / 2.0))
-        x0 = GetDetectorXY2(dsp0, 0.0, image_dict["Image Controls"])[0]
-        x1 = GetDetectorXY2(dsp1, 0.0, image_dict["Image Controls"])[0]
-        if not np.any(x0) or not np.any(x1):
-            raise Exception
-        numChans = int(1000 * (x1 - x0) / image_dict["Image Controls"]["pixelSize"][0]) // 2
-        self.cache["numChans"] = numChans
-        if self.logging:
-            t1 = time.time()
-            print(f"numChans: {(t1-t0):.2f}")
-            t0 = time.time()
-        self.cache["Qbins"], self.cache["QbinEdges"] = get_Qbands(self.cache["pixelQmap"], LUtth, wave, numChans)
-        if self.logging:
-            t1 = time.time()
-            print(f"get_Qbands(): {(t1-t0):.2f}")
-            t0 = time.time()
-
-        # pytorch integration
-        (
-            self.cache["tth_idx"],
-            self.cache["tth_val"],
-            self.cache["raveled_pol"],
-            self.cache["raveled_dist"],
-            self.cache["tth_size"],
-        ) = prepare_integration_maps(
-            self.cache["pixelTAmap"],
-            self.cache["polscalemap"],
-            self.cache["pixelsampledistmap"],
-            image_dict["Image Controls"]["IOtth"][0],
-            image_dict["Image Controls"]["IOtth"][1],
-            image_dict["Image Controls"]["outChannels"],
-        )
-
-        if self.stopEarly: return
-        if self.logging:
-            t1 = time.time()
-            print(f"prepare_qmaps(): {(t1-t0):.2f}")
-            t0 = time.time()
-
-        # gradient info
-        self.cache["gradient"] = gradient_cache(
-            predef_mask["image"].shape, center, np.ones((3, 3), dtype=np.uint)
-        )
-        if self.logging:
-            t1 = time.time()
-            print(f"gradient_cache(): {(t1-t0):.2f}")
-            t0 = time.time()
-
-        # store this in cache to include corrections made
-        self.cache["image_dict"] = image_dict
-        if self.logging:
-            t1 = time.time()
-            print(f"image_dict: {(t1-t0):.2f}")
-            t0 = time.time()
 
         cache_time = time.time() - cache_time
         print(f"Cache completed in {cache_time:.2f}s.")
@@ -409,7 +244,6 @@ class SingleIterator(QtCore.QObject):
 
     def __init__(
         self,
-        cache,
         filename,
         imctrlname,
         imgmaskname,
@@ -418,6 +252,7 @@ class SingleIterator(QtCore.QObject):
         name,
         number,
         ext,
+        cache_location = None,
         closing_method="binary_closing",
         calc_outlier = True,
         outChannels = 0,
@@ -430,7 +265,6 @@ class SingleIterator(QtCore.QObject):
         timing_names = None,
     ):
         super().__init__()
-        self.cache = cache.copy()
         self.filename = filename
         self.imctrlname = imctrlname
         self.imgmaskname = imgmaskname
@@ -439,6 +273,7 @@ class SingleIterator(QtCore.QObject):
         self.name = name
         self.number = number
         self.ext = ext
+        self.cache_location = cache_location
         self.closing_method = closing_method
         self.calc_outlier = calc_outlier
         self.outChannels = outChannels
@@ -452,13 +287,19 @@ class SingleIterator(QtCore.QObject):
 
     def run(self):
         try:
+            if self.cache_location is None:
+                self.cache_location = os.path.join(
+                    self.output_directory,
+                    "maps",
+                    os.path.splitext(os.path.split(self.imctrlname)[1])[0] + ".npy"
+                )
             run_iteration(
                 self.filename,
                 self.input_directory,
                 self.output_directory,
                 self.name,
                 self.number,
-                self.cache,
+                self.cache_location,
                 self.ext,
                 calc_outlier = self.calc_outlier,
                 outChannels = self.outChannels,
@@ -950,7 +791,6 @@ class main_window(QtWidgets.QWidget):
                         self.iteration_thread = QtCore.QThread()
                         if not self.settings_widget.azim_q_override.isChecked():
                             self.iteration_worker = SingleIterator(
-                                self.cache,
                                 filename,
                                 self.imgctrl,
                                 self.imgmask,
@@ -959,6 +799,7 @@ class main_window(QtWidgets.QWidget):
                                 name,
                                 number,
                                 ext,
+                                cache_location = None,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
                                 calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
@@ -969,7 +810,6 @@ class main_window(QtWidgets.QWidget):
                             )
                         else:
                             self.iteration_worker = SingleIterator(
-                                self.cache,
                                 filename,
                                 self.imgctrl,
                                 self.imgmask,
@@ -978,11 +818,13 @@ class main_window(QtWidgets.QWidget):
                                 name,
                                 number,
                                 ext,
+                                cache_location = None,
                                 azim_Q_shape_min = self.settings_widget.azim_q.value(),
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
                                 calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
                                 calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
+                                csim_first_index = self.settings_widget.csim_first_spinbox.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
                             )
@@ -1020,21 +862,28 @@ class main_window(QtWidgets.QWidget):
                         esdMul = self.settings_widget.madmult_default
                         if self.settings_widget.madmult_override.isChecked():
                             esdMul = self.settings_widget.madmult.value()
-                        not_in_poni_settings = {}
                         if self.iotth_max.value() != 0.0:
-                            not_in_poni_settings["IOtth"] = [
+                            tth_integration_range = [
                                 self.iotth_min.value(),
                                 self.iotth_max.value()
                             ]
+                        else:
+                            tth_integration_range = None
                         if (self.azim_min.value() != 0.0) or (os.path.splitext(self.imgctrl)[1] == ".poni"):
-                            not_in_poni_settings["LRazimuth"] = [
+                            azim_integration_range = [
                                 self.azim_min.value(),
                                 self.azim_max.value()
                             ]
+                        else:
+                            azim_integration_range = None
                         if self.outChannels.value() != 0.0:
-                            not_in_poni_settings["outChannels"] = self.outChannels.value()
+                            n_integration_bins = self.outChannels.value()
+                        else:
+                            n_integration_bins = None
                         if self.PolaVal.value() != 0.0:
-                            not_in_poni_settings["PolaVal"] = [self.PolaVal.value(), False]
+                            polarization = [self.PolaVal.value(), False]
+                        else:
+                            polarization = None
                         self.cache_worker = CacheCreator(
                             self.cache,
                             self.input_directory,
@@ -1046,7 +895,10 @@ class main_window(QtWidgets.QWidget):
                             self.bad_pixels,
                             self.blkSize,
                             esdMul = esdMul,
-                            not_in_poni_settings = not_in_poni_settings,
+                            tth_integration_range=tth_integration_range,
+                            azim_integration_range=azim_integration_range,
+                            n_integration_bins=n_integration_bins,
+                            polarization=polarization,
                         )
                         self.cache_worker.moveToThread(self.cache_thread)
                         self.cache_thread.started.connect(self.cache_worker.run)

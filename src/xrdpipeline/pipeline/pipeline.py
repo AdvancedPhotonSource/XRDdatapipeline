@@ -116,11 +116,10 @@ def run_iteration(
         output_directory,
         name,
         number,
-        cache,
+        cache_location,
         ext,
         closing_method = "binary_closing",
         calc_outlier = True,
-        outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
         calc_spot_stats = True,
@@ -146,6 +145,14 @@ def run_iteration(
     if timing is not None:
         timing_0 = time.time()
         local_times = []
+    cache = np.load(cache_location,allow_pickle=True).item()
+    if timing is not None:
+        timing_1 = time.time()
+        local_times.append(timing_1-timing_0)
+        timing_name = "Load cache"
+        if timing_name not in timing_names:
+            timing_names.append(timing_name)
+        timing_0 = time.time()
     image_dict = cache["image_dict"]
     # image_dict['image'] = tf.imread(self.filename)
     image_dict["image"] = load_image(filename)
