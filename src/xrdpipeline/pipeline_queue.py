@@ -136,6 +136,7 @@ class CacheCreator(QtCore.QObject):
     :param polarization: Polarization of the image, if this should be changed from the value in the image control file
     :param logging: Report timing information
     """
+    cache_location_signal = QtCore.Signal(str)
     finished = QtCore.Signal()
 
     def __init__(
@@ -182,7 +183,7 @@ class CacheCreator(QtCore.QObject):
 
     def run(self):
         cache_time = time.time()
-        create_cache(
+        cache_location = create_cache(
             self.cache,
             self.filename,
             self.imctrlname,
@@ -201,6 +202,7 @@ class CacheCreator(QtCore.QObject):
         cache_time = time.time() - cache_time
         print(f"Cache completed in {cache_time:.2f}s.")
 
+        self.cache_location_signal.emit(cache_location)
         self.finished.emit()
 
 
@@ -222,7 +224,6 @@ class SingleIterator(QtCore.QObject):
     binary closing.
     :param calc_outlier: Whether to calculate the outlier mask and integrate
     using it
-    :param outChannels: Number of integration bins
     :param calc_splitting: Whether to calculate spot/texture classification and
     integrate using the separated masks
     :param azim_Q_shape_min: Minimum ratio of azimuthal width to Q width for a
@@ -255,7 +256,6 @@ class SingleIterator(QtCore.QObject):
         cache_location = None,
         closing_method="binary_closing",
         calc_outlier = True,
-        outChannels = 0,
         calc_splitting = True,
         azim_Q_shape_min = 100,
         calc_spot_stats = True,
@@ -276,7 +276,6 @@ class SingleIterator(QtCore.QObject):
         self.cache_location = cache_location
         self.closing_method = closing_method
         self.calc_outlier = calc_outlier
-        self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
         self.calc_spot_stats = calc_spot_stats
@@ -287,12 +286,6 @@ class SingleIterator(QtCore.QObject):
 
     def run(self):
         try:
-            if self.cache_location is None:
-                self.cache_location = os.path.join(
-                    self.output_directory,
-                    "maps",
-                    os.path.splitext(os.path.split(self.imctrlname)[1])[0] + ".npy"
-                )
             run_iteration(
                 self.filename,
                 self.input_directory,
@@ -302,7 +295,6 @@ class SingleIterator(QtCore.QObject):
                 self.cache_location,
                 self.ext,
                 calc_outlier = self.calc_outlier,
-                outChannels = self.outChannels,
                 calc_splitting = self.calc_splitting,
                 azim_Q_shape_min = self.azim_Q_shape_min,
                 calc_spot_stats = self.calc_spot_stats,
@@ -626,6 +618,8 @@ class main_window(QtWidgets.QWidget):
         if files_must_exclude is not None:
             self.settings_widget.regex_exclude_text.setText(files_must_exclude)
 
+        self.cache_location = None
+
         # self.time_checkpoints = ["Start","Image loaded","Cache","Zero mask","Polar-correct","Outlier mask","Closing mask","Split first mask","Split second mask","All integrations","Save integrals","Delete project"]
         # self.time_checkpoints = ["Start", "Cache", "Zero mask", "Outlier mask", "Closing mask", "Splitting mask", "Integrations", "Save integrals", "CSim", "NMI", "SSim"]
         self.all_times = []
@@ -747,6 +741,9 @@ class main_window(QtWidgets.QWidget):
             for k, v in self.poni_config_defaults.items():
                 k.setValue(v)
 
+    def set_cache_location(self, cache_location):
+        self.cache_location = cache_location
+
     def cache_thread_finished(self):
         self.has_made_cache = True
         self.cache_thread = None
@@ -779,7 +776,7 @@ class main_window(QtWidgets.QWidget):
                 self.num_failed_info.setText(
                     f"Errored files: {self.num_failed}"
                 )
-                if self.has_made_cache:
+                if self.has_made_cache and self.cache_location is not None:
                     # ensure it's been some time since the file was modified
                     if time.time() - os.path.getmtime(self.queue[0][0]) > 1:
                         filename, name, number, ext = self.queue.popleft()
@@ -799,7 +796,7 @@ class main_window(QtWidgets.QWidget):
                                 name,
                                 number,
                                 ext,
-                                cache_location = None,
+                                cache_location = self.cache_location,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
                                 calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
@@ -818,7 +815,7 @@ class main_window(QtWidgets.QWidget):
                                 name,
                                 number,
                                 ext,
-                                cache_location = None,
+                                cache_location = self.cache_location,
                                 azim_Q_shape_min = self.settings_widget.azim_q.value(),
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
@@ -906,6 +903,7 @@ class main_window(QtWidgets.QWidget):
                         self.cache_worker.finished.connect(
                             self.cache_worker.deleteLater
                         )
+                        self.cache_worker.cache_location_signal.connect(self.set_cache_location)
                         # self.cache_thread.finished.connect(self.cache_thread.deleteLater)
                         self.cache_thread.finished.connect(self.cache_thread_finished)
                         self.cache_thread.start()

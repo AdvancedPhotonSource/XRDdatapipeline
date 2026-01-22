@@ -438,7 +438,15 @@ def create_cache(
         cache_location = os.path.join(
             output_directory,
             "maps",
-            os.path.splitext(os.path.split(imctrlname)[1])[0] + ".npy"
+            os.path.splitext(os.path.split(imctrlname)[1])[0]
         )
+        cache_location += f"_iotth_{image_dict['Image Controls']['IOtth']}"
+        cache_location += f"_LRazimuth_{image_dict['Image Controls']['LRazimuth']}"
+        cache_location += f"_outChannels_{image_dict['Image Controls']['outChannels']}"
+        cache_location += f"_PolaVal_{image_dict['Image Controls']['PolaVal'][0]}"
+        cache_location += f"_esdMul_{cache['esdMul']}"
+        cache_location += ".npy"
     print("cache location is " + cache_location)
     np.save(cache_location, cache)
+
+    return cache_location
