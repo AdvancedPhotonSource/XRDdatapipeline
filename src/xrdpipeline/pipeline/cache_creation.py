@@ -9,10 +9,18 @@ This file defines the cache creation routine for the analysis pipeline.
 
 
 from PIL import Image
-from general.GSASII_imports import *
 import torch
 import time
 import numpy as np
+import argparse
+import os, sys
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+mid_dir = os.path.split(script_dir)[0]
+if mid_dir not in sys.path:
+    sys.path.append(mid_dir)
+
+from general.GSASII_imports import *
 from general.corrections_and_maps import tth_to_q, get_Qbands
 
 
@@ -453,4 +461,40 @@ def create_cache(
 
     np.save(cache_location, cache)
 
-    return cache_location
+    return cache_location, cache
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--filename", help="Input file", required=True)
+    parser.add_argument("-o", "--output_directory", required=True, help="Location to place the output files from this pipeline")
+    parser.add_argument("-c", "--imctrl", required=True, help="Image control file")
+    parser.add_argument("-f", "--flatfield", help="Flatfield file")
+    parser.add_argument("-m", "--imgmask", help="Experimental mask")
+    parser.add_argument("-b", "--bad_pixels", help="Detector known bad pixel mask")
+    parser.add_argument("-t", "--tth_integration_range", nargs=2, type=float, help= "2theta integration range, if overriding or not included in the image control file. Provide minimum and maximum values separated by a space.")
+    parser.add_argument("-z", "--azim_integration_range", nargs=2, type=float, help="Azimuthal integration range, if overriding or not included in the image control file. Provide minimum and maximum values separated by a space.")
+    parser.add_argument("--n_integration_bins", type=float, help="Number of bins to use for integration, if overriding or not included in the config file.")
+    parser.add_argument("-p", "--polarization", type=float, help="Polarization of the image")
+    parser.add_argument("--outlier_mad_mult", type=float, default=3.0, help="Multiplier of median absolute deviation to use when considering a value an outlier. Default is 3.")
+    parser.add_argument("-l", "--cache_location", help="Output location to place the cache. If left as None, this will use a default location inside the output directory with a name based on all arguments. Recommended to leave as None.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print extra logging statements.")
+
+    args = parser.parse_args()
+
+    create_cache(
+        cache={},
+        filename=args.filename,
+        imctrlname=args.imctrl,
+        output_directory=args.output_directory,
+        tth_integration_range=args.tth_integration_range,
+        azim_integration_range=args.azim_integration_range,
+        n_integration_bins=args.n_integration_bins,
+        polarization=args.polarization,
+        imgmaskname = args.imgmask,
+        bad_pixels = args.bad_pixels,
+        flatfield = args.flatfield,
+        esdMul = args.outlier_mad_mult,
+        cache_location = args.cache_location,
+        verbose = args.verbose,
+    )

@@ -26,9 +26,8 @@ from watchdog.events import RegexMatchingEventHandler
 from watchdog.observers import Observer
 
 from general.GSASII_imports import *
-from pipeline.pipeline import run_iteration
-from pipeline.cache_creation import getmaps, get_azimbands, prepare_integration_maps, gradient_cache, create_cache
-from general.corrections_and_maps import get_Qbands
+from pipeline.pipeline_iteration import run_iteration
+from pipeline.cache_creation import create_cache
 from mask_widget import MainWindow
 from general.file_selection import FileSelectRowWidget
 
@@ -136,7 +135,7 @@ class CacheCreator(QtCore.QObject):
     :param polarization: Polarization of the image, if this should be changed from the value in the image control file
     :param logging: Report timing information
     """
-    cache_location_signal = QtCore.Signal(str)
+    cache_complete_signal = QtCore.Signal(str, dict)
     finished = QtCore.Signal()
 
     def __init__(
@@ -183,7 +182,7 @@ class CacheCreator(QtCore.QObject):
 
     def run(self):
         cache_time = time.time()
-        cache_location = create_cache(
+        cache_location, cache = create_cache(
             self.cache,
             self.filename,
             self.imctrlname,
@@ -202,7 +201,7 @@ class CacheCreator(QtCore.QObject):
         cache_time = time.time() - cache_time
         print(f"Cache completed in {cache_time:.2f}s.")
 
-        self.cache_location_signal.emit(cache_location)
+        self.cache_complete_signal.emit(cache_location, cache)
         self.finished.emit()
 
 
@@ -254,6 +253,7 @@ class SingleIterator(QtCore.QObject):
         number,
         ext,
         cache_location = None,
+        cache = None,
         closing_method="binary_closing",
         calc_outlier = True,
         calc_splitting = True,
@@ -274,6 +274,7 @@ class SingleIterator(QtCore.QObject):
         self.number = number
         self.ext = ext
         self.cache_location = cache_location
+        self.cache = cache
         self.closing_method = closing_method
         self.calc_outlier = calc_outlier
         self.calc_splitting = calc_splitting
@@ -292,8 +293,9 @@ class SingleIterator(QtCore.QObject):
                 self.output_directory,
                 self.name,
                 self.number,
-                self.cache_location,
                 self.ext,
+                self.cache_location,
+                self.cache,
                 calc_outlier = self.calc_outlier,
                 calc_splitting = self.calc_splitting,
                 azim_Q_shape_min = self.azim_Q_shape_min,
@@ -741,8 +743,9 @@ class main_window(QtWidgets.QWidget):
             for k, v in self.poni_config_defaults.items():
                 k.setValue(v)
 
-    def set_cache_location(self, cache_location):
+    def set_cache_location(self, cache_location, cache):
         self.cache_location = cache_location
+        self.cache = cache
 
     def cache_thread_finished(self):
         self.has_made_cache = True
@@ -797,6 +800,7 @@ class main_window(QtWidgets.QWidget):
                                 number,
                                 ext,
                                 cache_location = self.cache_location,
+                                cache = self.cache,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
                                 calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
@@ -816,6 +820,7 @@ class main_window(QtWidgets.QWidget):
                                 number,
                                 ext,
                                 cache_location = self.cache_location,
+                                cache = self.cache,
                                 azim_Q_shape_min = self.settings_widget.azim_q.value(),
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
                                 calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
@@ -903,7 +908,7 @@ class main_window(QtWidgets.QWidget):
                         self.cache_worker.finished.connect(
                             self.cache_worker.deleteLater
                         )
-                        self.cache_worker.cache_location_signal.connect(self.set_cache_location)
+                        self.cache_worker.cache_complete_signal.connect(self.set_cache_location)
                         # self.cache_thread.finished.connect(self.cache_thread.deleteLater)
                         self.cache_thread.finished.connect(self.cache_thread_finished)
                         self.cache_thread.start()
