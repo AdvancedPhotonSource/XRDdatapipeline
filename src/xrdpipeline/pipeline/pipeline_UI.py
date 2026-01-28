@@ -1276,8 +1276,9 @@ class main_window(QtWidgets.QWidget):
             for term in ("lxterminal", "gnome-terminal", "konsole", "xterm",
                          "terminator", "terminology", "tilix"):
                 try:
+                    import shutil
                     found_terminal = shutil.which(term)
-                    if not found: continue
+                    if not found_terminal: continue
                 except AttributeError:
                     logging.getLogger('').exception(f"Error running shutil.which({term}). Skipping.")
                 if term == "xterm":
