@@ -257,6 +257,15 @@ def create_cache(
         cache_location = None,
         verbose = False,
 ):
+    if "XRDdatapipeline_output" not in output_directory:
+        output_directory = os.path.join(output_directory, "XRDdatapipeline_output")
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+    newdirs = ["maps"]
+    for newdir in newdirs:
+        path = os.path.join(output_directory, newdir)
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     if verbose:
         print("Creating cache")

@@ -158,6 +158,16 @@ def run_iteration(
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
     """
+    if "XRDdatapipeline_output" not in output_directory:
+        output_directory = os.path.join(output_directory, "XRDdatapipeline_output")
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+    newdirs = ["maps", "masks", "integrals", "stats", "logs"]
+    for newdir in newdirs:
+        path = os.path.join(output_directory, newdir)
+        if not os.path.exists(path):
+            os.mkdir(path)
+
     if timing is not None:
         timing_0 = time.time()
         local_times = []
@@ -514,10 +524,10 @@ def run_iteration(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--filename", help="Input file")
-    parser.add_argument("-i", "--input_directory", help="Location of the input image directory")
-    parser.add_argument("-o", "--output_directory", help="Location to place the output files from this pipeline")
-    parser.add_argument("-c", "--cache_location", help="Cache location")
+    parser.add_argument("-f", "--filename", required=True, help="Input file")
+    parser.add_argument("-i", "--input_directory", required=True, help="Location of the input image directory")
+    parser.add_argument("-o", "--output_directory", required=True, help="Location to place the output files from this pipeline")
+    parser.add_argument("-c", "--cache_location", required=True, help="Cache location")
     parser.add_argument("--csim_first_index", type=int, default=0, help="Numerical index for the file which should be considered first when calculating cosine similarity.")
     parser.add_argument("-a", "--azim_Q_ratio", type=int, default=100, help="Azimuthal to Q width ratio used for classifying spots. Default is 100.")
     parser.add_argument("--outlier_option", choices=["splitting", "outlier_only", "none"], default="splitting", help="Choose whether to perform no outlier masking, outlier masking only, or outlier masking with spot/texture splitting.")

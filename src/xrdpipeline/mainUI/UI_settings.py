@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pyqtgraph.Qt import QtWidgets
 import pyqtgraph as pg
 import re
+import os
 
 
 @dataclass
@@ -69,6 +70,10 @@ class Settings:
             "tth_circle_mask": ColorSettings("2Theta Circle", "white"),
         }
     )
+
+    def __post_init__(self):
+        if "XRDdatapipeline_output" not in self.output_directory:
+            self.output_directory = os.path.join(self.output_directory, "XRDdatapipeline_output")
 
 
 class ColorWidget(QtWidgets.QWidget):

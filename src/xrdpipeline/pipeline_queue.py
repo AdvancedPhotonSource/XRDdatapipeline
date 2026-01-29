@@ -43,6 +43,8 @@ def launch_no_ui(
         csim_first_index = 0
 
     # run along directory
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
     newdirs = ["maps", "masks", "integrals", "stats", "logs"]
     if not ((flatfield is None) or (flatfield == "")):
         newdirs.append("flatfield")
@@ -163,37 +165,33 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--no_ui", action="store_true", help="Skip the UI and run over files with the specified options (otherwise options will be pre-filled in the UI). Must include input directory, output directory, and image control file to run.")
     args = parser.parse_args()
 
-    # Pass in location and names of files
-    dataLoc = os.path.abspath(
-        os.path.split(__file__)[0]
-    )  # data in location of this file
-    PathWrap = lambda fil: os.path.join(
-        dataLoc, fil
-    )  # convenience function for file paths
-
     if args.flatfield is not None:
-        flatfield = PathWrap(args.flatfield)
+        flatfield = os.path.abspath(args.flatfield)
     else:
         flatfield = None
     if args.imgmask is not None:
-        imgmask = PathWrap(args.imgmask)
+        imgmask = os.path.abspath(args.imgmask)
     else:
         imgmask = None
     if args.bad_pixels is not None:
-        bad_pixels = PathWrap(args.bad_pixels)
+        bad_pixels = os.path.abspath(args.bad_pixels)
     else:
         bad_pixels = None
     if args.input_directory:
-        input_directory = PathWrap(args.input_directory)
+        input_directory = os.path.abspath(args.input_directory)
     else:
         input_directory = None
     if args.output_directory:
-        output_directory = PathWrap(args.output_directory)
+        if "XRDdatapipeline_output" not in args.output_directory:
+            output_directory = os.path.abspath(args.output_directory)
+            output_directory = os.path.join(output_directory, "XRDdatapipeline_output")
+        else:
+            output_directory = os.path.abspath(args.output_directory)
     else:
         output_directory = None
     if args.imctrl:
-        if os.path.exists(PathWrap(args.imctrl)):
-            imgctrl = PathWrap(args.imctrl)
+        if os.path.exists(os.path.abspath(args.imctrl)):
+            imgctrl = os.path.abspath(args.imctrl)
         elif os.path.exists(os.path.join(input_directory, args.imctrl)):
             imgctrl = os.path.join(input_directory, args.imctrl)
         else:
@@ -206,26 +204,29 @@ if __name__ == "__main__":
 
 
     if args.no_ui:
-        launch_no_ui(
-            input_directory=input_directory,
-            output_directory=output_directory,
-            imctrl=imgctrl,
-            flatfield=flatfield,
-            imgmask=imgmask,
-            bad_pixels=bad_pixels,
-            tth_integration_range=args.tth_integration_range,
-            azim_integration_range=args.azim_integration_range,
-            n_integration_bins=args.n_integration_bins,
-            polarization=args.polarization,
-            csim_first_index=args.csim_first_index,
-            outlier_mad_mult=args.outlier_mad_mult,
-            n_mask_bins=args.n_mask_bins,
-            azim_Q_ratio=args.azim_Q_ratio,
-            outlier_option=args.outlier_option,
-            spottiness_option=args.spottiness_option,
-            files_must_include=args.files_must_include,
-            files_must_exclude=args.files_must_exclude,
-        )
+        if (args.input_directory is None) or (args.output_directory is None) or (args.imctrl is None):
+            print("When launching in no_ui mode, an input directory, output directory, and image control file are required.")
+        else:
+            launch_no_ui(
+                input_directory=input_directory,
+                output_directory=output_directory,
+                imctrl=imgctrl,
+                flatfield=flatfield,
+                imgmask=imgmask,
+                bad_pixels=bad_pixels,
+                tth_integration_range=args.tth_integration_range,
+                azim_integration_range=args.azim_integration_range,
+                n_integration_bins=args.n_integration_bins,
+                polarization=args.polarization,
+                csim_first_index=args.csim_first_index,
+                outlier_mad_mult=args.outlier_mad_mult,
+                n_mask_bins=args.n_mask_bins,
+                azim_Q_ratio=args.azim_Q_ratio,
+                outlier_option=args.outlier_option,
+                spottiness_option=args.spottiness_option,
+                files_must_include=args.files_must_include,
+                files_must_exclude=args.files_must_exclude,
+            )
     else:
         import PySide6
         from pyqtgraph.Qt import QtWidgets

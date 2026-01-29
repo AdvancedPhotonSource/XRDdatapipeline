@@ -949,6 +949,8 @@ class main_window(QtWidgets.QWidget):
         # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
         # self.process = main_process(dir_name,ctrl_name,predef_mask)
         # create subdirectories if needed
+        if not os.path.exists(self.output_directory):
+            os.mkdir(self.output_directory)
         newdirs = ["maps", "masks", "integrals", "stats", "logs"]
         if not ((self.flatfield is None) or (self.flatfield == "")):
             newdirs.append("flatfield")

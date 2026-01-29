@@ -7,7 +7,7 @@ https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
 This file defines the directory and file selection widget for the results UI.
 """
 
-
+import os
 from pyqtgraph.Qt import QtWidgets
 import pyqtgraph as pg
 
@@ -66,6 +66,8 @@ class FileSelectWindow(QtWidgets.QWidget):
     def apply_changes(self):
         self.settings.image_directory = self.image_directory_widget.file_name.text()
         self.settings.output_directory = self.output_directory_widget.file_name.text()
+        if "XRDdatapipeline_output" not in self.settings.output_directory:
+            self.settings.output_directory = os.path.join(self.settings.output_directory, "XRDdatapipeline_output")
         self.settings.imagecontrol = self.imctrl_file_widget.file_name.text()
         self.file_selected.emit()
 
