@@ -158,8 +158,7 @@ def run_iteration(
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
     """
-    if "XRDdatapipeline_output" not in output_directory:
-        output_directory = os.path.join(output_directory, "XRDdatapipeline_output")
+    output_directory = add_output_subdirectory(output_directory)
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
     newdirs = ["maps", "masks", "integrals", "stats", "logs"]

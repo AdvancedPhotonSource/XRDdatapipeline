@@ -30,6 +30,7 @@ from pipeline.pipeline_iteration import run_iteration
 from pipeline.cache_creation import create_cache
 from mask_widget import MainWindow
 from general.file_selection import FileSelectRowWidget
+from general.corrections_and_maps import add_output_subdirectory
 
 class ImageMonitor(RegexMatchingEventHandler):
     """
@@ -949,6 +950,7 @@ class main_window(QtWidgets.QWidget):
         # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
         # self.process = main_process(dir_name,ctrl_name,predef_mask)
         # create subdirectories if needed
+        self.output_directory = add_output_subdirectory(self.output_directory)
         if not os.path.exists(self.output_directory):
             os.mkdir(self.output_directory)
         newdirs = ["maps", "masks", "integrals", "stats", "logs"]

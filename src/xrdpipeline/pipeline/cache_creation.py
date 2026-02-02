@@ -21,7 +21,7 @@ if mid_dir not in sys.path:
     sys.path.append(mid_dir)
 
 from general.GSASII_imports import *
-from general.corrections_and_maps import tth_to_q, get_Qbands
+from general.corrections_and_maps import tth_to_q, get_Qbands, add_output_subdirectory
 
 
 def prepare_integration_maps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):
@@ -257,8 +257,7 @@ def create_cache(
         cache_location = None,
         verbose = False,
 ):
-    if "XRDdatapipeline_output" not in output_directory:
-        output_directory = os.path.join(output_directory, "XRDdatapipeline_output")
+    output_directory = add_output_subdirectory(output_directory)
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
     newdirs = ["maps"]

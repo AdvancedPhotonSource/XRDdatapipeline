@@ -13,6 +13,7 @@ import pyqtgraph as pg
 
 from mainUI.UI_settings import Settings
 from general.file_selection import FileSelectRowWidget
+from general.corrections_and_maps import add_output_subdirectory
 
 
 class FileSelectWindow(QtWidgets.QWidget):
@@ -66,8 +67,7 @@ class FileSelectWindow(QtWidgets.QWidget):
     def apply_changes(self):
         self.settings.image_directory = self.image_directory_widget.file_name.text()
         self.settings.output_directory = self.output_directory_widget.file_name.text()
-        if "XRDdatapipeline_output" not in self.settings.output_directory:
-            self.settings.output_directory = os.path.join(self.settings.output_directory, "XRDdatapipeline_output")
+        self.settings.output_directory = add_output_subdirectory(self.settings.output_directory)
         self.settings.imagecontrol = self.imctrl_file_widget.file_name.text()
         self.file_selected.emit()
 

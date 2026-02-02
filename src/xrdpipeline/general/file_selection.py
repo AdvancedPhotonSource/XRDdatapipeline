@@ -7,6 +7,7 @@ https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
 This file defines the file selection widget used in multiple other files.
 """
 
+import os
 from pyqtgraph.Qt import QtWidgets
 
 class FileSelectRowWidget(QtWidgets.QWidget):
@@ -46,3 +47,4 @@ class FileSelectRowWidget(QtWidgets.QWidget):
                 None, "Select File", self.startdir, self.ext
             )
             self.file_name.setText(location[0])
+

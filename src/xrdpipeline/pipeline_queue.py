@@ -15,6 +15,7 @@ import re
 
 from pipeline.pipeline_iteration import run_iteration
 from pipeline.cache_creation import create_cache
+from general.corrections_and_maps import add_output_subdirectory
 
 
 def launch_no_ui(
@@ -182,11 +183,8 @@ if __name__ == "__main__":
     else:
         input_directory = None
     if args.output_directory:
-        if "XRDdatapipeline_output" not in args.output_directory:
-            output_directory = os.path.abspath(args.output_directory)
-            output_directory = os.path.join(output_directory, "XRDdatapipeline_output")
-        else:
-            output_directory = os.path.abspath(args.output_directory)
+        output_directory = os.path.abspath(args.output_directory)
+        output_directory = add_output_subdirectory(output_directory)
     else:
         output_directory = None
     if args.imctrl:

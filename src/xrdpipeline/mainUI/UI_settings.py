@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtWidgets
 import pyqtgraph as pg
 import re
 import os
+from general.corrections_and_maps import add_output_subdirectory
 
 
 @dataclass
@@ -72,8 +73,10 @@ class Settings:
     )
 
     def __post_init__(self):
-        if "XRDdatapipeline_output" not in self.output_directory:
-            self.output_directory = os.path.join(self.output_directory, "XRDdatapipeline_output")
+        if ((self.output_directory != ".")
+            and (self.output_directory != "")
+            and (self.output_directory is not None)):
+            self.output_directory = add_output_subdirectory(self.output_directory)
 
 
 class ColorWidget(QtWidgets.QWidget):
