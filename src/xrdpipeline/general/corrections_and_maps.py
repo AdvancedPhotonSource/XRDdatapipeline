@@ -73,7 +73,7 @@ def get_Qbands(Qmap, LUtth, wavelength, numChans):
     Qmax = tth_to_q(LUtth[1], wavelength)
     dQ = (Qmax - Qmin) / numChans
     # Qband = np.array(Qmap / dQ, dtype = np.int32) # incorrect, doesn't start at qmin; check tthband
-    Qband = np.array((Qmap - Qmin) / dQ, dtype = np.int32)
+    Qband = np.array((Qmap - Qmin) / dQ, dtype = np.int16)
     bin_edges = np.arange(Qmin, Qmax+dQ, dQ)
     # tth_delta = (tth_max - tth_min) / numChans
     # tth_list = np.arange(tth_min, tth_max + tth_delta / 2.0, tth_delta)

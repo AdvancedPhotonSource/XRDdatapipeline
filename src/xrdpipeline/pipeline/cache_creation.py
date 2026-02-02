@@ -117,7 +117,7 @@ def get_azimbands(azmap, numChansAzim):
     :param numChansAzim: Number of bins
     """
     dazim = (360) / numChansAzim
-    azimband = np.array(azmap / dazim, dtype=np.int32)
+    azimband = np.array(azmap / dazim, dtype=np.int16)
     return azimband
 
 
@@ -296,7 +296,7 @@ def create_cache(
         t1 = time.time()
         print(f"LoadControls(): {(t1-t0):.2f}")
         t0 = time.time()
-    cache["image"] = load_image(filename)
+    # cache["image"] = load_image(filename)
     if verbose:
         t1 = time.time()
         print(f"load_image(): {(t1-t0):.2f}")
@@ -469,6 +469,25 @@ def create_cache(
         cache_location += cache_location_append + ".npy"
 
     np.save(cache_location, cache)
+    if verbose:
+        print(f"Size of cache: {sys.getsizeof(cache)}")
+        print(cache.keys())
+        for k, v in cache.items():
+            print(f"{k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["gradient"].items():
+            print(f"gradient {k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["image_dict"].items():
+            print(f"image_dict {k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["image_dict"]["Comments"].items():
+            print(f"image_dict Comments {k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["image_dict"]["Image Controls"].items():
+            print(f"image_dict Image Controls {k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["image_dict"]["Masks"].items():
+            print(f"image_dict Masks {k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["image_dict"]["Masks"]["SpotMask"].items():
+            print(f"image_dict Masks SpotMask {k}: {sys.getsizeof(v)}, {type(v)}")
+        for k, v in cache["image_dict"]["Stress/Strain"].items():
+            print(f"image_dict Stress/Strain {k}: {sys.getsizeof(v)}, {type(v)}")
 
     return cache_location, cache
 
