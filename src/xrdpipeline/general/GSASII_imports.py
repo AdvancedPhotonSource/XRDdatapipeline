@@ -19,9 +19,13 @@ import time
 script_dir = os.path.dirname(os.path.abspath(__file__))
 mid_dir = os.path.split(script_dir)[0]
 bindist_dir = os.path.join(mid_dir, "bindist")
+bin_dir = os.path.join(mid_dir, "bin")
 # Add 'bindist' to the beginning of sys.path
-print(bindist_dir)
-sys.path.insert(0, bindist_dir)
+# print(bindist_dir)
+if sys.platform.startswith("win"):
+    sys.path.insert(0, bindist_dir)
+else:
+    sys.path.insert(0, bin_dir)
 
 # trig functions using degrees
 # numpy versions
