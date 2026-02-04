@@ -1271,8 +1271,8 @@ class main_window(QtWidgets.QWidget):
             if os.path.exists(os.path.join(sys.prefix, 'conda-meta')):
                 # find current environment name
                 conda_env = os.environ['CONDA_PREFIX']
-                # terminal_command = f"conda activate {conda_env} && python {results_UI_location} {args}"
-                terminal_command = ["conda","run","-p",conda_env,"python",results_UI_location,*args_list]
+                terminal_command = f"conda activate {conda_env} && python {results_UI_location} {args}"
+                terminal_command_2 = ["conda","run","-p",conda_env,"python",results_UI_location,*args_list]
             else:
                 activate_cmd = os.path.join(venv_path, "activate")
                 terminal_command = f"source {activate_cmd} && python {results_UI_location} {args}"
@@ -1314,7 +1314,8 @@ class main_window(QtWidgets.QWidget):
                     return
             try:
                 if term == "xterm":
-                    subprocess.Popen([*subprocess_command, *terminal_command], start_new_session=True)
+                    full_command = [*subprocess_comand, *terminal_command_2]
+                    subprocess.Popen(full_command, start_new_session=True)
                 else:
                     subprocess.Popen(subprocess_command, shell=True)
             except:
