@@ -63,9 +63,10 @@ class CSimView(pg.GraphicsLayoutWidget):
         # print(f"CSim filenames: {filenames}")
         filenames.sort(key = lambda x: (len(x), x))
         arrays = [np.loadtxt(filename) for filename in filenames]
-        self.similarity_line_data = np.vstack(arrays)
-        for i, k in enumerate(self.methods):
-            # [:,0] for comparison to first, [:,1] for comparison to previous
-            self.similarity_line[k].setData(self.similarity_line_data[:, i])
+        if len(arrays) > 0:
+            self.similarity_line_data = np.vstack(arrays)
+            for i, k in enumerate(self.methods):
+                # [:,0] for comparison to first, [:,1] for comparison to previous
+                self.similarity_line[k].setData(self.similarity_line_data[:, i])
 
 

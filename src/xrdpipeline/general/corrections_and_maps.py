@@ -8,6 +8,7 @@ This file defines the correction and mapping routines for the analysis pipeline.
 """
 
 import numpy as np
+import os
 
 
 # nonzeromask
@@ -73,10 +74,29 @@ def get_Qbands(Qmap, LUtth, wavelength, numChans):
     Qmax = tth_to_q(LUtth[1], wavelength)
     dQ = (Qmax - Qmin) / numChans
     # Qband = np.array(Qmap / dQ, dtype = np.int32) # incorrect, doesn't start at qmin; check tthband
-    Qband = np.array((Qmap - Qmin) / dQ, dtype = np.int32)
+    Qband = np.array((Qmap - Qmin) / dQ, dtype = np.int16)
     bin_edges = np.arange(Qmin, Qmax+dQ, dQ)
     # tth_delta = (tth_max - tth_min) / numChans
     # tth_list = np.arange(tth_min, tth_max + tth_delta / 2.0, tth_delta)
     # tth_val = ((tth_list[1:] + tth_list[:-1]) / 2.0).astype(np.float32)
     return Qband, bin_edges
 
+def add_output_subdirectory(directory, subdirectory="XRDdatapipeline_output"):
+    """
+    Checks whether the specified subdirectory is at the end of the specified directory.
+    If not, it is appended to the directory.
+
+    :param directory: [Output] directory to check
+    :param subdirectory: Subdirectory to append, if it is not already the last part of the directory string
+    """
+    if os.path.split(directory)[1] != "":
+        if os.path.split(directory)[1] != subdirectory:
+            return os.path.join(directory, subdirectory)
+        else:
+            return directory
+    else:
+        newpath = os.path.split(directory)[0]
+        if os.path.split(newpath)[1] != subdirectory:
+            return os.path.join(newpath, subdirectory)
+        else:
+            return os.path.abspath(newpath)

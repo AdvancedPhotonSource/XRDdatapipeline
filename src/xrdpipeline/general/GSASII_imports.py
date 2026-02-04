@@ -17,10 +17,15 @@ import time
 
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
-bindist_dir = os.path.join(script_dir, "bindist")
+mid_dir = os.path.split(script_dir)[0]
+bindist_dir = os.path.join(mid_dir, "bindist")
+bin_dir = os.path.join(mid_dir, "bin")
 # Add 'bindist' to the beginning of sys.path
-print(bindist_dir)
-sys.path.insert(0, bindist_dir)
+# print(bindist_dir)
+if sys.platform.startswith("win"):
+    sys.path.insert(0, bindist_dir)
+else:
+    sys.path.insert(0, bin_dir)
 
 # trig functions using degrees
 # numpy versions
@@ -134,7 +139,6 @@ def read_image(imagename):
     Data["range"] = [(0, Imax), [0, Imax]]
     # size, samplechangerpos, det2theta, ImageTag, formatName
     Data["size"] = [image_data.shape[0], image_data.shape[1]]
-    print(Data["size"])
     Data["samplechangerpos"] = None
     Data["det2theta"] = 0.0
     ImgDict = {}

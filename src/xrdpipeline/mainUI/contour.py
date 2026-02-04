@@ -16,7 +16,7 @@ import time
 from enum import Enum
 
 from mainUI.UI_settings import Settings
-from corrections_and_maps import tth_to_q
+from general.corrections_and_maps import tth_to_q
 
 Viewtype = Enum('Viewtype', names=[('Contour',0),('Waterfall',1)])
 viewtypes = [
@@ -328,25 +328,25 @@ class ContourView(pg.GraphicsLayoutWidget):
     def change_x_axis_type(self, axis_type):
         # 2 theta = 0, Q = 1
         self.x_axis_type = axis_type
-        # self.wavelength = wavelength
-        if axis_type == 0:
-            self.contour_image.setRect(
-                self.tthvals[0],
-                self.yvals[0],
-                self.tthvals[-1] - self.tthvals[0],
-                self.yvals[-1] + self.live_spacing - self.yvals[0],
-            )
-        elif axis_type == 1:
-            if len(self.qvals) == 0:
-                self.qvals = tth_to_q(self.tthvals, self.settings.wavelength)
-            self.contour_image.setRect(
-                self.qvals[0],
-                self.yvals[0],
-                self.qvals[-1] - self.qvals[0],
-                self.yvals[-1] + self.live_spacing - self.yvals[0],
-            )
-        if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
-            self.update_waterfall_data()
+        if len(self.tthvals) != 0:
+            if axis_type == 0:
+                self.contour_image.setRect(
+                    self.tthvals[0],
+                    self.yvals[0],
+                    self.tthvals[-1] - self.tthvals[0],
+                    self.yvals[-1] + self.live_spacing - self.yvals[0],
+                )
+            elif axis_type == 1:
+                # if len(self.qvals) == 0:
+                #     self.qvals = tth_to_q(self.tthvals, self.settings.wavelength)
+                self.contour_image.setRect(
+                    self.qvals[0],
+                    self.yvals[0],
+                    self.qvals[-1] - self.qvals[0],
+                    self.yvals[-1] + self.live_spacing - self.yvals[0],
+                )
+            if self.viewtype_select.currentIndex() == Viewtype.Waterfall.value:
+                self.update_waterfall_data()
 
     def update_integral_data_manual(self):
         # self.live_spacing = self.integral_step.value()
@@ -497,7 +497,7 @@ class ContourView(pg.GraphicsLayoutWidget):
 
     def tth_line_checkbox_changed(self):
         if self.tth_line_checkbox.isChecked():
-            self.tth_line.setPen(255, 255, 255, 150)
+            self.tth_line.setPen(200, 200, 100)
         else:
             self.tth_line.setPen(0, 0, 0, 0)
 

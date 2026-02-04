@@ -55,6 +55,10 @@ These commands should install this module and all of its prerequisites.
         Need to include extra steps, ie installing and running the compiler
         Add extra linux_requirements.txt to install it, add the makefile for compiling
 
+If you just want to run the pipeline without using the UI, you can instead set up the virtual environment with:
+
+``python -m pip install -r requirements_noui.txt``
+
 Instructions: Pipeline
 ----------------------
 
@@ -87,6 +91,26 @@ it will still gather new images into the queue.
 Clear queue will cause the program to continue watching the directory, but clear any current images from the queue.
 Stop will clear the queue, complete the current process, and clear the cache of information used for each image.
 If you wish to adjust any settings, you must stop the process and start it again.
+
+Instructions: No-UI Pipeline
+----------------------------
+
+To launch the analysis pipeline without using the UI, ensure the virtual environment is running and run:
+
+``python src/xrdpipeline/pipeline_queue.py -i /path/to/input/directory -o /path/to/output/directory -c /path/to/config/file -n``
+
+This will run over all valid image files in the input directory.
+There are further arguments you can use to customize the pipeline as thoroughly as using the UI; for a list of these arguments, check the help option with:
+
+``python src/xrdpipeline/pipeline_queue.py -h``
+
+If you want to run part of the pipeline, you can run either the cache creation or the a single iteration over a single input file with the commands:
+
+``python src/xrdpipeline/pipeline/cache_creation.py -i /path/to/test/image.tif -o /path/to/output/directory -c /path/to/image/control/file.imctrl``
+
+``python src/xrdpipeline/pipeline/pipeline_iteration.py -f /path/to/image.tif -i /path/to/input/directory -o /path/to/output/directory -c /path/to/cache/file.npy``
+
+Both of these have further options as well, also accessible through the help option.
 
 Instructions: Results UI
 ------------------------

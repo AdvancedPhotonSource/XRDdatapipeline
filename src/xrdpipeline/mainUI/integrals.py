@@ -14,7 +14,7 @@ import numpy as np
 import os
 
 from mainUI.UI_settings import Settings
-from corrections_and_maps import tth_to_q
+from general.corrections_and_maps import tth_to_q
 
 from dataclasses import dataclass
 import warnings
@@ -173,6 +173,7 @@ class IntegralView(pg.GraphicsLayoutWidget):
                     )
                 )
                 vals[:, :] = 0
+                new_vals = vals
             if new_vals.shape != vals.shape:
                 print(
                     "Shape of incoming data {0} not equal to config shape {1} for integral {2}. Setting values to 0. If the config shape looks incorrect, go to Settings->outChannels and set it to {3}.".format(

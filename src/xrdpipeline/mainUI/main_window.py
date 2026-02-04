@@ -14,6 +14,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 import re
 import glob
 import os
+import time
 
 import tifffile as tf
 
@@ -24,7 +25,7 @@ from mainUI.integrals import IntegralView
 from mainUI.main_image import MainImageView
 from mainUI.tabbed_area import TabbedArea
 
-from corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
+from general.corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
 
 
 class NavigationBar(QtWidgets.QWidget):
@@ -368,24 +369,54 @@ class KeyPressWindow(QtWidgets.QWidget):
         Updates the list of images and integrals, then displays the
         most recent one.
         """
-        # global tiflist, keylist, curr_key, curr_pos
         # First thing saved: zero mask
         # Last things saved: integrals
         # Check integral list against tiflist
         self.update_tiflist()
-        self.tabbed_area.contour_widget.update_integral_list()
-        self.contourview.update_integral_list()
-        last_completed = self.tabbed_area.contour_widget.integral_filelist[-1]
-        # print(last_completed.split("\\")[1].split(self.tabbed_area.contour_widget.integral_extension)[0])
-        last_completed = os.path.splitext(os.path.split(last_completed)[1])[0]
-        # print(tiflist[keylist[curr_key]])
-        completed_pos = self.settings.tiflist[
-            self.settings.keylist[self.settings.curr_key]
-        ].index(last_completed)
-        # print(completed_pos)
-        if completed_pos != self.settings.curr_pos:
-            self.settings.curr_pos = completed_pos
-            self.updateImages()
+        # Find key of most recent file
+        integral_filelist = sorted(
+            glob.glob(
+                os.path.join(
+                    self.settings.output_directory,
+                    "integrals",
+                    # self.settings.keylist[self.settings.curr_key]
+                    "*"
+                )
+                + "*"
+            ),
+            key = lambda x: (os.path.getctime(x), x)
+        )
+        # Pop the last element of the list if it's been created in the past half second to avoid reading it while it is written
+        # Test files showing 0.02 seconds from creation time to modification time
+        if (len(integral_filelist) > 0) and (
+            time.time() - os.path.getctime(integral_filelist[-1]) < 0.5
+        ):
+            integral_filelist.pop()
+        # Only continue if the filelist is still larger than 0
+        if len(integral_filelist) > 0:
+            last_completed = integral_filelist[-1]
+            last_completed = os.path.splitext(os.path.split(last_completed)[1])[0]
+            last_completed = "".join(last_completed.split("_")[:-1])
+            result = re.search(r"(\d{5})", last_completed)
+            if result is not None:
+                key = last_completed[0 : result.start(0)]
+                key_idx = self.settings.keylist.index(key)
+                if key_idx != self.settings.curr_key:
+                    self.navigation_bar.dataset_select.setCurrentIndex(key_idx)
+
+            self.tabbed_area.contour_widget.update_integral_list()
+            self.contourview.update_integral_list()
+            if len(self.tabbed_area.contour_widget.integral_filelist) > 0:
+                last_completed = self.tabbed_area.contour_widget.integral_filelist[-1]
+                last_completed = os.path.splitext(os.path.split(last_completed)[1])[0]
+                last_completed = "".join(last_completed.split("_")[:-1])
+                completed_pos = self.settings.tiflist[
+                    self.settings.keylist[self.settings.curr_key]
+                ].index(last_completed)
+                # print(completed_pos)
+                if completed_pos != self.settings.curr_pos:
+                    self.settings.curr_pos = completed_pos
+                    self.updateImages()
 
     def updateImages(self, z_reset=False):
         # global curr_pos
@@ -397,6 +428,8 @@ class KeyPressWindow(QtWidgets.QWidget):
                 ]
             )
         )
+        if not self.imageview.maps_loaded:
+            self.imageview.load_maps()
         self.imageview.update_image_data(z_reset=z_reset)
         self.imageview.update_masks_data()
         self.integral_widget.update_integral_data()
@@ -553,6 +586,45 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.reset_integral_data(reset_z = True, manual = not contourview_live)
         self.tabbed_area.csim_widget.update_data()
 
+    def update_tth_lines(self, tth, Q, d, y = None, update_image_location_text = True):
+        """
+        Updates the 2theta (or Q) vertical lines and ellipsoidal mask. Called when moving the mouse over a canvas.
+
+        :param tth: position in 2 theta
+        :param Q: position in Q
+        :param d: position in d
+        :param y: Used for the y position of the integral line infobox. If not given,
+        defaults to slightly above the lower boundary of the integral canvas.
+        Only given when the mouse is hovering over the integral canvas to move it near the cursor.
+        """
+        if self.x_axis_choice.currentIndex() == 0:
+            x = tth
+        else:
+            x = Q
+        if y is None:
+            y = self.integral_widget.integral_view.getAxis("left").range[0]
+        if self.vLineCheckbox.isChecked():
+            integral_point = pg.QtCore.QPointF(x, y)
+            self.integral_widget.vLine.setPos(x)
+            integral_point.setX(x)
+            self.integral_cursor_label.setPos(integral_point)
+            self.tabbed_area.spottiness_widget.vLine.setPos(x)
+            self.tabbed_area.stats_widget.vLine.setPos(x)
+            self.integral_cursor_label.setText(
+                "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
+            )
+        if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
+            self.tabbed_area.contour_widget.tth_line.setPos(x)
+        if self.contourview.tth_line_checkbox.isChecked():
+            self.contourview.tth_line.setPos(x)
+        if self.circleCheckbox.isChecked():
+            self.imageview.update_tth_circle(tth)
+            if update_image_location_text:
+                self.cursor_label.setText(
+                    "<span style='font-size: 12pt'>x=0,   y=0,    z=0</span>,   <span style='color: red; font-size: 12pt'>2\u03b8=%0.2f\u00b0,    Azim=0.0\u00b0,</span>    <span style='font-size: 12pt'>Q=%0.2f\u212b\u207b\u00b9,    d=%0.2f\u212b</span>"
+                    % (tth, Q, d)
+                )
+
     def mouseMovedImage(self, evt):
         """
         Slot for the signal emitted when the mouse moves over the main image.
@@ -573,14 +645,18 @@ class KeyPressWindow(QtWidgets.QWidget):
                 and y_val > 0
                 and y_val < self.imageview.image_data.shape[0]
             ):
-                tth = self.imageview.tth_map[y_val, x_val]
-                azim = self.imageview.azim_map[y_val, x_val]
-                if self.settings.wavelength != 0:
-                    # Q = 4*np.pi*np.sin(tth/2 * np.pi/180) / self.wavelength #inverse angstroms
-                    Q = tth_to_q(tth, self.settings.wavelength)
-                    # d = self.wavelength / (2 * np.sin(tth/2 * np.pi/180)) #angstroms
-                    d = tth_to_d(tth, self.settings.wavelength)
+                if self.imageview.maps_loaded:
+                    tth = self.imageview.tth_map[y_val, x_val]
+                    azim = self.imageview.azim_map[y_val, x_val]
+                    if self.settings.wavelength != 0:
+                        Q = tth_to_q(tth, self.settings.wavelength)
+                        d = tth_to_d(tth, self.settings.wavelength)
+                    else:
+                        Q = 0
+                        d = 0
                 else:
+                    tth = 0
+                    azim = 0
                     Q = 0
                     d = 0
                 # calc intensity of underlying image
@@ -589,41 +665,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                     "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f,    z=%0.0f</span>,   <span style='color: red; font-size: 12pt'>2\u03b8=%0.2f\u00b0,    Azim=%0.1f\u00b0,</span>    <span style='font-size: 12pt'>Q=%0.2f\u212b\u207b\u00b9,    d=%0.2f\u212b</span>"
                     % (mousePoint.x(), mousePoint.y(), z, tth, azim, Q, d)
                 )
-                if self.vLineCheckbox.isChecked():
-                    integral_point = mousePoint
-                    integral_point.setY(
-                        self.integral_widget.integral_view.getAxis("left").range[0]
-                    )
-                    if self.x_axis_choice.currentIndex() == 0:
-                        self.integral_widget.vLine.setPos(tth)
-                        integral_point.setX(tth)
-                        self.integral_cursor_label.setPos(integral_point)
-                        self.tabbed_area.spottiness_widget.vLine.setPos(tth)
-                        self.tabbed_area.contour_widget.tth_line.setPos(tth)
-                        self.tabbed_area.stats_widget.vLine.setPos(tth)
-                        self.contourview.tth_line.setPos(tth)
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        Q = tth_to_q(tth, self.settings.wavelength)
-                        self.integral_widget.vLine.setPos(Q)
-                        self.tabbed_area.spottiness_widget.vLine.setPos(Q)
-                        self.tabbed_area.contour_widget.tth_line.setPos(Q)
-                        self.tabbed_area.stats_widget.vLine.setPos(Q)
-                        self.contourview.tth_line.setPos(Q)
-                        integral_point.setX(Q)
-                        self.integral_cursor_label.setPos(integral_point)
-                    self.integral_cursor_label.setText(
-                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
-                    )
-                if self.circleCheckbox.isChecked():
-                    self.imageview.update_tth_circle(tth)
-                # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-                #     if self.x_axis_choice.currentIndex() == 0:
-                #         self.tabbed_area.contour_widget.tth_line.setPos(tth)
-                #     elif self.x_axis_choice.currentIndex() == 1:
-                #         Q = tth_to_q(tth, self.settings.wavelength)
-                #         self.tabbed_area.contour_widget.tth_line.setPos(Q)
-                # if self.tabbed_area.stats_line_checkbox.isChecked():
-                #    self.tabbed_area.stats_widget.stats_line.setPos(tth)
+                self.update_tth_lines(tth, Q, d, update_image_location_text=False)
 
     def mouseMovedIntegral(self, evt):
         """
@@ -634,54 +676,25 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         :param evt: Mouse position
         """
-        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
-        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
-        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-        pos = evt
-        if self.integral_widget.integral_view.sceneBoundingRect().contains(pos):
-            mousePoint = self.integral_widget.integral_view.vb.mapSceneToView(pos)
-            if self.vLineCheckbox.isChecked():
-                self.integral_cursor_label.setPos(mousePoint)
+        if (
+            self.vLineCheckbox.isChecked()
+            or self.circleCheckbox.isChecked()
+            or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
+            pos = evt
+            if self.integral_widget.integral_view.sceneBoundingRect().contains(pos):
+                mousePoint = self.integral_widget.integral_view.vb.mapSceneToView(pos)
                 if self.x_axis_choice.currentIndex() == 0:
                     tth = mousePoint.x()
-                    self.integral_widget.vLine.setPos(tth)
-                    self.tabbed_area.spottiness_widget.vLine.setPos(tth)
-                    self.tabbed_area.stats_widget.vLine.setPos(tth)
-                    # Q = 4*np.pi*np.sin(tth/2 * np.pi/180) / self.wavelength
-                    # d = self.wavelength / (2 * np.sin(tth/2 * np.pi/180))
                     Q = tth_to_q(tth, self.settings.wavelength)
+                    d = tth_to_d(tth, self.settings.wavelength)
                 elif self.x_axis_choice.currentIndex() == 1:
                     Q = mousePoint.x()
-                    self.integral_widget.vLine.setPos(Q)
-                    self.tabbed_area.spottiness_widget.vLine.setPos(Q)
-                    self.tabbed_area.stats_widget.vLine.setPos(Q)
                     tth = q_to_tth(Q, self.settings.wavelength)
-                # axes for both are swapped at the same time, so it can still use mousePoint.x()
-                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
-                self.contourview.tth_line.setPos(mousePoint.x())
-                d = tth_to_d(tth, self.settings.wavelength)
-                self.integral_cursor_label.setText(
-                    "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
-                )
-            if self.circleCheckbox.isChecked():
-                if self.x_axis_choice.currentIndex() == 0:
-                    self.imageview.update_tth_circle(mousePoint.x())
-                elif self.x_axis_choice.currentIndex() == 1:
-                    self.imageview.update_tth_circle(
-                        q_to_tth(mousePoint.x(), self.settings.wavelength)
-                    )
-            # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-            #     # axes for both are swapped at the same time, so it can still use mousePoint.x()
-            #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
-            # if self.tabbed_area.stats_line_checkbox.isChecked():
-            #    self.tabbed_area.stats_widget.stats_line.setPos(mousePoint.x())
-            # self.tooltip.showText(mousePoint,"test")
-            # print(mousePoint)
-            # pos.mapToGlobal() does not exist
-            # evt.screenPos() does not exist
-            # self.hoverpos = pos
-            # QtWidgets.QToolTip.showText(self.hoverpos.toPoint(),"test")
-            # self.integral_widget.integral_view.setToolTip("test")
+                    d = tth_to_d(tth, self.settings.wavelength)
+                y = mousePoint.y()
+                self.update_tth_lines(tth, Q, d, y=y)
 
     # def mouseHoverIntegral(self,evt):
     #    print(self.hoverpos.toPoint())
@@ -702,44 +715,20 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.vLineCheckbox.isChecked()
             or self.circleCheckbox.isChecked()
             or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked()
-        ):
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
             pos = evt
             if self.tabbed_area.contour_widget.view.sceneBoundingRect().contains(pos):
                 mousePoint = self.tabbed_area.contour_widget.view.vb.mapSceneToView(pos)
-                integral_point = mousePoint
-                # integral_point.setY(self.integral_widget.integral_view.getAxis("left").range[1]*.85) #near top
-                # integral_point.setY(0)
-                # axis = self.integral_widget.integral_view.getAxis("left")
-                # integral_point.setY(axis.range[0] + (axis.range[1]-axis.range[0])*.05)
-                integral_point.setY(
-                    self.integral_widget.integral_view.getAxis("left").range[0]
-                )
-                self.integral_cursor_label.setPos(integral_point)
-                if self.vLineCheckbox.isChecked():
-                    self.integral_widget.vLine.setPos(mousePoint.x())
-                    self.tabbed_area.spottiness_widget.vLine.setPos(mousePoint.x())
-                    self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
-                    self.contourview.tth_line.setPos(mousePoint.x())
-                    if self.x_axis_choice.currentIndex() == 0:
-                        tth = mousePoint.x()
-                        Q = tth_to_q(tth, self.settings.wavelength)
-                        d = tth_to_d(tth, self.settings.wavelength)
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        Q = mousePoint.x()
-                        tth = q_to_tth(Q, self.settings.wavelength)
-                        d = tth_to_d(tth, self.settings.wavelength)
-                    self.integral_cursor_label.setText(
-                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
-                    )
-                if self.circleCheckbox.isChecked():
-                    if self.x_axis_choice.currentIndex() == 0:
-                        self.imageview.update_tth_circle(mousePoint.x())
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        self.imageview.update_tth_circle(
-                            q_to_tth(mousePoint.x(), self.settings.wavelength)
-                        )
-                # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-                #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+                if self.x_axis_choice.currentIndex() == 0:
+                    tth = mousePoint.x()
+                    Q = tth_to_q(tth, self.settings.wavelength)
+                    d = tth_to_d(tth, self.settings.wavelength)
+                elif self.x_axis_choice.currentIndex() == 1:
+                    Q = mousePoint.x()
+                    tth = q_to_tth(Q, self.settings.wavelength)
+                    d = tth_to_d(tth, self.settings.wavelength)
+                self.update_tth_lines(tth, Q, d)
     
     def mouseMovedLeftContour(self, evt):
         """
@@ -755,45 +744,20 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.vLineCheckbox.isChecked()
             or self.circleCheckbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ):
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
             pos = evt
             if self.contourview.view.sceneBoundingRect().contains(pos):
                 mousePoint = self.contourview.view.vb.mapSceneToView(pos)
-                integral_point = mousePoint
-                # integral_point.setY(self.integral_widget.integral_view.getAxis("left").range[1]*.85) #near top
-                # integral_point.setY(0)
-                # axis = self.integral_widget.integral_view.getAxis("left")
-                # integral_point.setY(axis.range[0] + (axis.range[1]-axis.range[0])*.05)
-                integral_point.setY(
-                    self.integral_widget.integral_view.getAxis("left").range[0]
-                )
-                self.integral_cursor_label.setPos(integral_point)
-                if self.vLineCheckbox.isChecked():
-                    self.integral_widget.vLine.setPos(mousePoint.x())
-                    self.tabbed_area.spottiness_widget.vLine.setPos(mousePoint.x())
-                    self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
-                    self.tabbed_area.stats_widget.vLine.setPos(mousePoint.x())
-                    self.contourview.tth_line.setPos(mousePoint.x())
-                    if self.x_axis_choice.currentIndex() == 0:
-                        tth = mousePoint.x()
-                        Q = tth_to_q(tth, self.settings.wavelength)
-                        d = tth_to_d(tth, self.settings.wavelength)
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        Q = mousePoint.x()
-                        tth = q_to_tth(Q, self.settings.wavelength)
-                        d = tth_to_d(tth, self.settings.wavelength)
-                    self.integral_cursor_label.setText(
-                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
-                    )
-                if self.circleCheckbox.isChecked():
-                    if self.x_axis_choice.currentIndex() == 0:
-                        self.imageview.update_tth_circle(mousePoint.x())
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        self.imageview.update_tth_circle(
-                            q_to_tth(mousePoint.x(), self.settings.wavelength)
-                        )
-                # if self.contourview.tth_line_checkbox.isChecked():
-                #     self.contourview.tth_line.setPos(mousePoint.x())
+                if self.x_axis_choice.currentIndex() == 0:
+                    tth = mousePoint.x()
+                    Q = tth_to_q(tth, self.settings.wavelength)
+                    d = tth_to_d(tth, self.settings.wavelength)
+                elif self.x_axis_choice.currentIndex() == 1:
+                    Q = mousePoint.x()
+                    tth = q_to_tth(Q, self.settings.wavelength)
+                    d = tth_to_d(tth, self.settings.wavelength)
+                self.update_tth_lines(tth, Q, d)
     
     def mouseMovedSpottiness(self, evt):
         """
@@ -804,47 +768,24 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         :param evt: Mouse position
         """
-        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.stats_line_checkbox.isChecked():
-        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
-        # if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked() or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-        pos = evt
-        if self.tabbed_area.spottiness_widget.view.sceneBoundingRect().contains(pos):
-            mousePoint = self.tabbed_area.spottiness_widget.view.vb.mapSceneToView(pos)
-            integral_point = mousePoint
-            integral_point.setY(
-                self.integral_widget.integral_view.getAxis("left").range[0]
-            )
-            if self.vLineCheckbox.isChecked():
-                self.integral_cursor_label.setPos(integral_point)
+        if (
+            self.vLineCheckbox.isChecked()
+            or self.circleCheckbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
+            pos = evt
+            if self.tabbed_area.spottiness_widget.view.sceneBoundingRect().contains(pos):
+                mousePoint = self.tabbed_area.spottiness_widget.view.vb.mapSceneToView(pos)
                 if self.x_axis_choice.currentIndex() == 0:
                     tth = mousePoint.x()
-                    self.integral_widget.vLine.setPos(tth)
-                    self.tabbed_area.spottiness_widget.vLine.setPos(tth)
-                    # Q = 4*np.pi*np.sin(tth/2 * np.pi/180) / self.wavelength
-                    # d = self.wavelength / (2 * np.sin(tth/2 * np.pi/180))
                     Q = tth_to_q(tth, self.settings.wavelength)
+                    d = tth_to_d(tth, self.settings.wavelength)
                 elif self.x_axis_choice.currentIndex() == 1:
                     Q = mousePoint.x()
-                    self.integral_widget.vLine.setPos(Q)
-                    self.tabbed_area.spottiness_widget.vLine.setPos(Q)
                     tth = q_to_tth(Q, self.settings.wavelength)
-                d = tth_to_d(tth, self.settings.wavelength)
-                self.integral_cursor_label.setText(
-                    "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
-                )
-                # axes for both are swapped at the same time, so it can still use mousePoint.x()
-                self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
-                self.contourview.tth_line.setPos(mousePoint.x())
-            if self.circleCheckbox.isChecked():
-                if self.x_axis_choice.currentIndex() == 0:
-                    self.imageview.update_tth_circle(mousePoint.x())
-                elif self.x_axis_choice.currentIndex() == 1:
-                    self.imageview.update_tth_circle(
-                        q_to_tth(mousePoint.x(), self.settings.wavelength)
-                    )
-            # if self.tabbed_area.contour_widget.tth_line_checkbox.isChecked():
-            #     # axes for both are swapped at the same time, so it can still use mousePoint.x()
-            #     self.tabbed_area.contour_widget.tth_line.setPos(mousePoint.x())
+                    d = tth_to_d(tth, self.settings.wavelength)
+                self.update_tth_lines(tth, Q, d)
 
     def mouseMovedStats(self,evt):
         """
@@ -855,14 +796,15 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         :param evt: Mouse position
         """
-        if self.vLineCheckbox.isChecked() or self.circleCheckbox.isChecked():
+        if (
+            self.vLineCheckbox.isChecked()
+            or self.circleCheckbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
             pos = evt
             if self.tabbed_area.stats_widget.stats_view.sceneBoundingRect().contains(pos):
                 mousePoint = self.tabbed_area.stats_widget.stats_view.vb.mapSceneToView(pos)
-                integral_point = mousePoint
-                integral_point.setY(
-                    self.integral_widget.integral_view.getAxis("left").range[0]
-                )
                 if self.x_axis_choice.currentIndex() == 0:
                     tth = mousePoint.x()
                     Q = tth_to_q(tth, self.settings.wavelength)
@@ -870,22 +812,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                     Q = mousePoint.x()
                     tth = q_to_tth(Q, self.settings.wavelength)
                 d = tth_to_d(tth, self.settings.wavelength)
-                if self.vLineCheckbox.isChecked():
-                    if self.x_axis_choice.currentIndex() == 0:
-                        self.integral_cursor_label.setPos(integral_point)
-                        self.integral_widget.vLine.setPos(tth)
-                        self.tabbed_area.stats_widget.vLine.setPos(tth)
-                        self.contourview.tth_line.setPos(tth)
-                    elif self.x_axis_choice.currentIndex() == 1:
-                        self.integral_cursor_label.setPos(integral_point)
-                        self.integral_widget.vLine.setPos(Q)
-                        self.tabbed_area.stats_widget.vLine.setPos(Q)
-                        self.contourview.tth_line.setPos(Q)
-                    self.integral_cursor_label.setText(
-                        "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
-                    )
-                if self.circleCheckbox.isChecked():
-                    self.imageview.update_tth_circle(tth)
+                self.update_tth_lines(tth, Q, d)
 
     def mouseClickedContourChangeImage(self, evt):
         """
@@ -1044,7 +971,7 @@ class KeyPressWindow(QtWidgets.QWidget):
     def play(self):
         # No need for a queue, just to periodically check for updates
         self.timer.timeout.connect(self.check_for_updates)
-        self.timer.start(100)
+        self.timer.start(500)
 
     def pause(self):
         if self.live_view_image_checkbox.isChecked():
