@@ -14,6 +14,7 @@ import time
 import numpy as np
 import argparse
 import os, sys
+import logging
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 mid_dir = os.path.split(script_dir)[0]
@@ -228,7 +229,7 @@ def gradient_cache(image_shape, center, footprint):
                 )
     r_hat, phi_hat = r_and_phi_hat(image_shape, center)
     t1 = time.time()
-    print(
+    logging.getLogger(__name__).info(
         "Time spent on gradient cache calculations: {0:.2f}s".format(
             t1 - t0
         )
@@ -267,12 +268,12 @@ def create_cache(
             os.mkdir(path)
 
     if verbose:
-        print("Creating cache")
+        logging.getLogger(__name__).info("Creating cache")
         t0 = time.time()
     image_dict = read_image(filename)
     if verbose:
         t1 = time.time()
-        print(f"read_image(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"read_image(): {(t1-t0):.2f}")
         t0 = time.time()
     if os.path.splitext(imctrlname)[1] == ".imctrl":
         with open(imctrlname, "r") as imctrlfile:
@@ -293,12 +294,12 @@ def create_cache(
         image_dict["Image Controls"]["PolaVal"] = polarization
     if verbose:
         t1 = time.time()
-        print(f"LoadControls(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"LoadControls(): {(t1-t0):.2f}")
         t0 = time.time()
     # cache["image"] = load_image(filename)
     if verbose:
         t1 = time.time()
-        print(f"load_image(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"load_image(): {(t1-t0):.2f}")
         t0 = time.time()
 
     predef_mask = {}
@@ -328,7 +329,7 @@ def create_cache(
     cache["flatfield"] = flatfield_image
     if verbose:
         t1 = time.time()
-        print(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"predef, bad pixel, flatfield: {(t1-t0):.2f}")
         t0 = time.time()
 
     if save_predef:
@@ -351,23 +352,19 @@ def create_cache(
         )
     if verbose:
         t1 = time.time()
-        print(f"predef, flatfield save: {(t1-t0):.2f}")
-        t0 = time.time()
-    if verbose:
-        t1 = time.time()
-        print(f"Image controls: {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"predef, flatfield save: {(t1-t0):.2f}")
         t0 = time.time()
     _, tifdata, _, _ = GetTifData(filename)
     image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
     if verbose:
         t1 = time.time()
-        print(f"GetTifData(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"GetTifData(): {(t1-t0):.2f}")
         t0 = time.time()
 
     getmaps(cache, image_dict["Image Controls"], imctrlname, os.path.join(output_directory, "maps"))
     if verbose:
         t1 = time.time()
-        print(f"getmaps(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"getmaps(): {(t1-t0):.2f}")
         t0 = time.time()
     cache["AzimMask"] = np.logical_or(
         cache["pixelAzmap"] < image_dict["Image Controls"]["LRazimuth"][0],
@@ -375,7 +372,7 @@ def create_cache(
         )
     if verbose:
         t1 = time.time()
-        print(f"AzimMask: {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"AzimMask: {(t1-t0):.2f}")
         t0 = time.time()
     # 2th fairly linear along center; calc 2th - pixelsize conversion
     center = image_dict["Image Controls"]["center"]
@@ -386,13 +383,13 @@ def create_cache(
     image_dict["Masks"]["SpotMask"]["esdMul"] = esdMul
     if verbose:
         t1 = time.time()
-        print(f"pix size, center, esdMul: {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"pix size, center, esdMul: {(t1-t0):.2f}")
         t0 = time.time()
     numChansAzim = 360
     cache["azimband"] = get_azimbands(cache["pixelAzmap"], numChansAzim)
     if verbose:
         t1 = time.time()
-        print(f"get_azimbands(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"get_azimbands(): {(t1-t0):.2f}")
         t0 = time.time()
 
     # numChans
@@ -408,12 +405,12 @@ def create_cache(
     cache["numChans"] = numChans
     if verbose:
         t1 = time.time()
-        print(f"numChans: {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"numChans: {(t1-t0):.2f}")
         t0 = time.time()
     cache["Qbins"], cache["QbinEdges"] = get_Qbands(cache["pixelQmap"], LUtth, wave, numChans)
     if verbose:
         t1 = time.time()
-        print(f"get_Qbands(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"get_Qbands(): {(t1-t0):.2f}")
         t0 = time.time()
 
     # pytorch integration
@@ -434,7 +431,7 @@ def create_cache(
 
     if verbose:
         t1 = time.time()
-        print(f"prepare_qmaps(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"prepare_qmaps(): {(t1-t0):.2f}")
         t0 = time.time()
 
     # gradient info
@@ -443,14 +440,14 @@ def create_cache(
     )
     if verbose:
         t1 = time.time()
-        print(f"gradient_cache(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"gradient_cache(): {(t1-t0):.2f}")
         t0 = time.time()
 
     # store this in cache to include corrections made
     cache["image_dict"] = image_dict
     if verbose:
         t1 = time.time()
-        print(f"image_dict: {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"image_dict: {(t1-t0):.2f}")
         t0 = time.time()
 
     if cache_location is None:
@@ -469,24 +466,30 @@ def create_cache(
 
     np.save(cache_location, cache)
     if verbose:
-        print(f"Size of cache: {sys.getsizeof(cache)}")
-        print(cache.keys())
+        logging.getLogger(__name__).info(f"Size of cache: {sys.getsizeof(cache)}")
+        temp_formatter = logging.Formatter('%(message)s')
+        fh.setFormatter(temp_formatter)
+        ch.setFormatter(temp_formatter)
+        logging.getLogger(__name__).info(cache.keys())
         for k, v in cache.items():
-            print(f"{k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"{k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["gradient"].items():
-            print(f"gradient {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"gradient {k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["image_dict"].items():
-            print(f"image_dict {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"image_dict {k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["image_dict"]["Comments"].items():
-            print(f"image_dict Comments {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"image_dict Comments {k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["image_dict"]["Image Controls"].items():
-            print(f"image_dict Image Controls {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"image_dict Image Controls {k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["image_dict"]["Masks"].items():
-            print(f"image_dict Masks {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"image_dict Masks {k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["image_dict"]["Masks"]["SpotMask"].items():
-            print(f"image_dict Masks SpotMask {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"image_dict Masks SpotMask {k}: {sys.getsizeof(v)}, {type(v)}")
         for k, v in cache["image_dict"]["Stress/Strain"].items():
-            print(f"image_dict Stress/Strain {k}: {sys.getsizeof(v)}, {type(v)}")
+            logging.getLogger(__name__).info(f"image_dict Stress/Strain {k}: {sys.getsizeof(v)}, {type(v)}")
+        formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s',datefmt='%m/%d/%Y %H:%M:%S')
+        fh.setFormatter(formatter)
+        ch.setFormatter(formatter)
 
     return cache_location, cache
 
@@ -509,19 +512,49 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    create_cache(
-        cache={},
-        filename=args.filename,
-        imctrlname=args.imctrl,
-        output_directory=args.output_directory,
-        tth_integration_range=args.tth_integration_range,
-        azim_integration_range=args.azim_integration_range,
-        n_integration_bins=args.n_integration_bins,
-        polarization=args.polarization,
-        imgmaskname = args.imgmask,
-        bad_pixels = args.bad_pixels,
-        flatfield = args.flatfield,
-        esdMul = args.outlier_mad_mult,
-        cache_location = args.cache_location,
-        verbose = args.verbose,
-    )
+    # Set up logging
+    logging.getLogger(".".join(__name__.split(".")[:-2])).setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s',datefmt='%m/%d/%Y %H:%M:%S')
+    ch.setFormatter(formatter)
+    logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(ch)
+
+    output_directory = add_output_subdirectory(args.output_directory)
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+    newdirs = ["maps", "logs"]
+    for newdir in newdirs:
+        path = os.path.join(output_directory, newdir)
+        if not os.path.exists(path):
+            os.mkdir(path)
+
+    localname = os.path.splitext(os.path.split(args.filename)[1])[0]
+    curtime = time.strftime('%Y_%m_%d_%H_%M_%S')
+    logging_filepath = os.path.join(output_directory, 'logs', f'cache_{curtime}_{localname}.log') # put cache name instead
+    fh = logging.FileHandler(logging_filepath)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
+    logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(fh)
+
+    try:
+        create_cache(
+            cache = {},
+            filename = args.filename,
+            imctrlname = args.imctrl,
+            output_directory = args.output_directory,
+            tth_integration_range = args.tth_integration_range,
+            azim_integration_range = args.azim_integration_range,
+            n_integration_bins = args.n_integration_bins,
+            polarization = args.polarization,
+            imgmaskname = args.imgmask,
+            bad_pixels = args.bad_pixels,
+            flatfield = args.flatfield,
+            esdMul = args.outlier_mad_mult,
+            cache_location = args.cache_location,
+            verbose = args.verbose,
+        )
+        logging.getLogger(__name__).info(f"Cache completed using file {args.filename}")
+
+    except:
+        logging.getLogger(__name__).exception(f"Error creating cache with file {args.filename}")

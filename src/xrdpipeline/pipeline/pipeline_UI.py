@@ -308,7 +308,7 @@ class SingleIterator(QtCore.QObject):
             )
             self.succeeded.emit()
         except:
-            logging.getLogger('').exception(f"Exception in file {self.filename}")
+            logging.getLogger(__name__).exception(f"Exception in file {self.filename}")
             self.failed.emit()
         self.finished.emit()
 
@@ -454,12 +454,12 @@ class main_window(QtWidgets.QWidget):
         ):
         super().__init__()
         # Set up logging
-        logging.getLogger('').setLevel(logging.INFO)
+        logging.getLogger(".".join(__name__.split(".")[:-2])).setLevel(logging.INFO)
         self.ch = logging.StreamHandler()
         self.ch.setLevel(logging.INFO)
         self.formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s',datefmt='%m/%d/%Y %H:%M:%S')
         self.ch.setFormatter(self.formatter)
-        logging.getLogger('').addHandler(self.ch)
+        logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(self.ch)
 
         self.num_success = 0
         self.num_failed = 0
@@ -967,7 +967,7 @@ class main_window(QtWidgets.QWidget):
         self.fh = logging.FileHandler(self.logging_filepath)
         self.fh.setLevel(logging.INFO)
         self.fh.setFormatter(self.formatter)
-        logging.getLogger('').addHandler(self.fh)
+        logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(self.fh)
 
         self.num_success = 0
         self.num_failed = 0
@@ -1001,7 +1001,7 @@ class main_window(QtWidgets.QWidget):
                         results.group("name") + "-" + results.group("number") + "_base.chi"
                     )
                     if os.path.exists(integral_filename):
-                        logging.getLogger('').info(f"Skipping {filename}")
+                        logging.getLogger(__name__).info(f"Skipping {filename}")
                         continue
                 if results is not None:
                     self.queue.append(
@@ -1125,17 +1125,17 @@ class main_window(QtWidgets.QWidget):
             try:
                 means = np.mean(self.list_of_times, axis=0)
                 std = np.std(self.list_of_times, axis=0)
-                logging.getLogger('').info(f"Finished successfully processing {self.num_success} files. {self.num_failed} files encountered an error.")
+                logging.getLogger(__name__).info(f"Finished successfully processing {self.num_success} files. {self.num_failed} files encountered an error.")
                 formatter = logging.Formatter('%(message)s')
                 self.fh.setFormatter(formatter)
                 self.ch.setFormatter(formatter)
                 for i in range(len(self.list_of_time_names)):
-                    logging.getLogger('').info(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
+                    logging.getLogger(__name__).info(f"{self.list_of_time_names[i]}: {means[i]:.4f} +/- {std[i]:.4f}")
                 self.fh.setFormatter(self.formatter)
                 self.ch.setFormatter(self.formatter)
             except:
                 self.fh.setFormatter(self.formatter)
-                logging.getLogger('').warning("Problem printing out timing info")
+                logging.getLogger(__name__).warning("Problem printing out timing info")
         self.list_of_times = []
         self.list_of_time_names = []
         self.stop_button.setText("Stopping...")
@@ -1191,8 +1191,8 @@ class main_window(QtWidgets.QWidget):
         self.poni_config_options.setEnabled(True)
 
         # Remove file handler
-        if len(logging.getLogger('').handlers) > 1:
-            logging.getLogger('').removeHandler(logging.getLogger('').handlers[1])
+        if len(logging.getLogger(".".join(__name__.split(".")[:-2])).handlers) > 1:
+            logging.getLogger(".".join(__name__.split(".")[:-2])).removeHandler(logging.getLogger(".".join(__name__.split(".")[:-2])).handlers[1])
 
     def open_maskwidget(self):
         """
@@ -1284,7 +1284,7 @@ class main_window(QtWidgets.QWidget):
                     found_terminal = shutil.which(term)
                     if not found_terminal: continue
                 except AttributeError:
-                    logging.getLogger('').exception(f"Error running shutil.which({term}). Skipping.")
+                    logging.getLogger(__name__).exception(f"Error running shutil.which({term}). Skipping.")
                 if term == "xterm":
                     # subprocess_command = f"xterm -e {terminal_command}"
                     subprocess_command = ["xterm","-e"]
@@ -1310,7 +1310,7 @@ class main_window(QtWidgets.QWidget):
                     subprocess_command = f"terminology --hold -e {terminal_command}"
                     break
                 else:
-                    logging.getLogger('').warning(f"No terminal emulator found for Linux environment. Cannot open new terminal.")
+                    logging.getLogger(__name__).warning(f"No terminal emulator found for Linux environment. Cannot open new terminal.")
                     return
             try:
                 if term == "xterm":
@@ -1318,7 +1318,7 @@ class main_window(QtWidgets.QWidget):
                 else:
                     subprocess.Popen(subprocess_command, shell=True)
             except:
-                logging.getLogger('').exception(f"Problem launching new subprocess terminal with command {subprocess_command}.")
+                logging.getLogger(__name__).exception(f"Problem launching new subprocess terminal with command {subprocess_command}.")
         else:
             print("Platform not yet supported.")
 

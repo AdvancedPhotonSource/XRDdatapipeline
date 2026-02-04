@@ -12,6 +12,7 @@ import argparse
 import os, sys
 import glob
 import re
+import logging
 
 from pipeline.pipeline_iteration import run_iteration
 from pipeline.cache_creation import create_cache
@@ -85,7 +86,7 @@ def launch_no_ui(
                 ]
             )
     if len(queue) == 0:
-        print("Found no files in the directory matching the include and exclude requirements.")
+        logging.getLogger(__name__).warning("Found no files in the directory matching the include and exclude requirements.")
         return
 
     # make cache
@@ -193,8 +194,8 @@ if __name__ == "__main__":
         elif os.path.exists(os.path.join(input_directory, args.imctrl)):
             imgctrl = os.path.join(input_directory, args.imctrl)
         else:
-            print(
-                "Image control file not found in this directory or in specified directory."
+            logging.getLogger(__name__).warning(
+                "Image control file not found in this directory or in the input directory."
             )
             imgctrl = None
     else:
@@ -202,8 +203,9 @@ if __name__ == "__main__":
 
 
     if args.no_ui:
-        if (args.input_directory is None) or (args.output_directory is None) or (args.imctrl is None):
-            print("When launching in no_ui mode, an input directory, output directory, and image control file are required.")
+        if (args.input_directory is None) or (args.output_directory is None) or (imgctrl is None):
+            logging.getLogger(__name__).warning("When launching in no_ui mode, an input directory (-i), output directory (-o), and image control file (-c) are required. See the help info (-h) for more information. " \
+            "If you are already inputting all three, try putting file and directory names in quotations. If using Windows, also try dropping any trailing slashes in directory names (so they don't escape the end quote).")
         else:
             launch_no_ui(
                 input_directory=input_directory,
@@ -226,30 +228,32 @@ if __name__ == "__main__":
                 files_must_exclude=args.files_must_exclude,
             )
     else:
-        import PySide6
-        from pyqtgraph.Qt import QtWidgets
-        from pipeline.pipeline_UI import main_window
-
-        app = QtWidgets.QApplication([])
-        window = main_window(
-            input_directory=input_directory,
-            output_directory=output_directory,
-            imctrl=imgctrl,
-            flatfield=flatfield,
-            imgmask=imgmask,
-            bad_pixels=bad_pixels,
-            tth_integration_range=args.tth_integration_range,
-            azim_integration_range=args.azim_integration_range,
-            n_integration_bins=args.n_integration_bins,
-            polarization=args.polarization,
-            csim_first_index=args.csim_first_index,
-            outlier_mad_mult=args.outlier_mad_mult,
-            n_mask_bins=args.n_mask_bins,
-            azim_Q_ratio=args.azim_Q_ratio,
-            outlier_option=args.outlier_option,
-            spottiness_option=args.spottiness_option,
-            files_must_include=args.files_must_include,
-            files_must_exclude=args.files_must_exclude,
-        )
-        sys.exit(app.exec())
-
+        try:
+            import PySide6
+            from pyqtgraph.Qt import QtWidgets
+            from pipeline.pipeline_UI import main_window
+        except:
+            logging.getLogger(__name__).exception("Exception importing Qt libraries and running the UI. Try running with mode -n/--no_ui.")
+        else:
+            app = QtWidgets.QApplication([])
+            window = main_window(
+                input_directory=input_directory,
+                output_directory=output_directory,
+                imctrl=imgctrl,
+                flatfield=flatfield,
+                imgmask=imgmask,
+                bad_pixels=bad_pixels,
+                tth_integration_range=args.tth_integration_range,
+                azim_integration_range=args.azim_integration_range,
+                n_integration_bins=args.n_integration_bins,
+                polarization=args.polarization,
+                csim_first_index=args.csim_first_index,
+                outlier_mad_mult=args.outlier_mad_mult,
+                n_mask_bins=args.n_mask_bins,
+                azim_Q_ratio=args.azim_Q_ratio,
+                outlier_option=args.outlier_option,
+                spottiness_option=args.spottiness_option,
+                files_must_include=args.files_must_include,
+                files_must_exclude=args.files_must_exclude,
+            )
+            sys.exit(app.exec())

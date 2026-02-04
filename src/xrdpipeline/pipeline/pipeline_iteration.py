@@ -20,6 +20,7 @@ from PIL import Image
 
 import argparse
 import re
+import logging
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 mid_dir = os.path.split(script_dir)[0]
@@ -158,7 +159,7 @@ def run_iteration(
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
     """
-    output_directory = add_output_subdirectory(output_directory)
+    output_directory = add_output_subdirectory(args.output_directory)
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
     newdirs = ["maps", "masks", "integrals", "stats", "logs"]
@@ -568,21 +569,63 @@ if __name__ == "__main__":
             )
         )
 
-        run_iteration(
-            filename = args.filename,
-            input_directory = args.input_directory,
-            output_directory = args.output_directory,
-            name = results.group("name"),
-            number = results.group("number"),
-            ext = results.group("ext"),
-            cache_location = args.cache_location,
-            closing_method = "binary_closing",
-            calc_outlier = calc_outlier,
-            calc_splitting = calc_splitting,
-            azim_Q_shape_min = args.azim_Q_ratio,
-            calc_spot_stats = calc_spot_stats,
-            calc_grad_spottiness = calc_grad_spottiness,
-            csim_first_index = args.csim_first_index,
-            timing = None,
-            timing_names = None,
-        )
+        # Set up logging
+        logging.getLogger(".".join(__name__.split(".")[:-2])).setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s',datefmt='%m/%d/%Y %H:%M:%S')
+        ch.setFormatter(formatter)
+        logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(ch)
+
+        output_directory = add_output_subdirectory(args.output_directory)
+        if not os.path.exists(output_directory):
+            os.mkdir(output_directory)
+        newdirs = ["maps", "masks", "integrals", "stats", "logs"]
+        for newdir in newdirs:
+            path = os.path.join(output_directory, newdir)
+            if not os.path.exists(path):
+                os.mkdir(path)
+
+        localname = os.path.splitext(os.path.split(args.filename)[1])[0]
+        curtime = time.strftime('%Y_%m_%d_%H_%M_%S')
+        logging_filepath = os.path.join(output_directory, 'logs', f'{curtime}_{localname}.log')
+        fh = logging.FileHandler(logging_filepath)
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(formatter)
+        logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(fh)
+
+        timing = []
+        timing_names = []
+        try:
+            run_iteration(
+                filename = args.filename,
+                input_directory = args.input_directory,
+                output_directory = output_directory,
+                name = results.group("name"),
+                number = results.group("number"),
+                ext = results.group("ext"),
+                cache_location = args.cache_location,
+                closing_method = "binary_closing",
+                calc_outlier = calc_outlier,
+                calc_splitting = calc_splitting,
+                azim_Q_shape_min = args.azim_Q_ratio,
+                calc_spot_stats = calc_spot_stats,
+                calc_grad_spottiness = calc_grad_spottiness,
+                csim_first_index = args.csim_first_index,
+                timing = timing,
+                timing_names = timing_names,
+            )
+        except:
+            logging.getLogger(__name__).exception(f"Exception in file {args.filename}")
+        try:
+            logging.getLogger(__name__).info(f"Finished successfully processing {args.filename}.")
+            temp_formatter = logging.Formatter('%(message)s')
+            fh.setFormatter(temp_formatter)
+            ch.setFormatter(temp_formatter)
+            for i in range(len(timing[0])):
+                logging.getLogger(__name__).info(f"{timing_names[i]}: {timing[0][i]:.2f}s")
+            fh.setFormatter(formatter)
+            ch.setFormatter(formatter)
+        except:
+            fh.setFormatter(formatter)
+            logging.getLogger(__name__).warning("Problem printing out timing info")
