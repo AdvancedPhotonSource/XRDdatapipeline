@@ -29,6 +29,7 @@ if mid_dir not in sys.path:
 
 from pipeline.classification import current_splitting_method
 from general.corrections_and_maps import *
+from general.file_name_definitions import add_output_subdirectory, find_name_number, ImageNumberStyle
 from general.GSASII_imports import *
 
 
@@ -124,7 +125,6 @@ def run_iteration(
         input_directory,
         output_directory,
         name,
-        number,
         ext,
         cache_location = None,
         cache = None,
@@ -145,7 +145,6 @@ def run_iteration(
     :param input_directory: Path to the directory the images are located
     :param output_directory: Path to the directory to place output files such as integrals
     :param name: Name of the dataset
-    :param number: Number of this image
     :param ext: Extension of the file name
     :param cache_location: Location of the cache file saved to disk. One of this or the cache parameter is required.
     :param cache: Dictionary output from run_cache(). One of this or the cache_location parameter is required.
@@ -167,6 +166,8 @@ def run_iteration(
         path = os.path.join(output_directory, newdir)
         if not os.path.exists(path):
             os.mkdir(path)
+
+    short_name, number, style = find_name_number(name)
 
     if timing is not None:
         timing_0 = time.time()
@@ -196,7 +197,7 @@ def run_iteration(
             os.path.join(
                 output_directory,
                 "flatfield",
-                name + "-" + number + "_flatfield_correct.tif"
+                name + "_flatfield_correct.tif"
             )
         )
     image_dict["corrected_image"] = None
@@ -209,7 +210,7 @@ def run_iteration(
         os.path.join(
             output_directory,
             "masks",
-            name + "-" + number + "_base.tif"
+            name + "_base.tif"
         )
     )
     # predef_mask_extended = ski.morphology.binary_dilation(
@@ -250,7 +251,7 @@ def run_iteration(
                 os.path.join(
                     output_directory,
                     "masks",
-                    name + "-" + number + "_outliermask.tif"
+                    name + "_outliermask.tif"
                 )
             )
             t1 = time.time()
@@ -263,7 +264,7 @@ def run_iteration(
                 os.path.join(
                     output_directory,
                     "masks",
-                    name + "-" + number + "_outliermask.tif"
+                    name + "_outliermask.tif"
                 )
             )
         elif (closing_method == None) or (closing_method == ""):
@@ -341,7 +342,7 @@ def run_iteration(
                 os.path.join(
                     output_directory,
                     "masks",
-                    name + "-" + number + "_spots.tif"
+                    name + "_spots.tif"
                 )
             )
             imsave = Image.fromarray(split_arcs)
@@ -349,7 +350,7 @@ def run_iteration(
                 os.path.join(
                     output_directory,
                     "masks",
-                    name + "-" + number + "_arcs.tif"
+                    name + "_arcs.tif"
                 )
             )
             if timing is not None:
@@ -399,34 +400,30 @@ def run_iteration(
     integral_file_base = os.path.join(
         output_directory,
         "integrals",
-        name + "-" + number
+        name
     )
     Export_chi(
-        # name + "-" + number + "_base",
-        name + "-" + number + ".tif",
+        name + ".tif",
         hist_base.T,
         integral_file_base + "_base",
         # error=False,
     )
     if calc_outlier:
         Export_chi(
-            # name + "-" + number + "_closed",
-            name + "-" + number + ".tif",
+            name + ".tif",
             hist_closed.T,
             integral_file_base + "_om",
             # error=False,
         )
         if calc_splitting:
             Export_chi(
-                # name + "-" + number + "_closedspotsmasked",
-                name + "-" + number + ".tif",
+                name + ".tif",
                 hist_closedspotsmasked.T,
                 integral_file_base + "_spotsmasked",
                 # error=False,
             )
             Export_chi(
-                # name + "-" + number + "_closedarcsmasked",
-                name + "-" + number + ".tif",
+                name + ".tif",
                 hist_closedarcsmasked.T,
                 integral_file_base + "_arcsmasked",
                 # error=False,
@@ -444,9 +441,9 @@ def run_iteration(
         # spottiness
         if calc_spot_stats or calc_grad_spottiness:
             if calc_spot_stats:
-                spots_table_df.to_csv(stats_prefix + "-" + number + "_spots_stats_df.csv")
+                spots_table_df.to_csv(stats_prefix + "_spots_stats_df.csv")
             if calc_grad_spottiness:
-                spots_table_grad.to_csv(stats_prefix + "-" + number + "_spots_stats_grad.csv")
+                spots_table_grad.to_csv(stats_prefix + "_spots_stats_grad.csv")
             qbins_filename = stats_prefix + "_qbinedges.npy"
             if not os.path.exists(qbins_filename):
                 with open(qbins_filename, "wb") as outfile:
@@ -461,65 +458,90 @@ def run_iteration(
 
     # Calculate comparisons between images
     # Find and read in previous image given current image number
-    prev_number = ""
-    number_int_prev = int(number) - 1
-    if number_int_prev < 0:
-        # first image (00000) will have no previous image; just compare to self
-        prev_number = number
-    else:
-        # turn int back to '00001' format, padded to 5 digits
-        prev_number = f"{number_int_prev:05}"
-    try:
-        previous_image_name = os.path.join(input_directory, name + "-" + prev_number + ext)
-        # print(previous_image_name)
-        previous_image = ski.io.imread(
-            previous_image_name
-        ).astype(np.float32)
-    except:
-        print("Cannot find previous image for cosine similarity; using current instead.")
-        previous_image = image_dict["image"].astype(np.float32)
-    first_index_str = f"{csim_first_index:0>5}"
-    if os.path.exists(
-        os.path.join(input_directory, name + f"-{first_index_str}" + ext)
-    ):
-        first_image = ski.io.imread(
-            os.path.join(input_directory, name + f"-{first_index_str}" + ext)
-        ).astype(np.float32)
-    elif os.path.exists(
-        os.path.join(input_directory, name + f"-00000-{first_index_str}" + ext)
-    ):
-        first_image = ski.io.imread(
-            os.path.join(input_directory, name + f"-00000-{first_index_str}" + ext)
-        ).astype(np.float32)
-    elif os.path.exists(
-        os.path.join(input_directory, name[:-6] + f"-{first_index_str}" + ext)
-    ):
-        first_image = ski.io.imread(
-            os.path.join(input_directory, name[:-6] + f"-{first_index_str}" + ext)
-        ).astype(np.float32)
-    else:
-        print("Cannot find first image for cosine similarity; using current instead.")
-        first_image = image_dict["image"].astype(np.float32)
-    csim_f = 1 - spatial.distance.cosine(
-        np.array(image_dict["image"], dtype=np.float32).ravel(),
-        first_image.ravel(),
-    )
-    csim_p = 1 - spatial.distance.cosine(
-        np.array(image_dict["image"], dtype=np.float32).ravel(),
-        previous_image.ravel(),
-    )
-    with open(stats_prefix + "-" + number + "_csim.txt", "w") as outfile:
-        outfile.write(
-            "{first:0.9f}\t{prev:0.9f}\n".format(first=csim_f, prev=csim_p)
-        )
+    if style != ImageNumberStyle.NoNumber:
+        prev_number = ""
+        number_int_prev = int(number) - 1
+        if number_int_prev < 0:
+            # first image (00000) will have no previous image; just compare to self
+            prev_number = number
+        else:
+            # turn int back to '00001' format, padded to 5 digits
+            if style == ImageNumberStyle.Default:
+                prev_number = f"{number_int_prev:05}"
+                first_index_str = f"{csim_first_index:0>5}"
+            elif style == ImageNumberStyle.NumberOnly:
+                prev_number = f"{number_int_prev}"
+                first_index_str = f"{csim_first_index}"
+        try:
+            num_splits = ["-", "_", ""]
+            for split in num_splits:
+                previous_image_name = os.path.join(input_directory, short_name + split + prev_number + ext)
+                if os.path.exists(previous_image_name):
+                    previous_image = ski.io.imread(
+                        previous_image_name
+                    ).astype(np.float32)
+                    break
+            if previous_image is None:
+                print("Cannot find previous image for cosine similarity; using current instead.")
+                previous_image = image_dict["image"].astype(np.float32)
+        except:
+            print("Exception finding previous image for cosine similarity; using current instead.")
+            previous_image = image_dict["image"].astype(np.float32)
 
-    if timing is not None:
-        timing_1 = time.time()
-        local_times.append(timing_1-timing_0)
-        timing_name = "Cosine Similarity"
-        if timing_name not in timing_names:
-            timing_names.append(timing_name)
-        timing.append(local_times)
+        try:
+            first_image = None
+            for split in num_splits:
+                first_image_name = os.path.join(input_directory, short_name + split + first_index_str + ext)
+                if os.path.exists(first_image_name):
+                    first_image = ski.io.imread(
+                        first_image_name
+                    ).astype(np.float32)
+                    break
+            if (first_image is None) and (style == ImageNumberStyle.Default):
+                for split in num_splits:
+                    first_image_name_ex0 = os.path.join(
+                        input_directory, short_name + split + "00000-" + first_index_str + ext
+                    )
+                    first_image_name_cut = os.path.join(
+                        input_directory, short_name[:-6] + split + first_index_str + ext
+                    )
+                    if os.path.exists(first_image_name_ex0):
+                        first_image = ski.io.imread(
+                            first_image_name
+                        ).astype(np.float32)
+                        break
+                    elif os.path.exists(first_image_name_cut):
+                        first_image = ski.io.imread(
+                            first_image_name_cut
+                        ).astype(np.float32)
+                        break
+            if first_image is None:
+                print("Cannot find first image for cosine similarity; using current instead.")
+                first_image = image_dict["image"].astype(np.float32)
+        except:
+            print("Exception finding first image for cosine similarity; using current instead.")
+            first_image = image_dict["image"].astype(np.float32)
+
+        csim_f = 1 - spatial.distance.cosine(
+            np.array(image_dict["image"], dtype=np.float32).ravel(),
+            first_image.ravel(),
+        )
+        csim_p = 1 - spatial.distance.cosine(
+            np.array(image_dict["image"], dtype=np.float32).ravel(),
+            previous_image.ravel(),
+        )
+        with open(stats_prefix + "_csim.txt", "w") as outfile:
+            outfile.write(
+                "{first:0.9f}\t{prev:0.9f}\n".format(first=csim_f, prev=csim_p)
+            )
+
+        if timing is not None:
+            timing_1 = time.time()
+            local_times.append(timing_1-timing_0)
+            timing_name = "Cosine Similarity"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+            timing.append(local_times)
 
 
 if __name__ == "__main__":
@@ -556,15 +578,14 @@ if __name__ == "__main__":
         ignore_regs = None
     if ignore_regs is None or not re.match(ignore_regs, args.filename):
         if args.files_must_include is not None:
-            reg = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(args.files_must_include) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+            reg = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(args.files_must_include) + r".*)(?P<ext>\.tif|\.png)$"
         else:
-            reg = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+            reg = r"(?P<input_directory>.*[\\\/])(?P<name>.*)(?P<ext>\.tif|\.png)$"
         results = re.match(reg, args.filename)
         print(
             "Directory: {0}, Name: {1}, Number: {2}, Extension: {3}".format(
                 results.group("input_directory"),
                 results.group("name"),
-                results.group("number"),
                 results.group("ext"),
             )
         )
@@ -602,7 +623,6 @@ if __name__ == "__main__":
                 input_directory = args.input_directory,
                 output_directory = output_directory,
                 name = results.group("name"),
-                number = results.group("number"),
                 ext = results.group("ext"),
                 cache_location = args.cache_location,
                 closing_method = "binary_closing",

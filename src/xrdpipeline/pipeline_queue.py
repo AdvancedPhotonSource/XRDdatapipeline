@@ -16,7 +16,7 @@ import logging
 
 from pipeline.pipeline_iteration import run_iteration
 from pipeline.cache_creation import create_cache
-from general.corrections_and_maps import add_output_subdirectory
+from general.file_name_definitions import add_output_subdirectory
 
 
 def launch_no_ui(
@@ -60,9 +60,9 @@ def launch_no_ui(
                 # ctime is not platform-independent, so using mtime
                 key = os.path.getmtime
             )
-    reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+    reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)(?P<ext>\.tif|\.png)$"
     if (files_must_include is not None) and (files_must_include.strip() != ""):
-        reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(files_must_include) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+        reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(files_must_include) + r".*)(?P<ext>\.tif|\.png)$"
         regs = reg_include
     else:
         regs = reg_image
@@ -81,7 +81,6 @@ def launch_no_ui(
                 [
                     filename,
                     results.group("name"),
-                    results.group("number"),
                     results.group("ext"),
                 ]
             )
@@ -122,14 +121,13 @@ def launch_no_ui(
     elif spottiness_option == "none":
         calc_spot_stats = False
     for it in range(len(queue)):
-        filename, name, number, ext = queue.popleft()
+        filename, name, ext = queue.popleft()
         print(filename)
         run_iteration(
             filename=filename,
             input_directory=input_directory,
             output_directory=output_directory,
             name=name,
-            number=number,
             ext=ext,
             cache_location=cache_location,
             cache=cache,

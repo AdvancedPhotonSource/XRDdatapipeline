@@ -8,7 +8,6 @@ This file defines the UI for the analysis pipeline.
 """
 
 from collections import deque
-import argparse
 import glob
 import re
 import os, sys
@@ -16,8 +15,6 @@ import subprocess
 import time
 import threading
 import logging
-
-from PIL import Image
 
 import PySide6
 from pyqtgraph.Qt import QtCore, QtWidgets
@@ -30,7 +27,7 @@ from pipeline.pipeline_iteration import run_iteration
 from pipeline.cache_creation import create_cache
 from mask_widget import MainWindow
 from general.file_selection import FileSelectRowWidget
-from general.corrections_and_maps import add_output_subdirectory
+from general.file_name_definitions import add_output_subdirectory
 
 class ImageMonitor(RegexMatchingEventHandler):
     """
@@ -42,12 +39,12 @@ class ImageMonitor(RegexMatchingEventHandler):
         #'_ext' not on base images
         # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif.metadata$"
         # reg_tif = r"(?P<directory>.*\\)(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})\.tif$"
-        reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+        reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)(?P<ext>\.tif|\.png)$"
         # reg for integral data files
 
         # RegexMatchingEventHandler uses the OR of all passed entries, not AND, so it must be built into the string
         if (include is not None) and (include.strip() != ""):
-            reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(include) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+            reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(include) + r".*)(?P<ext>\.tif|\.png)$"
             regs = [reg_include]
         else:
             regs = [reg_image]
@@ -65,29 +62,17 @@ class ImageMonitor(RegexMatchingEventHandler):
             "Directory: {0}, Name: {1}, Number: {2}, Extension: {3}".format(
                 results[0].group("input_directory"),
                 results[0].group("name"),
-                results[0].group("number"),
                 results[0].group("ext"),
             )
         )
-        # number -> actual int
-        # number_int = results[0].group("number").remove("-").remove("_")
-        # number_int = int(number_int)
 
-        # Add file path to queue, stripping ".metadata"
-        # TODO: WARNING: REMOVE THE 10X FOR ACTUAL RUNS
-        # Done for testing 10k input without requiring 10x disk space
-        # for i in range(10000):
-        #    self.queue.append([event.src_path[:-9],results[0].group("name"),results[0].group("number")])
-        # self.queue.append([event.src_path[:-9],results[0].group("name"),results[0].group("number")])
         self.queue.append(
             [
                 event.src_path,
                 results[0].group("name"),
-                results[0].group("number"),
                 results[0].group("ext"),
             ]
         )
-        # self.queue.put([event.src_path,results.group("name"),results.group("number")])
 
 
 class ImctrlFileSelect(FileSelectRowWidget):
@@ -251,7 +236,6 @@ class SingleIterator(QtCore.QObject):
         input_directory,
         output_directory,
         name,
-        number,
         ext,
         cache_location = None,
         cache = None,
@@ -272,7 +256,6 @@ class SingleIterator(QtCore.QObject):
         self.input_directory = input_directory
         self.output_directory = output_directory
         self.name = name
-        self.number = number
         self.ext = ext
         self.cache_location = cache_location
         self.cache = cache
@@ -293,7 +276,6 @@ class SingleIterator(QtCore.QObject):
                 self.input_directory,
                 self.output_directory,
                 self.name,
-                self.number,
                 self.ext,
                 self.cache_location,
                 self.cache,
@@ -783,8 +765,8 @@ class main_window(QtWidgets.QWidget):
                 if self.has_made_cache and self.cache_location is not None:
                     # ensure it's been some time since the file was modified
                     if time.time() - os.path.getmtime(self.queue[0][0]) > 1:
-                        filename, name, number, ext = self.queue.popleft()
-                        print(filename, name, number, ext)
+                        filename, name, ext = self.queue.popleft()
+                        print(filename, name, ext)
                         # print("Queue is {0} items long".format(len(self.queue)))
                         # self.single_iteration(filename,self.imgctrl,self.imgmask,self.directory,name,number)
                         # set up iteration thread. Should set these up with a pool and just run, but for now, run one at a time.
@@ -798,7 +780,6 @@ class main_window(QtWidgets.QWidget):
                                 self.input_directory,
                                 self.output_directory,
                                 name,
-                                number,
                                 ext,
                                 cache_location = self.cache_location,
                                 cache = self.cache,
@@ -818,7 +799,6 @@ class main_window(QtWidgets.QWidget):
                                 self.input_directory,
                                 self.output_directory,
                                 name,
-                                number,
                                 ext,
                                 cache_location = self.cache_location,
                                 cache = self.cache,
@@ -979,9 +959,9 @@ class main_window(QtWidgets.QWidget):
                 # ctime is not platform-independent, so using mtime
                 key = os.path.getmtime
             )
-            reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+            reg_image = r"(?P<input_directory>.*[\\\/])(?P<name>.*)(?P<ext>\.tif|\.png)$"
             if (self.include_regex is not None) and (self.include_regex.strip() != ""):
-                reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(self.include_regex) + r".*)[_\-](?P<number>\d{5}|\d{5}[_\-]\d{5})(?P<ext>\.tif|\.png)$"
+                reg_include = r"(?P<input_directory>.*[\\\/])(?P<name>.*" + re.escape(self.include_regex) + r".*)(?P<ext>\.tif|\.png)$"
                 regs = reg_include
             else:
                 regs = reg_image
@@ -1008,14 +988,12 @@ class main_window(QtWidgets.QWidget):
                         [
                             filename,
                             results.group("name"),
-                            results.group("number"),
                             results.group("ext"),
                         ]
                     )
                     print(
                         filename,
                         results.group("name"),
-                        results.group("number"),
                         results.group("ext"),
                     )
 
