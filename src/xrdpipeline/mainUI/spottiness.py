@@ -91,7 +91,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         filename_grad = os.path.join(
             self.settings.output_directory,
             "stats",
-            self.settings.keylist[self.settings.curr_key] + self.settings.curr_num + "_spots_stats_grad.csv"
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_stats_grad.csv",
         )
         if os.path.exists(filename_grad):
             grad_stats = pd.read_csv(filename_grad)

@@ -232,8 +232,9 @@ def split_grad_with_Q_groupby(
         print(f"Gradient calc time: {t1-t0}")
 
     if report_times: t0 = time.time()
-    threshold = np.percentile(radial_grad_2, threshold_percentile)
-    on_arc_threshold = np.percentile(radial_grad_2, 10)
+    non_nan_radial_grad_2 = radial_grad_2.ravel()[~np.isnan(radial_grad_2.ravel())]
+    threshold = np.percentile(non_nan_radial_grad_2, threshold_percentile)
+    on_arc_threshold = np.percentile(non_nan_radial_grad_2, 10)
     if report_times:
         t1 = time.time()
         print(f"Threshold calc time: {t1-t0}")

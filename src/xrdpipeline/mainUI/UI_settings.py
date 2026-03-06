@@ -13,7 +13,7 @@ from pyqtgraph.Qt import QtWidgets
 import pyqtgraph as pg
 import re
 import os
-from general.corrections_and_maps import add_output_subdirectory
+from general.file_name_definitions import add_output_subdirectory
 
 
 @dataclass
@@ -47,6 +47,7 @@ class Settings:
     outChannels: int
     keylist: list
     tiflist: dict
+    numlist: dict
     curr_num: str
     curr_key: int = 0
     curr_pos: int = 0

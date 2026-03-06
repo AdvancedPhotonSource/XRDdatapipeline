@@ -22,7 +22,8 @@ if mid_dir not in sys.path:
     sys.path.append(mid_dir)
 
 from general.GSASII_imports import *
-from general.corrections_and_maps import tth_to_q, get_Qbands, add_output_subdirectory
+from general.corrections_and_maps import tth_to_q, get_Qbands
+from general.file_name_definitions import add_output_subdirectory
 
 
 def prepare_integration_maps(tth_map, pol_map, dist_map, tth_min, tth_max, numChans, logging = False):

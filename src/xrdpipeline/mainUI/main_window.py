@@ -26,6 +26,7 @@ from mainUI.main_image import MainImageView
 from mainUI.tabbed_area import TabbedArea
 
 from general.corrections_and_maps import tth_to_q, tth_to_d, q_to_tth
+from general.file_name_definitions import find_name_number
 
 
 class NavigationBar(QtWidgets.QWidget):
@@ -47,7 +48,7 @@ class NavigationBar(QtWidgets.QWidget):
 
         self.setLayout(pg.QtWidgets.QHBoxLayout())
         self.layout().addWidget(self.prev_button)
-        self.layout().addWidget(self.dataset_select)
+        self.layout().addWidget(self.dataset_select, 3)
         self.layout().addWidget(self.next_button)
 
 
@@ -336,21 +337,20 @@ class KeyPressWindow(QtWidgets.QWidget):
         )
         keylist = []
         tiflist = {}
+        numlist = {}
         for tif in fulltiflist: # Probably losing sort here
-            #key = tif.split("\\")[-1].split("/")[-1].split("-")[0] # grab label at start of file name, eg "Sam4". Need to work on this, as some are things like "Dewen-4"
-            key = os.path.split(tif)[1]
-            result = re.search(r"(\d{5})", key)
-            if result is not None:
-                key = key[0 : result.start(0)]
-                if key not in keylist:
-                    keylist.append(key)
-                    tiflist[key] = []
-            #initialimage = tif[0:re.search(r'(\d+)\D+$', tif).end(1)] # string from the start to the end of the last set of numbers.
-            initialimage = os.path.splitext(os.path.split(tif)[1])[0]
-            if initialimage not in tiflist[key]:
-                tiflist[key].append(initialimage)
+            base_name = os.path.splitext(os.path.split(tif)[1])[0]
+            key, number, style = find_name_number(base_name)
+            if key not in keylist:
+                keylist.append(key)
+                tiflist[key] = []
+                numlist[key] = []
+            if base_name not in tiflist[key]:
+                tiflist[key].append(base_name)
+                numlist[key].append(number)
         self.settings.keylist = keylist
         self.settings.tiflist = tiflist
+        self.settings.numlist = numlist
         # get size of first image, if it exists
         self.settings.image_size = self.get_image_size(
             os.path.join(
@@ -496,9 +496,13 @@ class KeyPressWindow(QtWidgets.QWidget):
         #    print("Only Left, Right, Up, Down and Space keys are functional!")
 
     def update_num(self):
-        matchstring = rf".*{re.escape(self.settings.keylist[self.settings.curr_key])}" + r"(?P<number>\d{5}[_\-]\d{5}|\d{5})"
-        matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
-        self.settings.curr_num = matches.group("number")
+        # matchstring = rf".*{re.escape(self.settings.keylist[self.settings.curr_key])}" + r"(?P<number>\d{5}[_\-]\d{5}|\d{5})"
+        # matches = re.match(matchstring, self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos])
+        # self.settings.curr_num = matches.group("number")
+        # curr_image = self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
+        # name, number, style = find_name_number()
+        # numlist now created during update_tiflist()
+        self.settings.curr_num = self.settings.numlist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]
 
     def forward(self):
         """

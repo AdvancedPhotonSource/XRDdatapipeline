@@ -13,7 +13,7 @@ import pyqtgraph as pg
 
 from mainUI.UI_settings import Settings
 from general.file_selection import FileSelectRowWidget
-from general.corrections_and_maps import add_output_subdirectory
+from general.file_name_definitions import add_output_subdirectory
 
 
 class FileSelectWindow(QtWidgets.QWidget):
