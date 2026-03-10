@@ -170,6 +170,85 @@ def read_image(imagename):
     return ImgDict
 
 
+def read_image_no_metadata(imagename):
+    image_data = load_image(imagename)
+    Data = {}
+    Data["type"] = "PWDR"
+    # Data['color'] = GSASIIpath.GetConfigValue('Contour_color','Paired')
+    if "tilt" not in Data:  # defaults if not preset in e.g. Bruker importer
+        Data["tilt"] = 0.0
+        Data["rotation"] = 0.0
+        Data["pixLimit"] = 20
+        Data["calibdmin"] = 0.5
+        Data["cutoff"] = 10.0
+    Data["showLines"] = False
+    Data["calibskip"] = 0
+    Data["ring"] = []
+    Data["rings"] = []
+    Data["edgemin"] = 100000000
+    Data["ellipses"] = []
+    Data["GonioAngles"] = [0.0, 0.0, 0.0]
+    Data["DetDepth"] = 0.0
+    Data["DetDepthRef"] = False
+    Data["calibrant"] = ""
+    Data["IOtth"] = [5.0, 50.0]
+    Data["LRazimuth"] = [0.0, 180.0]
+    Data["azmthOff"] = 0.0
+    Data["outChannels"] = 2500
+    Data["outAzimuths"] = 1
+    Data["centerAzm"] = False
+    Data["fullIntegrate"] = True
+    Data["setRings"] = False
+    Data["background image"] = ["", -1.0]
+    Data["dark image"] = ["", -1.0]
+    Data["Flat Bkg"] = 0.0
+    Data["Oblique"] = [0.5, False]
+    Data["varyList"] = {
+        "dist": True,
+        "det-X": True,
+        "det-Y": True,
+        "tilt": True,
+        "phi": True,
+        "dep": False,
+        "wave": False,
+    }
+    Data["setDefault"] = False
+    # Imax is image intensity maximum
+    Imax = np.max(image_data)
+    Data["range"] = [(0, Imax), [0, Imax]]
+    # size, samplechangerpos, det2theta, ImageTag, formatName
+    Data["size"] = [image_data.shape[0], image_data.shape[1]]
+    Data["samplechangerpos"] = None
+    Data["det2theta"] = 0.0
+    ImgDict = {}
+    ImgDict["Comments"] = {}
+    # with tf.TiffFile(imagename) as tif:
+    #     for tag in tif.pages[0].tags:
+    #         ImgDict["Comments"][tag.name] = tag.value
+    ImgDict["Image Controls"] = Data
+    ImgDict["Masks"] = {
+        "Points": [],
+        "Rings": [],
+        "Arcs": [],
+        "Polygons": [],
+        "Frames": [],
+        "Thresholds": [(0, Imax), [0, Imax]],
+        "SpotMask": {"esdMul": 3.0, "spotMask": None},
+    }
+    ImgDict["Stress/Strain"] = {
+        "Type": "True",
+        "d-zero": [],
+        "Sample phi": 0.0,
+        "Sample z": 0.0,
+        "Sample load": 0.0,
+    }
+    # ImgDict['image'] = image_data
+    ImgDict["image"] = image_data
+    ImgDict["corrected_image"] = None
+
+    return ImgDict
+
+
 # G2fil; updates cache from imctrl file
 def LoadControls(Slines, data):
     "Read values from a .imctrl (Image Controls) file"
