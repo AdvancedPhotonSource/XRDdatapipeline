@@ -122,6 +122,7 @@ class CacheCreator(QtCore.QObject):
     :param logging: Report timing information
     """
     cache_complete_signal = QtCore.Signal(str, dict)
+    cache_failed_signal = QtCore.Signal()
     finished = QtCore.Signal()
 
     def __init__(
@@ -139,11 +140,12 @@ class CacheCreator(QtCore.QObject):
         outChannels = None,
         calc_splitting = True,
         azim_Q_shape_min = 100,
-        tth_integration_range=None,
-        azim_integration_range=None,
-        n_integration_bins=None,
-        polarization=None,
-        logging=False,
+        tth_integration_range = None,
+        azim_integration_range = None,
+        n_integration_bins = None,
+        polarization = None,
+        pixelSize = None,
+        logging = False,
     ):
         super().__init__()
         self.cache = cache
@@ -160,35 +162,47 @@ class CacheCreator(QtCore.QObject):
         self.outChannels = outChannels
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
-        self.tth_integration_range=tth_integration_range
-        self.azim_integration_range=azim_integration_range
-        self.n_integration_bins=n_integration_bins
-        self.polarization=polarization
+        self.tth_integration_range = tth_integration_range
+        self.azim_integration_range = azim_integration_range
+        self.n_integration_bins = n_integration_bins
+        self.polarization = polarization
+        self.pixelSize = pixelSize
         self.stopEarly = False
 
     def run(self):
         cache_time = time.time()
-        cache_location, cache = create_cache(
-            self.cache,
-            self.filename,
-            self.imctrlname,
-            self.output_directory,
-            self.tth_integration_range,
-            self.azim_integration_range,
-            self.n_integration_bins,
-            self.polarization,
-            self.imgmaskname,
-            self.bad_pixels,
-            self.flatfield,
-            self.esdMul,
-            verbose=False,
-        )
+        try:
+            cache_location, cache = create_cache(
+                self.cache,
+                self.filename,
+                self.imctrlname,
+                self.output_directory,
+                self.tth_integration_range,
+                self.azim_integration_range,
+                self.n_integration_bins,
+                self.polarization,
+                self.imgmaskname,
+                self.bad_pixels,
+                self.flatfield,
+                self.esdMul,
+                pixSize=self.pixelSize,
+                verbose=False,
+            )
+        except:
+            logging.getLogger(__name__).exception(f"Exception creating cache using {self.filename}.")
+            self.cache_failed_signal.emit()
+            self.finished.emit()
 
-        cache_time = time.time() - cache_time
-        print(f"Cache completed in {cache_time:.2f}s.")
+        else:
+            if cache is None:
+                self.cache_failed_signal.emit()
+                self.finished.emit()
+            else:
+                cache_time = time.time() - cache_time
+                print(f"Cache completed in {cache_time:.2f}s.")
 
-        self.cache_complete_signal.emit(cache_location, cache)
-        self.finished.emit()
+                self.cache_complete_signal.emit(cache_location, cache)
+                self.finished.emit()
 
 
 class SingleIterator(QtCore.QObject):
@@ -362,6 +376,21 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.regex_exclude_label = QtWidgets.QLabel("Exclude filenames with:")
         self.regex_exclude_text = QtWidgets.QLineEdit()
 
+        self.pixelSize_override = QtWidgets.QCheckBox("Pixel size:")
+        self.pixelSize_x_label = QtWidgets.QLabel("X:")
+        self.pixelSize_y_label = QtWidgets.QLabel("Y:")
+        self.pixelSize_x_text = QtWidgets.QLineEdit()
+        self.pixelSize_y_text = QtWidgets.QLineEdit()
+        self.pixelSize_widget = QtWidgets.QWidget()
+        self.pixelSize_layout = QtWidgets.QHBoxLayout()
+        self.pixelSize_layout.addWidget(self.pixelSize_x_label)
+        self.pixelSize_layout.addWidget(self.pixelSize_x_text)
+        self.pixelSize_layout.addWidget(self.pixelSize_y_label)
+        self.pixelSize_layout.addWidget(self.pixelSize_y_text)
+        self.pixelSize_widget.setLayout(self.pixelSize_layout)
+        self.pixelSize_x_text.textEdited.connect(self.check_pixelSize_edited)
+        self.pixelSize_x_text.textEdited.connect(self.check_pixelSize_edited)
+
         self.defaults_button = QtWidgets.QPushButton("Restore Defaults")
         self.defaults_button.released.connect(self.restore_defaults)
 
@@ -374,9 +403,11 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.settings_layout.addWidget(self.regex_include_text, 0, 1)
         self.settings_layout.addWidget(self.regex_exclude_label, 1, 0)
         self.settings_layout.addWidget(self.regex_exclude_text, 1, 1)
-        self.settings_layout.addWidget(self.csim_first_label, 2, 0)
-        self.settings_layout.addWidget(self.csim_first_spinbox, 2, 1)
-        self.settings_layout.addWidget(self.calc_outlier_checkbox, 3, 0, 1, 2)
+        self.settings_layout.addWidget(self.pixelSize_override, 2, 0)
+        self.settings_layout.addWidget(self.pixelSize_widget, 2, 1)
+        self.settings_layout.addWidget(self.csim_first_label, 3, 0)
+        self.settings_layout.addWidget(self.csim_first_spinbox, 3, 1)
+        self.settings_layout.addWidget(self.calc_outlier_checkbox, 4, 0, 1, 2)
         self.outlier_layout.addWidget(self.override_label, 0, 0, 1, 2)
         self.outlier_layout.addWidget(self.madmult_override, 1, 0)
         self.outlier_layout.addWidget(self.madmult, 1, 1)
@@ -387,8 +418,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.azim_q, 4, 1)
         self.outlier_layout.addWidget(self.calc_spottiness_label, 5, 0)
         self.outlier_layout.addWidget(self.calc_spottiness_combobox, 5, 1)
-        self.settings_layout.addWidget(self.outlier_settings, 4, 0, 6, 2)
-        self.settings_layout.addWidget(self.defaults_button, 10, 0)
+        self.settings_layout.addWidget(self.outlier_settings, 5, 0, 6, 2)
+        self.settings_layout.addWidget(self.defaults_button, 11, 0)
 
         self.setLayout(self.settings_layout)
 
@@ -407,6 +438,12 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
         self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
         self.csim_first_spinbox.setValue(self.csim_first_default)
+        self.pixelSize_x_text.clear()
+        self.pixelSize_y_text.clear()
+        self.pixelSize_override.setChecked(False)
+
+    def check_pixelSize_edited(self):
+        self.pixelSize_override.setChecked(True)
 
 
 class main_window(QtWidgets.QWidget):
@@ -624,8 +661,8 @@ class main_window(QtWidgets.QWidget):
         self.keep_running = False
         self.timer.timeout.connect(self.on_timeout)
 
-        # self.iteration_thread = QtCore.QThread()
-        # self.cache_thread = QtCore.QThread()
+        self.iteration_thread = None
+        self.cache_thread = None
 
         self.queue_length_info = QtWidgets.QLabel(
             f"Queue is {len(self.queue)} items long"
@@ -729,6 +766,11 @@ class main_window(QtWidgets.QWidget):
     def set_cache_location(self, cache_location, cache):
         self.cache_location = cache_location
         self.cache = cache
+
+    def cache_failed(self):
+        self.keep_running = False
+        self.cache_has_failed = True
+        self.stop_button_pressed()
 
     def cache_thread_finished(self):
         self.has_made_cache = True
@@ -841,7 +883,13 @@ class main_window(QtWidgets.QWidget):
                         self.timer.stop()
                         self.cache_thread = QtCore.QThread()
                         filename = self.queue[0][0]
-                        # print(filename)
+                        # Try a few more images if the first one is missing its metadata
+                        if not os.path.exists(filename + ".metadata"):
+                            if (len(self.queue) > 1) and os.path.exists(self.queue[1][0] + ".metadata"):
+                                filename = self.queue[1][0]
+                            elif (len(self.queue) > 2) and os.path.exists(self.queue[2][0] + ".metadata"):
+                                filename = self.queue[2][0]
+                            # else keep filename the same, handle missing metadata in cache creation
                         esdMul = self.settings_widget.madmult_default
                         if self.settings_widget.madmult_override.isChecked():
                             esdMul = self.settings_widget.madmult.value()
@@ -867,6 +915,14 @@ class main_window(QtWidgets.QWidget):
                             polarization = [self.PolaVal.value(), False]
                         else:
                             polarization = None
+                        if (self.settings_widget.pixelSize_override.isChecked() and 
+                            (self.settings_widget.pixelSize_x_text.text() != "") and 
+                            (self.settings_widget.pixelSize_y_text.text() != "")):
+                            pixelSize = [float(self.settings_widget.pixelSize_x_text.text()),
+                                         float(self.settings_widget.pixelSize_y_text.text())]
+                        else:
+                            pixelSize = None
+
                         self.cache_worker = CacheCreator(
                             self.cache,
                             self.input_directory,
@@ -882,6 +938,7 @@ class main_window(QtWidgets.QWidget):
                             azim_integration_range=azim_integration_range,
                             n_integration_bins=n_integration_bins,
                             polarization=polarization,
+                            pixelSize=pixelSize,
                         )
                         self.cache_worker.moveToThread(self.cache_thread)
                         self.cache_thread.started.connect(self.cache_worker.run)
@@ -890,6 +947,7 @@ class main_window(QtWidgets.QWidget):
                             self.cache_worker.deleteLater
                         )
                         self.cache_worker.cache_complete_signal.connect(self.set_cache_location)
+                        self.cache_worker.cache_failed_signal.connect(self.cache_failed)
                         # self.cache_thread.finished.connect(self.cache_thread.deleteLater)
                         self.cache_thread.finished.connect(self.cache_thread_finished)
                         self.cache_thread.start()
@@ -901,7 +959,7 @@ class main_window(QtWidgets.QWidget):
                 self.num_failed_info.setText(
                     f"Errored files: {self.num_failed}"
                 )
-                if self.process_existing_only_radio.isChecked():
+                if self.process_existing_only_radio.isChecked() or self.cache_has_failed:
                     self.stop_button_pressed()
             # else:
             #    #If it's been over an hour since the last update, stop
@@ -1136,7 +1194,7 @@ class main_window(QtWidgets.QWidget):
             self.cache_thread.quit()
             self.cache_thread.finished.connect(self.really_stopped)
             self.cache_thread.finished.connect(self.cache_thread.deleteLater)
-        elif self.iteration_thread.isRunning():
+        elif self.iteration_thread is not None and self.iteration_thread.isRunning():
             self.iteration_thread.quit()
             self.iteration_thread.finished.connect(self.really_stopped)
             self.iteration_thread.finished.connect(self.iteration_thread.deleteLater)

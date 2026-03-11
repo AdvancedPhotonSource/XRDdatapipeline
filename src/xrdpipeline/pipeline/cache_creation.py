@@ -257,6 +257,7 @@ def create_cache(
         flatfield = None,
         esdMul = 3.0,
         cache_location = None,
+        pixSize = None,
         verbose = False,
 ):
     output_directory = add_output_subdirectory(output_directory)
@@ -271,10 +272,33 @@ def create_cache(
     if verbose:
         logging.getLogger(__name__).info("Creating cache")
         t0 = time.time()
-    image_dict = read_image(filename)
+    if os.path.exists(filename + ".metadata"):
+        image_dict = read_image(filename)
+        _, tifdata, _, _ = GetTifData(filename)
+    elif pixSize is not None:
+        image_dict = read_image_no_metadata(filename)
+        tifdata = {}
+        tifdata["pixelSize"] = pixSize
+    else:
+        image_dict = read_image_no_metadata(filename)
+        if image_dict["Image Controls"]["size"] == [2048, 2048]:
+            tifdata = {}
+            tifdata["pixelSize"] = [200, 200]
+            logging.getLogger(__name__).warning(f"No metadata found for {filename}. Using pixel size of [200, 200] based on image shape. "
+                                                "Provide a metadata file or write the correct pixel size in the Advanced Settings and rerun if this is incorrect.")
+        elif image_dict["Image Controls"]["size"] == [2880, 2880]:
+            tifdata = {}
+            tifdata["pixelSize"] = [150, 150]
+            logging.getLogger(__name__).warning(f"No metadata found for {filename}. Using pixel size of [150, 150] based on image shape. "
+                                                "Provide a metadata file or write the correct pixel size in the Advanced Settings and rerun if this is incorrect.")
+        else:
+            logging.getLogger(__name__).error(f"No metadata found for {filename}. "
+                                                    "Provide a metadata file in the same location as the tif file or write the correct pixel size in the Advanced Settings and rerun.")
+            return None, None
+
     if verbose:
         t1 = time.time()
-        logging.getLogger(__name__).info(f"read_image(): {(t1-t0):.2f}")
+        logging.getLogger(__name__).info(f"read_image() and GetTifData(): {(t1-t0):.2f}")
         t0 = time.time()
     if os.path.splitext(imctrlname)[1] == ".imctrl":
         with open(imctrlname, "r") as imctrlfile:
@@ -297,11 +321,7 @@ def create_cache(
         t1 = time.time()
         logging.getLogger(__name__).info(f"LoadControls(): {(t1-t0):.2f}")
         t0 = time.time()
-    # cache["image"] = load_image(filename)
-    if verbose:
-        t1 = time.time()
-        logging.getLogger(__name__).info(f"load_image(): {(t1-t0):.2f}")
-        t0 = time.time()
+    image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
 
     predef_mask = {}
     save_predef = False
@@ -354,12 +374,6 @@ def create_cache(
     if verbose:
         t1 = time.time()
         logging.getLogger(__name__).info(f"predef, flatfield save: {(t1-t0):.2f}")
-        t0 = time.time()
-    _, tifdata, _, _ = GetTifData(filename)
-    image_dict["Image Controls"]["pixelSize"] = tifdata["pixelSize"]
-    if verbose:
-        t1 = time.time()
-        logging.getLogger(__name__).info(f"GetTifData(): {(t1-t0):.2f}")
         t0 = time.time()
 
     getmaps(cache, image_dict["Image Controls"], imctrlname, os.path.join(output_directory, "maps"))
