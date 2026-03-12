@@ -1480,7 +1480,7 @@ class PixelSizeWindow(QtWidgets.QDialog):
         super().__init__()
 
         self.grid_layout = QtWidgets.QGridLayout()
-        self.explanation_label = QtWidgets.QLabel("No tif metadata found. Please input the X and Y pixel size for the detector in mm.")
+        self.explanation_label = QtWidgets.QLabel("No tif metadata found. Please input the X and Y pixel size for the detector in \u03BCm.")
         self.pix_x_label = QtWidgets.QLabel("pixelSize X:")
         self.pix_x = QtWidgets.QDoubleSpinBox()
         self.pix_x.setMinimum(0)
