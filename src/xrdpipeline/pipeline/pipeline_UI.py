@@ -985,6 +985,7 @@ class main_window(QtWidgets.QWidget):
         self.exclude_regex = self.settings_widget.regex_exclude_text.text()
         self.cache = {}
         self.has_made_cache = False
+        self.cache_has_failed = False
         # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
         # self.process = main_process(dir_name,ctrl_name,predef_mask)
         # create subdirectories if needed

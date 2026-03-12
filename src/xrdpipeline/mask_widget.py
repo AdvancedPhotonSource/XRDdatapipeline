@@ -64,8 +64,6 @@ def readMasks(filename):
 def getmaps(cache, imctrlname, pathmaps, save=True):		# fast integration using the same imctrl and mask
     #TA = G2img.Make2ThetaAzimuthMap(imctrls,(0,imctrls['size'][0]),(0,imctrls['size'][1]))    #2-theta array, 2880 according to detector pixel numbers
     imctrls = read_imctrl(imctrlname)
-    if cache["size"] == (2880,2880):
-        cache["pixelSize"] = (150,150)
     imctrls["pixelSize"] = cache["pixelSize"]
     cache["center"] = [0,0]
     cache["center"][0] = imctrls["center"][0]*1000/(imctrls["pixelSize"][0])
@@ -1477,6 +1475,42 @@ class InitialFilesWindow(QtWidgets.QWidget):
         self.close()
 
 
+class PixelSizeWindow(QtWidgets.QDialog):
+    def __init__(self, shape=None):
+        super().__init__()
+
+        self.grid_layout = QtWidgets.QGridLayout()
+        self.explanation_label = QtWidgets.QLabel("No tif metadata found. Please input the X and Y pixel size for the detector in \u03BCm.")
+        self.pix_x_label = QtWidgets.QLabel("pixelSize X:")
+        self.pix_x = QtWidgets.QDoubleSpinBox()
+        self.pix_x.setMinimum(0)
+        self.pix_x.setMaximum(10000)
+        self.pix_x.setSingleStep(1)
+        self.pix_y_label = QtWidgets.QLabel("pixelSize Y:")
+        self.pix_y = QtWidgets.QDoubleSpinBox()
+        self.pix_y.setMinimum(0)
+        self.pix_y.setMaximum(10000)
+        self.pix_y.setSingleStep(1)
+
+        if shape == (2048, 2048):
+            self.pix_x.setValue(200)
+            self.pix_y.setValue(200)
+        elif shape == (2880, 2880):
+            self.pix_x.setValue(150)
+            self.pix_y.setValue(150)
+
+        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+
+        self.grid_layout.addWidget(self.explanation_label, 0, 0, 1, 2)
+        self.grid_layout.addWidget(self.pix_x_label, 1, 0)
+        self.grid_layout.addWidget(self.pix_x, 1, 1)
+        self.grid_layout.addWidget(self.pix_y_label, 2, 0)
+        self.grid_layout.addWidget(self.pix_y, 2, 1)
+        self.grid_layout.addWidget(self.button_box, 3, 0, 1, 2)
+        self.setLayout(self.grid_layout)
+
 class MainWindow(pg.GraphicsLayoutWidget):
 
     mask_location = pg.QtCore.Signal(str)
@@ -1702,13 +1736,23 @@ QPushButton:hover {{
             self.load_imctrls(imctrl_file_name=imctrl_file_name)
 
     def load_imctrls(self, imctrl_file_name):
-        self.cache = {}
-        self.cache['size'] = self.main_image.image_data.shape
-        # with tf.TiffFile(self.image_file_name) as tif:
-        #     for page in tif.pages:
-        #         for tag in page.tags:
-        #             print(f"{tag.name}: {tag.value}")
-        _,data,_,_ = GetTifData(self.image_file_name)
+        if os.path.exists(self.image_file_name + ".metadata"):
+            _,data,_,_ = GetTifData(self.image_file_name)
+        else:
+            pixelSize = self.prompt_pixel_size()
+            data = {"size":self.main_image.image_data.shape,
+                    "pixelSize":pixelSize}
+        if pixelSize is None:
+            # pop up error, then stop loading info
+            error_box = QtWidgets.QMessageBox.question(
+                self,
+                "Exit",
+                "Cancelling image control file load. Please provide a metadata file or pixel size.",
+                QtWidgets.QMessageBox.StandardButton.Ok,
+                QtWidgets.QMessageBox.StandardButton.Ok
+                )
+            error_box
+            return
         self.cache = data
         getmaps(self.cache, imctrl_file_name,".", save=False) # use os path
         Arc.tthmap = self.cache['pixelTAmap']
@@ -1730,6 +1774,18 @@ QPushButton:hover {{
         self.imagescale_is_square = False
         if self.cache['pixelSize'][0] == self.cache['pixelSize'][1]:
             self.imagescale_is_square = True
+
+    def prompt_pixel_size(self):
+        pixel_size_window = PixelSizeWindow(shape=self.main_image.image_data.shape)
+        result = pixel_size_window.exec()
+        if result == 1:
+            pixelSize = [pixel_size_window.pix_x.value(),
+                         pixel_size_window.pix_y.value()]
+        elif result == 0:
+            pixelSize = None
+        else:
+            pixelSize = None
+        return pixelSize
 
     def load_files(self, image, imctrl, immask):
         print(image, imctrl, immask)
