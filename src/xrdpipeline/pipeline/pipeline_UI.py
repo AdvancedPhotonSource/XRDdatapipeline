@@ -59,7 +59,7 @@ class ImageMonitor(RegexMatchingEventHandler):
         results = [r.match(event.src_path) for r in self.regexes]
         # print(results[0].group(0,1,2,3,4))
         print(
-            "Directory: {0}, Name: {1}, Number: {2}, Extension: {3}".format(
+            "Directory: {0}, Name: {1}, Extension: {2}".format(
                 results[0].group("input_directory"),
                 results[0].group("name"),
                 results[0].group("ext"),
