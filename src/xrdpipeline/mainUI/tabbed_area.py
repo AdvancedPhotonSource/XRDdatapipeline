@@ -16,6 +16,7 @@ from mainUI.stats import StatsView
 from mainUI.contour import ContourView, Viewtype
 from mainUI.csim import CSimView
 from mainUI.spottiness import SpottinessView
+from mainUI.azim_Qs import AzimQView
 from mainUI.user_data_import import UserAddedDataTab
 
 class TabbedArea(QtWidgets.QTabWidget):
@@ -36,18 +37,21 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.contour_page = QtWidgets.QWidget()
         self.csim_page = QtWidgets.QWidget()
         self.spottiness_page = QtWidgets.QWidget()
+        self.azimq_page = QtWidgets.QWidget()
         self.user_data_page = QtWidgets.QWidget()
 
         self.stats_widget = StatsView(self.stats_page, self.settings)
         self.contour_widget = ContourView(self.contour_page, self.settings)
         self.csim_widget = CSimView(self.csim_page, self.settings)
         self.spottiness_widget = SpottinessView(self.spottiness_page, self.settings)
+        self.azimq_widget = AzimQView(self.azimq_page, self.settings)
         self.user_data_widget = UserAddedDataTab(self.user_data_page, self.settings)
 
         self.stats_layout = QtWidgets.QGridLayout()
         self.contour_layout = QtWidgets.QGridLayout()
         self.csim_layout = QtWidgets.QGridLayout()
         self.spottiness_layout = QtWidgets.QGridLayout()
+        self.azimq_layout = QtWidgets.QGridLayout()
         self.user_data_layout = QtWidgets.QGridLayout()
 
         self.stats_layout.addWidget(self.stats_widget, 0, 0, 2, 6)
@@ -87,6 +91,11 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.spottiness_layout.addWidget(self.spottiness_widget)
         self.spottiness_page.setLayout(self.spottiness_layout)
 
+        self.azimq_layout.addWidget(self.azimq_widget, 0, 0, 2, 6)
+        self.azimq_layout.addWidget(self.azimq_widget.histogram_type_select, 2, 0)
+
+        self.azimq_page.setLayout(self.azimq_layout)
+
         self.user_data_layout.addWidget(self.user_data_widget)
         self.user_data_page.setLayout(self.user_data_layout)
 
@@ -94,6 +103,7 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.addTab(self.stats_page, "Stats")
         self.addTab(self.spottiness_page, "Spottiness")
         self.addTab(self.csim_page, "Similarity")
+        self.addTab(self.azimq_page, "Azim / Q")
         self.addTab(self.user_data_page, "User Data")
 
     def update_dir(self):
@@ -101,5 +111,6 @@ class TabbedArea(QtWidgets.QTabWidget):
         self.stats_widget.update_dir()
         self.csim_widget.update_dir()
         self.spottiness_widget.update_dir()
+        self.azimq_widget.update_dir()
         self.user_data_widget.update_dir()
 

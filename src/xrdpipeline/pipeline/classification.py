@@ -159,7 +159,12 @@ def qwidth_area_classification_groupby(
     df['classifier'] = np.zeros(len(raveled_labels[raveled_mask]))
     df.loc[df['label'].isin(arcs_index), 'classifier'] = 2
     df.loc[df['label'].isin(spots_index), 'classifier'] = 1
-    
+
+    azim_vs_Q = azim_vs_Q.to_frame()
+    azim_vs_Q.rename(columns={0:"azim_vs_Q"},inplace=True)
+    azim_vs_Q["diff_azim"] = diff_azim
+    azim_vs_Q["diff_Q"] = diff_Q
+
     return df, valid_labels, labeled_mask, raveled_mask, azim_vs_Q
 
 
@@ -543,8 +548,6 @@ def current_splitting_method(
                 timing_names.append(timing_name)
 
     if calc_azim_Qs:
-        azim_vs_Q = azim_vs_Q.to_frame()
-        azim_vs_Q.rename(columns={0:"azim_vs_Q"},inplace=True)
         azim_vs_Q["classifier"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["classifier"].median()
         if use_radial_grad or use_azim_grad:
             azim_vs_Q["medianQ"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["medianQ"].median()
@@ -552,6 +555,7 @@ def current_splitting_method(
             azim_vs_Q["medianQ"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["Qvalue"].median()
         azim_vs_Q["medianAzim"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["azimvalue"].median()
         azim_vs_Q["medianAzimFlipped"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["flipped_azimvalue"].median()
+        azim_vs_Q["area"] = df.loc[df['label'].isin(valid_labels), "label"].value_counts().sort_index()
         to_return.append(azim_vs_Q)
 
     return to_return

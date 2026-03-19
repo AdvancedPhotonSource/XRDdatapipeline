@@ -143,6 +143,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.stats_widget.stats_view.scene().sigMouseMoved.connect(
             self.mouseMovedStats
         )
+        self.tabbed_area.azimq_widget.azimq_view.scene().sigMouseMoved.connect(
+            self.mouseMovedAzimQ
+        )
         # checkboxes for the vertical line and circle
         self.vLineCheckbox = QtWidgets.QCheckBox("2Th Line")
         # self.vLineCheckbox.setChecked(True)
@@ -437,6 +440,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.horiz_line.setValue(self.settings.curr_pos)
         self.tabbed_area.stats_widget.update_stats_data()
         self.tabbed_area.spottiness_widget.update_data()
+        self.tabbed_area.azimq_widget.update_stats_data()
 
     def update_user_data(self, data, location):
         """
@@ -614,6 +618,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.integral_cursor_label.setPos(integral_point)
             self.tabbed_area.spottiness_widget.vLine.setPos(x)
             self.tabbed_area.stats_widget.vLine.setPos(x)
+            self.tabbed_area.azimq_widget.vLine.setPos(x)
             self.integral_cursor_label.setText(
                 "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
             )
@@ -818,6 +823,33 @@ class KeyPressWindow(QtWidgets.QWidget):
                 d = tth_to_d(tth, self.settings.wavelength)
                 self.update_tth_lines(tth, Q, d)
 
+    def mouseMovedAzimQ(self,evt):
+        """
+        Slot for the signal emitted when the mouse moves over the azim_q widget canvas.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
+        if (
+            self.vLineCheckbox.isChecked()
+            or self.circleCheckbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
+            pos = evt
+            if self.tabbed_area.azimq_widget.azimq_view.sceneBoundingRect().contains(pos):
+                mousePoint = self.tabbed_area.azimq_widget.azimq_view.vb.mapSceneToView(pos)
+                if self.x_axis_choice.currentIndex() == 0:
+                    tth = mousePoint.x()
+                    Q = tth_to_q(tth, self.settings.wavelength)
+                elif self.x_axis_choice.currentIndex() == 1:
+                    Q = mousePoint.x()
+                    tth = q_to_tth(Q, self.settings.wavelength)
+                d = tth_to_d(tth, self.settings.wavelength)
+                self.update_tth_lines(tth, Q, d)
+
     def mouseClickedContourChangeImage(self, evt):
         """
         Use the y axis value of the contour graph to swap to the image closest to
@@ -942,11 +974,15 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.tabbed_area.stats_widget.stats_view.setXLink(
                 self.integral_widget.integral_view.getViewBox()
             )
+            self.tabbed_area.azimq_widget.azimq_view.setXLink(
+                self.integral_widget.integral_view.getViewBox()
+            )
         else:
             # self.tabbed_area.contour_widget.view.getViewBox().linkView(pg.ViewBox.XAxis,None)
             self.tabbed_area.contour_widget.view.setXLink(None)
             self.tabbed_area.spottiness_widget.view.setXLink(None)
             self.tabbed_area.stats_widget.stats_view.setXLink(None)
+            self.tabbed_area.azimq_widget.azimq_view.setXLink(None)
 
     def x_axis_changed(self, evt):
         """
@@ -965,6 +1001,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.change_x_axis_type(evt)
         self.tabbed_area.spottiness_widget.change_x_axis_type(evt)
         self.tabbed_area.stats_widget.change_x_axis_type(evt)
+        self.tabbed_area.azimq_widget.change_x_axis_type(evt)
 
     def live_view_image_checkbox_changed(self, evt):
         if self.live_view_image_checkbox.isChecked():
