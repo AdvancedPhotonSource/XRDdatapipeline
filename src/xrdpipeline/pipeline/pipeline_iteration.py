@@ -457,7 +457,7 @@ def run_iteration(
                 spots_table_df.to_csv(stats_prefix + "_spots_stats_df.csv")
             if calc_grad_spottiness:
                 spots_table_grad.to_csv(stats_prefix + "_spots_stats_grad.csv")
-            qbins_filename = stats_prefix + "_qbinedges.npy"
+            qbins_filename = os.path.join(output_directory, "stats","qbinedges.npy")
             if not os.path.exists(qbins_filename):
                 with open(qbins_filename, "wb") as outfile:
                     np.save(outfile, cache["QbinEdges"])

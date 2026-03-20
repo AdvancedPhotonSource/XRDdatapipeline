@@ -183,28 +183,12 @@ class StatsView(pg.GraphicsLayoutWidget):
         qbins_filename = os.path.join(
             self.settings.output_directory,
             "stats",
-            self.settings.keylist[self.settings.curr_key][:-1] + "_qbinedges.npy"
-        )
-        qbins_alt1 = os.path.join(
-            self.settings.output_directory,
-            "stats",
-            self.settings.keylist[self.settings.curr_key][:-1] + "-00000_qbinedges.npy"
-        )
-        qbins_alt2 = os.path.join(
-            self.settings.output_directory,
-            "stats",
-            self.settings.keylist[self.settings.curr_key][:-6] + "_qbinedges.npy"
+            "qbinedges.npy"
         )
         self.q_bins = []
         self.tth_bins = []
         if os.path.exists(qbins_filename):
             with open(qbins_filename, 'rb') as infile:
-                self.q_bins = np.load(infile)
-        elif os.path.exists(qbins_alt1):
-            with open(qbins_alt1, 'rb') as infile:
-                self.q_bins = np.load(infile)
-        elif os.path.exists(qbins_alt2):
-            with open(qbins_alt2, 'rb') as infile:
                 self.q_bins = np.load(infile)
         else:
             print("Missing q bins file.")
