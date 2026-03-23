@@ -93,6 +93,8 @@ class TabbedArea(QtWidgets.QTabWidget):
 
         self.azimq_layout.addWidget(self.azimq_widget, 0, 0, 2, 6)
         self.azimq_layout.addWidget(self.azimq_widget.histogram_type_select, 2, 0)
+        self.azimq_layout.addWidget(self.azimq_widget.filter_area_label, 2, 1)
+        self.azimq_layout.addWidget(self.azimq_widget.filter_area_spinbox, 2, 2)
 
         self.azimq_page.setLayout(self.azimq_layout)
 

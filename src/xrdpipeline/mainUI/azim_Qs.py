@@ -47,8 +47,16 @@ class AzimQView(pg.GraphicsLayoutWidget):
         self.spotPen = pg.mkPen("b")
         self.arcBrush = pg.mkBrush("r")
         self.arcPen = pg.mkPen("r")
+        self.scatter_spot_legend_dummy = pg.ScatterPlotItem()
+        self.scatter_spot_legend_dummy.setBrush(self.spotBrush)
+        self.scatter_spot_legend_dummy.setPen(self.spotPen)
+        self.scatter_arc_legend_dummy = pg.ScatterPlotItem()
+        self.scatter_arc_legend_dummy.setBrush(self.arcBrush)
+        self.scatter_arc_legend_dummy.setPen(self.arcPen)
 
         self.legend = self.azimq_view.addLegend(offset=(-1, 1))
+        self.legend.addItem(self.scatter_arc_legend_dummy, "Texture Arcs")
+        self.legend.addItem(self.scatter_spot_legend_dummy, "Spots")
 
         self.vLine = pg.InfiniteLine(angle=90, movable=False)
         self.azimq_view.addItem(self.vLine, ignoreBounds=True)
@@ -69,6 +77,12 @@ class AzimQView(pg.GraphicsLayoutWidget):
         )
         self.histogram_type_select.setCurrentIndex(0)
 
+        self.filter_area_label = QtWidgets.QLabel("Minimum cluster area filter (pixels):")
+        self.filter_area_spinbox = QtWidgets.QSpinBox()
+        self.filter_area_spinbox.setMinimum(0)
+        self.filter_area_spinbox.setMaximum(1000)
+        self.filter_area_spinbox.valueChanged.connect(self.adjust_area_filter)
+
     def histogram_type_changed(self, evt):
         """
         Slots to the signal from the histogram type QComboBox.
@@ -81,12 +95,7 @@ class AzimQView(pg.GraphicsLayoutWidget):
         :param evt: Index of the requested histogram type
         """
         self.azimq_view.clear()
-        self.legend.clear()
         self.azimq_view.addItem(self.histogram_type_dict[self.histogram_types[evt]])
-        self.legend.addItem(
-            self.histogram_type_dict[self.histogram_types[evt]],
-            self.histogram_types[evt],
-        )
         if evt == 0:
             self.azimq_view.getAxis('left').setLabel('Azimuthal span / Q span (\u00b0\u22c5\u212b)')
         elif evt == 1:
@@ -126,19 +135,22 @@ class AzimQView(pg.GraphicsLayoutWidget):
             self.cluster_classifier_data = azim_vs_qs_df["classifier"].values
             self.cluster_medianq_data = azim_vs_qs_df["medianQ"].values
             self.cluster_mediantth_data = q_to_tth(self.cluster_medianq_data, self.settings.wavelength)
+            self.filter = self.cluster_area_data > self.filter_area_spinbox.value()
             if self.x_axis_type == "tth":
-                self.cluster_scatter_azimq.setData(self.cluster_mediantth_data, self.cluster_azimq_data)
-                self.cluster_scatter_area.setData(self.cluster_mediantth_data, self.cluster_area_data)
-                self.cluster_scatter_diffazim.setData(self.cluster_mediantth_data, self.cluster_diffazim_data)
-                self.cluster_scatter_diffq.setData(self.cluster_mediantth_data, self.cluster_diffq_data)
+                self.cluster_scatter_azimq.setData(self.cluster_mediantth_data[self.filter], self.cluster_azimq_data[self.filter])
+                self.cluster_scatter_area.setData(self.cluster_mediantth_data[self.filter], self.cluster_area_data[self.filter])
+                self.cluster_scatter_diffazim.setData(self.cluster_mediantth_data[self.filter], self.cluster_diffazim_data[self.filter])
+                self.cluster_scatter_diffq.setData(self.cluster_mediantth_data[self.filter], self.cluster_diffq_data[self.filter])
             elif self.x_axis_type == "Q":
-                self.cluster_scatter_azimq.setData(self.cluster_medianq_data, self.cluster_azimq_data)
-                self.cluster_scatter_area.setData(self.cluster_medianq_data, self.cluster_area_data)
-                self.cluster_scatter_diffazim.setData(self.cluster_medianq_data, self.cluster_diffazim_data)
-                self.cluster_scatter_diffq.setData(self.cluster_medianq_data, self.cluster_diffq_data)
+                self.cluster_scatter_azimq.setData(self.cluster_medianq_data[self.filter], self.cluster_azimq_data[self.filter])
+                self.cluster_scatter_area.setData(self.cluster_medianq_data[self.filter], self.cluster_area_data[self.filter])
+                self.cluster_scatter_diffazim.setData(self.cluster_medianq_data[self.filter], self.cluster_diffazim_data[self.filter])
+                self.cluster_scatter_diffq.setData(self.cluster_medianq_data[self.filter], self.cluster_diffq_data[self.filter])
+            self.brush = [self.classifier_brush(x) for x in self.cluster_classifier_data[self.filter]]
+            self.pen = [self.classifier_pen(x) for x in self.cluster_classifier_data[self.filter]]
             for cluster_plot_item in [self.cluster_scatter_azimq, self.cluster_scatter_area, self.cluster_scatter_diffazim, self.cluster_scatter_diffq]:
-                cluster_plot_item.setBrush([self.classifier_brush(x) for x in self.cluster_classifier_data])
-                cluster_plot_item.setPen([self.classifier_pen(x) for x in self.cluster_classifier_data])
+                cluster_plot_item.setBrush(self.brush)
+                cluster_plot_item.setPen(self.pen)
         else:
             # If the file for this image does not exist, clear the canvas.
             self.clear_canvas()
@@ -154,16 +166,22 @@ class AzimQView(pg.GraphicsLayoutWidget):
         self.histogram_type_changed(self.histogram_type_select.currentIndex())
 
     def update_tth(self):
-        self.cluster_scatter_azimq.setData(self.cluster_mediantth_data, self.cluster_azimq_data)
-        self.cluster_scatter_area.setData(self.cluster_mediantth_data, self.cluster_area_data)
-        self.cluster_scatter_diffazim.setData(self.cluster_mediantth_data, self.cluster_diffazim_data)
-        self.cluster_scatter_diffq.setData(self.cluster_mediantth_data, self.cluster_diffq_data)
+        self.cluster_scatter_azimq.setData(self.cluster_mediantth_data[self.filter], self.cluster_azimq_data[self.filter])
+        self.cluster_scatter_area.setData(self.cluster_mediantth_data[self.filter], self.cluster_area_data[self.filter])
+        self.cluster_scatter_diffazim.setData(self.cluster_mediantth_data[self.filter], self.cluster_diffazim_data[self.filter])
+        self.cluster_scatter_diffq.setData(self.cluster_mediantth_data[self.filter], self.cluster_diffq_data[self.filter])
+        for cluster_plot_item in [self.cluster_scatter_azimq, self.cluster_scatter_area, self.cluster_scatter_diffazim, self.cluster_scatter_diffq]:
+            cluster_plot_item.setBrush(self.brush)
+            cluster_plot_item.setPen(self.pen)
 
     def update_q(self):
-        self.cluster_scatter_azimq.setData(self.cluster_medianq_data, self.cluster_azimq_data)
-        self.cluster_scatter_area.setData(self.cluster_medianq_data, self.cluster_area_data)
-        self.cluster_scatter_diffazim.setData(self.cluster_medianq_data, self.cluster_diffazim_data)
-        self.cluster_scatter_diffq.setData(self.cluster_medianq_data, self.cluster_diffq_data)
+        self.cluster_scatter_azimq.setData(self.cluster_medianq_data[self.filter], self.cluster_azimq_data[self.filter])
+        self.cluster_scatter_area.setData(self.cluster_medianq_data[self.filter], self.cluster_area_data[self.filter])
+        self.cluster_scatter_diffazim.setData(self.cluster_medianq_data[self.filter], self.cluster_diffazim_data[self.filter])
+        self.cluster_scatter_diffq.setData(self.cluster_medianq_data[self.filter], self.cluster_diffq_data[self.filter])
+        for cluster_plot_item in [self.cluster_scatter_azimq, self.cluster_scatter_area, self.cluster_scatter_diffazim, self.cluster_scatter_diffq]:
+            cluster_plot_item.setBrush(self.brush)
+            cluster_plot_item.setPen(self.pen)
 
     def classifier_brush(self, classifier):
         if classifier == 1:
@@ -176,3 +194,21 @@ class AzimQView(pg.GraphicsLayoutWidget):
             return self.spotPen
         elif classifier == 2:
             return self.arcPen
+
+    def adjust_area_filter(self, value):
+        self.filter = self.cluster_area_data > value
+        if self.x_axis_type == "tth":
+            self.cluster_scatter_azimq.setData(self.cluster_mediantth_data[self.filter], self.cluster_azimq_data[self.filter])
+            self.cluster_scatter_area.setData(self.cluster_mediantth_data[self.filter], self.cluster_area_data[self.filter])
+            self.cluster_scatter_diffazim.setData(self.cluster_mediantth_data[self.filter], self.cluster_diffazim_data[self.filter])
+            self.cluster_scatter_diffq.setData(self.cluster_mediantth_data[self.filter], self.cluster_diffq_data[self.filter])
+        elif self.x_axis_type == "Q":
+            self.cluster_scatter_azimq.setData(self.cluster_medianq_data[self.filter], self.cluster_azimq_data[self.filter])
+            self.cluster_scatter_area.setData(self.cluster_medianq_data[self.filter], self.cluster_area_data[self.filter])
+            self.cluster_scatter_diffazim.setData(self.cluster_medianq_data[self.filter], self.cluster_diffazim_data[self.filter])
+            self.cluster_scatter_diffq.setData(self.cluster_medianq_data[self.filter], self.cluster_diffq_data[self.filter])
+        self.brush = [self.classifier_brush(x) for x in self.cluster_classifier_data[self.filter]]
+        self.pen = [self.classifier_pen(x) for x in self.cluster_classifier_data[self.filter]]
+        for cluster_plot_item in [self.cluster_scatter_azimq, self.cluster_scatter_area, self.cluster_scatter_diffazim, self.cluster_scatter_diffq]:
+            cluster_plot_item.setBrush(self.brush)
+            cluster_plot_item.setPen(self.pen)
