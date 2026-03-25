@@ -43,10 +43,10 @@ class AzimQView(pg.GraphicsLayoutWidget):
         self.cluster_scatter_diffazim = pg.ScatterPlotItem()
         self.cluster_scatter_diffq = pg.ScatterPlotItem()
 
-        self.spotBrush = pg.mkBrush("b")
-        self.spotPen = pg.mkPen("b")
-        self.arcBrush = pg.mkBrush("r")
-        self.arcPen = pg.mkPen("r")
+        self.spotBrush = pg.mkBrush(self.settings.colors["azim_q_spot"].color)
+        self.spotPen = pg.mkPen(self.settings.colors["azim_q_spot"].color)
+        self.arcBrush = pg.mkBrush(self.settings.colors["azim_q_arc"].color)
+        self.arcPen = pg.mkPen(self.settings.colors["azim_q_arc"].color)
         self.scatter_spot_legend_dummy = pg.ScatterPlotItem()
         self.scatter_spot_legend_dummy.setBrush(self.spotBrush)
         self.scatter_spot_legend_dummy.setPen(self.spotPen)
@@ -146,11 +146,7 @@ class AzimQView(pg.GraphicsLayoutWidget):
                 self.cluster_scatter_area.setData(self.cluster_medianq_data[self.filter], self.cluster_area_data[self.filter])
                 self.cluster_scatter_diffazim.setData(self.cluster_medianq_data[self.filter], self.cluster_diffazim_data[self.filter])
                 self.cluster_scatter_diffq.setData(self.cluster_medianq_data[self.filter], self.cluster_diffq_data[self.filter])
-            self.brush = [self.classifier_brush(x) for x in self.cluster_classifier_data[self.filter]]
-            self.pen = [self.classifier_pen(x) for x in self.cluster_classifier_data[self.filter]]
-            for cluster_plot_item in [self.cluster_scatter_azimq, self.cluster_scatter_area, self.cluster_scatter_diffazim, self.cluster_scatter_diffq]:
-                cluster_plot_item.setBrush(self.brush)
-                cluster_plot_item.setPen(self.pen)
+            self.update_colors()
         else:
             # If the file for this image does not exist, clear the canvas.
             self.clear_canvas()
@@ -207,6 +203,18 @@ class AzimQView(pg.GraphicsLayoutWidget):
             self.cluster_scatter_area.setData(self.cluster_medianq_data[self.filter], self.cluster_area_data[self.filter])
             self.cluster_scatter_diffazim.setData(self.cluster_medianq_data[self.filter], self.cluster_diffazim_data[self.filter])
             self.cluster_scatter_diffq.setData(self.cluster_medianq_data[self.filter], self.cluster_diffq_data[self.filter])
+        self.update_colors()
+
+    def update_colors(self):
+        self.spotBrush = pg.mkBrush(self.settings.colors["azim_q_spot"].color)
+        self.spotPen = pg.mkPen(self.settings.colors["azim_q_spot"].color)
+        self.arcBrush = pg.mkBrush(self.settings.colors["azim_q_arc"].color)
+        self.arcPen = pg.mkPen(self.settings.colors["azim_q_arc"].color)
+        self.scatter_spot_legend_dummy.setBrush(self.spotBrush)
+        self.scatter_spot_legend_dummy.setPen(self.spotPen)
+        self.scatter_arc_legend_dummy.setBrush(self.arcBrush)
+        self.scatter_arc_legend_dummy.setPen(self.arcPen)
+
         self.brush = [self.classifier_brush(x) for x in self.cluster_classifier_data[self.filter]]
         self.pen = [self.classifier_pen(x) for x in self.cluster_classifier_data[self.filter]]
         for cluster_plot_item in [self.cluster_scatter_azimq, self.cluster_scatter_area, self.cluster_scatter_diffazim, self.cluster_scatter_diffq]:

@@ -44,11 +44,11 @@ class CSimView(pg.GraphicsLayoutWidget):
             # check if addPlot.plot() is a shortcut for create PlotItem, add PlotItem
             self.similarity_line[k] = self.view.plot()
             self.legend.addItem(self.similarity_line[k], k)
-        self.similarity_line["Compared to Previous"].setPen("r")
-        self.similarity_line["Compared to First"].setPen('b')
+        self.update_colors()
 
     def update_dir(self):
         self.update_data()
+        self.update_colors()
 
     def update_data(self):
         filename_piece = os.path.join(
@@ -69,4 +69,6 @@ class CSimView(pg.GraphicsLayoutWidget):
                 # [:,0] for comparison to first, [:,1] for comparison to previous
                 self.similarity_line[k].setData(self.similarity_line_data[:, i])
 
-
+    def update_colors(self):
+        self.similarity_line["Compared to Previous"].setPen(self.settings.colors["csim_prev"].color)
+        self.similarity_line["Compared to First"].setPen(self.settings.colors["csim_first"].color)

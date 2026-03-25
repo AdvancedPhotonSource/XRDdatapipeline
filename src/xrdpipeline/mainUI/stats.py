@@ -56,12 +56,13 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.spots_scatter_intensitymean = pg.ScatterPlotItem()
         self.spots_scatter_intensitysum = pg.ScatterPlotItem()
         self.spots_count = pg.PlotDataItem()
-        self.spots_count.setPen("r")
 
         self.legend = self.stats_view.addLegend(offset=(-1, 1))
 
         self.vLine = pg.InfiniteLine(angle=90, movable=False)
         self.stats_view.addItem(self.vLine, ignoreBounds=True)
+
+        self.update_colors()
 
         # UI
         self.histogram_type_select = QtWidgets.QComboBox()
@@ -201,6 +202,7 @@ class StatsView(pg.GraphicsLayoutWidget):
         # Then update and display the current image's stats data
         self.update_stats_data()
         self.histogram_type_changed(self.histogram_type_select.currentIndex())
+        self.update_colors()
     
     def update_tth(self):
         self.spots_count.setData(self.tth_bins, self.spots_count_data)
@@ -216,4 +218,13 @@ class StatsView(pg.GraphicsLayoutWidget):
         self.spots_scatter_intensitymean.setData(self.scatter_q_bins, self.spots_intensitymean_data)
         self.spots_scatter_intensitysum.setData(self.scatter_q_bins, self.spots_intensitysum_data)
 
-
+    def update_colors(self):
+        self.spots_count.setPen(self.settings.colors["stats_spot_count_line"].color)
+        self.spots_scatter_area.setBrush(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_intensitymax.setBrush(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_intensitymean.setBrush(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_intensitysum.setBrush(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_area.setPen(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_intensitymax.setPen(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_intensitymean.setPen(self.settings.colors["stats_scatter_plot"].color)
+        self.spots_scatter_intensitysum.setPen(self.settings.colors["stats_scatter_plot"].color)

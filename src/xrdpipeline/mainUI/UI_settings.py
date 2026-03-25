@@ -56,12 +56,13 @@ class Settings:
         default_factory=lambda: {
             "predef_mask": ColorSettings("Predefined Mask", "hotpink"),
             "nonpositive_mask": ColorSettings("Nonpositive Mask", "purple"),
-            "base_line": ColorSettings("Base Integral Line", "black"),
             "outlier_mask": ColorSettings("Outlier Mask", "lime"),
-            "outlier_line": ColorSettings("Outlier Masked Integral Line", "lime"),
             "spot_mask": ColorSettings("Spot Mask", "cyan"),
-            "spot_line": ColorSettings("Spot Masked Integral Line", "cyan"),
             "arcs_mask": ColorSettings("Texture Mask", "red"),
+            "tth_circle_mask": ColorSettings("2Theta Circle", "white"),
+            "base_line": ColorSettings("Base Integral Line", "black"),
+            "outlier_line": ColorSettings("Outlier Masked Integral Line", "lime"),
+            "spot_line": ColorSettings("Spot Masked Integral Line", "cyan"),
             "arcs_line": ColorSettings("Texture Masked Integral Line", "red"),
             "minus_spot_line": ColorSettings(
                 "Base \u2013 Spot Masked Integral Line", "blue"
@@ -69,7 +70,18 @@ class Settings:
             "minus_arcs_line": ColorSettings(
                 "Base \u2013 Texture Masked Integral Line", "hotpink"
             ),
-            "tth_circle_mask": ColorSettings("2Theta Circle", "white"),
+            "stats_spot_count_line": ColorSettings("Spot Count Line", "red"),
+            "stats_scatter_plot": ColorSettings("Scatter Plot", "grey"),
+            "grad_spottiness_median": ColorSettings("Median", "hotpink"),
+            "grad_spottiness_MAD": ColorSettings("MAD", "cyan"),
+            "grad_spottiness_mean": ColorSettings("Mean", "red"),
+            "grad_spottiness_STD": ColorSettings("STD", "green"),
+            "grad_spottiness_diff": ColorSettings("MAD-STD", "blue"),
+            "grad_spottiness_div": ColorSettings("STD/MAD", "blue"),
+            "csim_first": ColorSettings("Compared to First", "blue"),
+            "csim_prev": ColorSettings("Compared to Previous", "red"),
+            "azim_q_arc": ColorSettings("Arcs", "red"),
+            "azim_q_spot": ColorSettings("Spots", "blue"),
         }
     )
 
@@ -80,17 +92,23 @@ class Settings:
             self.output_directory = add_output_subdirectory(self.output_directory)
 
 
+class LayoutHLine(QtWidgets.QFrame):
+    def __init__(self):
+        super().__init__()
+        self.setFrameShape(pg.QtWidgets.QFrame.Shape.HLine)
+
+
 class ColorWidget(QtWidgets.QWidget):
     """
-    Colored preview button for a particular color item.
-    Clicking it will bring up a color dialog window to select a new color.
+    Widget holding the name, current color, and colored preview button for a particular color item.
+    Clicking the button will bring up a color dialog window to select a new color.
     The color item will be updated when the new color is selected.
     """
     def __init__(self, coloritem: ColorSettings):
         super().__init__()
         self.coloritem = coloritem
         self.name_label = QtWidgets.QLabel(self.coloritem.name + ":")
-        self.color_text = QtWidgets.QLineEdit(self.coloritem.color)
+        self.color_text = QtWidgets.QLabel(self.coloritem.color)
         self.current_color_preview = QtWidgets.QPushButton()
         self.current_color_preview.setStyleSheet(f"""
 QPushButton {{
@@ -106,11 +124,6 @@ QPushButton:hover {{
 }}
         """)
         self.current_color_preview.released.connect(self.open_color_dialog)
-        self.widgetlayout = QtWidgets.QHBoxLayout()
-        self.widgetlayout.addWidget(self.name_label)
-        self.widgetlayout.addWidget(self.color_text)
-        self.widgetlayout.addWidget(self.current_color_preview)
-        self.setLayout(self.widgetlayout)
 
     def apply(self):
         self.coloritem.color = self.color_text.text()
@@ -205,13 +218,118 @@ class SettingsWindow(QtWidgets.QWidget):
         self.cancel_button = QtWidgets.QPushButton("Cancel")
 
         # colors
-        self.colors_layout = QtWidgets.QVBoxLayout()
+        self.main_image_colors_label = QtWidgets.QLabel("<b>Main image</b>")
+        self.main_image_colors = [
+            "predef_mask",
+            "nonpositive_mask",
+            "outlier_mask",
+            "spot_mask",
+            "arcs_mask",
+            "tth_circle_mask"
+            ]
+        self.integral_colors_label = QtWidgets.QLabel("<b>Integrals</b>")
+        self.integral_colors = [
+            "base_line",
+            "outlier_line",
+            "spot_line",
+            "arcs_line",
+            "minus_spot_line",
+            "minus_arcs_line"
+            ]
+        self.contour_colors_label = QtWidgets.QLabel("<b>Contour and Waterfall</b>")
+        self.contour_colors = []
+        self.spot_stats_colors_label = QtWidgets.QLabel("<b>Spot statistics</b>")
+        self.spot_stats_colors = ["stats_spot_count_line", "stats_scatter_plot"]
+        self.grad_spottiness_colors_label = QtWidgets.QLabel("<b>Gradient-based spot statistics</b>")
+        self.grad_spottiness_colors = ["grad_spottiness_median",
+            "grad_spottiness_MAD",
+            "grad_spottiness_mean",
+            "grad_spottiness_STD",
+            "grad_spottiness_diff",
+            "grad_spottiness_div"]
+        self.csim_colors_label = QtWidgets.QLabel("<b>Cosine Similarity</b>")
+        self.csim_colors = ["csim_first", "csim_prev"]
+        self.azim_q_colors_label = QtWidgets.QLabel("<b>Azim vs Q</b>")
+        self.azim_q_colors = ["azim_q_arc", "azim_q_spot"]
+
+        self.color_scroll = QtWidgets.QScrollArea()
+        self.color_scroll_widget = QtWidgets.QWidget()
+        self.color_scroll_layout = QtWidgets.QVBoxLayout()
+        self.color_scroll_layout.addWidget(self.color_scroll)
+        self.colors_layout = QtWidgets.QGridLayout()
         self.color_widgets = {}
-        for name, coloritem in self.settings.colors.items():
-            self.color_widgets[name] = ColorWidget(coloritem)
-            self.colors_layout.addWidget(self.color_widgets[name])
+
+        it = 0
+        self.colors_layout.addWidget(self.main_image_colors_label, it, 0, 1, 3)
+        it +=1
+        for name in self.main_image_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
+        self.colors_layout.addWidget(LayoutHLine(), it, 0, 1, 3)
+        it += 1
+        self.colors_layout.addWidget(self.integral_colors_label, it, 0, 1, 3)
+        it += 1
+        for name in self.integral_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
+        self.colors_layout.addWidget(LayoutHLine(), it, 0, 1, 3)
+        it += 1
+        self.colors_layout.addWidget(self.contour_colors_label, it, 0, 1, 3)
+        it += 1
+        for name in self.contour_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
+        self.colors_layout.addWidget(LayoutHLine(), it, 0, 1, 3)
+        it += 1
+        self.colors_layout.addWidget(self.spot_stats_colors_label, it, 0, 1, 3)
+        it += 1
+        for name in self.spot_stats_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
+        self.colors_layout.addWidget(LayoutHLine(), it, 0, 1, 3)
+        it += 1
+        self.colors_layout.addWidget(self.grad_spottiness_colors_label, it, 0, 1, 3)
+        it += 1
+        for name in self.grad_spottiness_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
+        self.colors_layout.addWidget(LayoutHLine(), it, 0, 1, 3)
+        it += 1
+        self.colors_layout.addWidget(self.csim_colors_label, it, 0, 1, 3)
+        it += 1
+        for name in self.csim_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
+        self.colors_layout.addWidget(LayoutHLine(), it, 0, 1, 3)
+        it += 1
+        self.colors_layout.addWidget(self.azim_q_colors_label, it, 0, 1, 3)
+        it += 1
+        for name in self.azim_q_colors:
+            self.color_widgets[name] = ColorWidget(self.settings.colors[name])
+            self.colors_layout.addWidget(self.color_widgets[name].name_label, it, 0)
+            self.colors_layout.addWidget(self.color_widgets[name].current_color_preview, it, 1)
+            self.colors_layout.addWidget(self.color_widgets[name].color_text, it, 2)
+            it += 1
         self.default_colors_button = QtWidgets.QPushButton("Return to Defaults")
-        self.colors_layout.addWidget(self.default_colors_button)
+        self.color_scroll_layout.addWidget(self.default_colors_button)
         self.default_colors_button.released.connect(self.default_colors_pressed)
 
         self.settings_layout = QtWidgets.QGridLayout()
@@ -239,7 +357,9 @@ class SettingsWindow(QtWidgets.QWidget):
         self.button_layout.addWidget(self.cancel_button)
 
         self.base_settings.setLayout(self.settings_layout)
-        self.color_settings.setLayout(self.colors_layout)
+        self.color_scroll_widget.setLayout(self.colors_layout)
+        self.color_scroll.setWidget(self.color_scroll_widget)
+        self.color_settings.setLayout(self.color_scroll_layout)
 
         self.main_layout = QtWidgets.QVBoxLayout()
         # self.main_layout.addLayout(self.settings_layout)
