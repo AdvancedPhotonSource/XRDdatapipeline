@@ -99,7 +99,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         }
         self.integral_types = list(self.integral_type_dict.keys())
         self.integral_select.addItems(self.integral_types)
-        self.integral_select.setCurrentIndex(1)
+        self.integral_select.setCurrentIndex(0)
         self.integral_select.currentIndexChanged.connect(self.integral_type_changed)
 
         self.viewtype_select = QtWidgets.QComboBox()
