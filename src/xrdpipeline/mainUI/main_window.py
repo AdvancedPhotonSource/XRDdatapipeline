@@ -454,18 +454,25 @@ class KeyPressWindow(QtWidgets.QWidget):
         """
         integral_plot = self.integral_widget.integral_view
         stats_plot = self.tabbed_area.stats_widget.stats_view
+        azim_q_plot = self.tabbed_area.azimq_widget.azimq_view
         if location != "Integral":
             if data.plotitem in integral_plot.listDataItems():
                 integral_plot.removeItem(data.plotitem)
         if location != "Stats":
             if data.plotitem in stats_plot.listDataItems():
                 stats_plot.removeItem(data.plotitem)
+        if location != "Azim/Q":
+            if data.plotitem in azim_q_plot.listDataItems():
+                azim_q_plot.removeItem(data.plotitem)
         if location == "Integral":
             if data.plotitem not in integral_plot.listDataItems():
                 self.integral_widget.integral_view.addItem(data.plotitem)
         elif location == "Stats":
             if data.plotitem not in stats_plot.listDataItems():
                 stats_plot.addItem(data.plotitem)
+        elif location == "Azim/Q":
+            if data.plotitem not in azim_q_plot.listDataItems():
+                azim_q_plot.addItem(data.plotitem)
 
     def remove_user_data(self, data):
         """
@@ -477,10 +484,13 @@ class KeyPressWindow(QtWidgets.QWidget):
         """
         integral_plot = self.integral_widget.integral_view
         stats_plot = self.tabbed_area.stats_widget.stats_view
+        azim_q_plot = self.tabbed_area.azimq_widget.azimq_view
         if data.plotitem in integral_plot.listDataItems():
             integral_plot.removeItem(data.plotitem)
         if data.plotitem in stats_plot.listDataItems():
             stats_plot.removeItem(data.plotitem)
+        if data.plotitem in azim_q_plot.listDataItems():
+            azim_q_plot.removeItem(data.plotitem)
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Right:
