@@ -157,6 +157,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.linked_axes_checkbox.stateChanged.connect(
             self.linked_axes_checkbox_changed
         )
+        self.linked_axes_checkbox.setChecked(True)
 
         self.live_view_image_checkbox = QtWidgets.QCheckBox("Live update")
         self.live_view_image_checkbox.stateChanged.connect(
