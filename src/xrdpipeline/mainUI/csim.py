@@ -30,6 +30,15 @@ class CSimView(pg.GraphicsLayoutWidget):
         self.settings = settings
         # similar to contour view, show full directory
         self.view = self.addPlot(title="")
+        self.secondary_view = pg.ViewBox()
+        self.view.scene().addItem(self.secondary_view)
+        # Link scaling the right vertical axis to the new viewbox
+        self.view.showAxis('right')
+        self.view.getAxis('right').linkToView(self.secondary_view)
+        # Link the two x axes so they still scale together as expected
+        self.secondary_view.setXLink(self.view)
+        self.view.getAxis('right').setLabel('Compared to Previous')
+        self.view.getAxis('left').setLabel('Compared to First')
         self.min = 0
         self.max = 100
         self.spacing = 1
@@ -40,11 +49,15 @@ class CSimView(pg.GraphicsLayoutWidget):
         self.similarity_line = {}
         self.similarity_line_data = []
         self.legend = self.view.addLegend(offset=(-1, 1))
-        for k in self.methods:
-            # check if addPlot.plot() is a shortcut for create PlotItem, add PlotItem
-            self.similarity_line[k] = self.view.plot()
-            self.legend.addItem(self.similarity_line[k], k)
+        self.similarity_line["Compared to First"] = self.view.plot()
+        self.legend.addItem(self.similarity_line["Compared to First"], "Compared to First")
+        self.similarity_line["Compared to Previous"] = pg.PlotDataItem()
+        self.secondary_view.addItem(self.similarity_line["Compared to Previous"])
+        self.legend.addItem(self.similarity_line["Compared to Previous"], "Compared to Previous")
         self.update_colors()
+        self.updateViews()
+        # Ensure the secondary viewbox is updated when the primary one is resized
+        self.view.vb.sigResized.connect(self.updateViews)
 
     def update_dir(self):
         self.update_data()
@@ -72,3 +85,11 @@ class CSimView(pg.GraphicsLayoutWidget):
     def update_colors(self):
         self.similarity_line["Compared to Previous"].setPen(self.settings.colors["csim_prev"].color)
         self.similarity_line["Compared to First"].setPen(self.settings.colors["csim_first"].color)
+
+    def updateViews(self):
+        """
+        Updates the secondary viewbox.
+        Called when the primary viewbox is resized.
+        """
+        self.secondary_view.setGeometry(self.view.vb.sceneBoundingRect())
+        self.secondary_view.linkedViewChanged(self.view.vb, self.secondary_view.XAxis)
