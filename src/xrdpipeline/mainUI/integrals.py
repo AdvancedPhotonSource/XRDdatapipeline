@@ -175,21 +175,23 @@ class IntegralView(pg.GraphicsLayoutWidget):
                 vals[:, :] = 0
                 new_vals = vals
             if new_vals.shape != vals.shape:
-                print(
-                    "Shape of incoming data {0} not equal to config shape {1} for integral {2}. Setting values to 0. If the config shape looks incorrect, go to Settings->outChannels and set it to {3}.".format(
-                        new_vals.shape,
-                        vals.shape,
-                        integral_infile_piece + ext,
-                        new_vals.shape[0],
+                if new_vals.shape != (self.settings.outChannels, 2):
+                    print(
+                        f"Shape of incoming data {new_vals.shape} not equal to config shape {vals.shape} for integral {integral_infile_piece + ext}. "
+                        f"Setting config value for number of integration bins to {new_vals.shape[0]}."
                     )
-                )
-                vals[:, :] = 0
+                    self.settings.outChannels = new_vals.shape[0]
+                    self.integral_data = np.empty((self.settings.outChannels, 2))
+                    self.masked_integral_data = np.empty((self.settings.outChannels, 2))
+                    self.spotmasked_integral_data = np.empty((self.settings.outChannels, 2))
+                    self.texturemasked_integral_data = np.empty((self.settings.outChannels, 2))
+                vals = np.empty((self.settings.outChannels, 2))
             try:
                 vals[:, :] = new_vals
             except:
                 print(
                     "Exception setting integral data for {0}. Setting to 0.".format(
-                        integral_infile_piece, ext
+                        integral_infile_piece + ext
                     )
                 )
 
