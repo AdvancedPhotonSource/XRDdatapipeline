@@ -341,10 +341,10 @@ def run_iteration(
             returned_items = list(returned_items)
             split_spots = returned_items.pop(0)
             split_arcs = returned_items.pop(0)
-            if calc_spot_stats:
-                spots_table_df = returned_items.pop(0)
             if calc_grad_spottiness:
                 spots_table_grad = returned_items.pop(0)
+            if calc_spot_stats:
+                spots_table_df = returned_items.pop(0)
             if calc_azim_Qs:
                 azim_vs_Qs = returned_items.pop(0)
 
