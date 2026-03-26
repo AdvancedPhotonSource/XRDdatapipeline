@@ -426,9 +426,9 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_spottiness_default = 1
         self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
 
-        self.regex_include_label = QtWidgets.QLabel("Only include filenames with:")
+        self.regex_include_label = QtWidgets.QLabel("Only include filenames with (case-sensitive):")
         self.regex_include_text = QtWidgets.QLineEdit()
-        self.regex_exclude_label = QtWidgets.QLabel("Exclude filenames with:")
+        self.regex_exclude_label = QtWidgets.QLabel("Exclude filenames with (case-sensitive):")
         self.regex_exclude_text = QtWidgets.QLineEdit()
 
         self.pixelSize_label = QtWidgets.QLabel("Pixel size (Leave blank for default values):")
