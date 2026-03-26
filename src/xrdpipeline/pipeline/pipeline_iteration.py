@@ -448,7 +448,7 @@ def run_iteration(
         timing_0 = time.time()
     
     stats_prefix = os.path.join(output_directory, "stats", name)
-    if calc_outlier:
+    if calc_outlier and calc_splitting:
         # spottiness
         if calc_azim_Qs:
             azim_vs_Qs.to_csv(stats_prefix + "_azim_vs_Qs.csv")
