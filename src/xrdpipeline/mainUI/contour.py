@@ -45,7 +45,6 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_min = 0
         self.manual_max = 100
         self.manual_spacing = 1
-        self.integral_extension = "_om.chi"
         self.integral_data = []
         self.automatically_set_spacing = True
         # Intended to be "Should this zoom out (change step size) when more images appear than the max, or should it start scrolling?" Not yet implemented.
@@ -100,6 +99,7 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.integral_types = list(self.integral_type_dict.keys())
         self.integral_select.addItems(self.integral_types)
         self.integral_select.setCurrentIndex(0)
+        self.integral_extension = self.integral_type_dict[self.integral_types[self.integral_select.currentIndex()]]
         self.integral_select.currentIndexChanged.connect(self.integral_type_changed)
 
         self.viewtype_select = QtWidgets.QComboBox()
