@@ -59,6 +59,10 @@ class CSimView(pg.GraphicsLayoutWidget):
         # Ensure the secondary viewbox is updated when the primary one is resized
         self.view.vb.sigResized.connect(self.updateViews)
 
+        self.vline = pg.InfiniteLine(angle=90, movable=False)
+        self.vline.setZValue(1)
+        self.view.addItem(self.vline, ignoreBounds=True)
+
     def update_dir(self):
         self.update_data()
         self.update_colors()

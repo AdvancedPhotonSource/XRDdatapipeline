@@ -137,6 +137,9 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.view.scene().sigMouseClicked.connect(
             self.mouseClickedLeftContourChangeImage
         )
+        self.tabbed_area.csim_widget.view.scene().sigMouseClicked.connect(
+            self.mouseClickedCsimChangeImage
+        )
         self.tabbed_area.spottiness_widget.view.scene().sigMouseMoved.connect(
             self.mouseMovedSpottiness
         )
@@ -439,6 +442,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.integral_widget.update_integral_data()
         self.tabbed_area.contour_widget.horiz_line.setValue(self.settings.curr_pos)
         self.contourview.horiz_line.setValue(self.settings.curr_pos)
+        self.tabbed_area.csim_widget.vline.setValue(self.settings.curr_pos)
         self.tabbed_area.stats_widget.update_stats_data()
         self.tabbed_area.spottiness_widget.update_data()
         self.tabbed_area.azimq_widget.update_stats_data()
@@ -868,22 +872,6 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         :param evt: Mouse position
         """
-        # global tiflist, keylist, curr_key, curr_pos
-        # evt.button() results = {1: left click, 2: right click, 4: middle click}
-        # print(evt.button())
-        # If left click
-        # Can also check for double-click (evt.double() == True)
-        # no longer outputting same evt.button() results
-        # if evt.button() == 1:
-        #     print("Recognized left click")
-        #     pos = int(self.tabbed_area.contour_widget.view.vb.mapSceneToView(evt.scenePos()).y())
-        #     if (pos >= 0) and (pos >= self.tabbed_area.contour_widget.view.getAxis("left").range[0]) and (pos < len(self.settings.tiflist[self.settings.keylist[self.settings.curr_key]])):
-        #         if self.timer.isActive():
-        #             self.pause()
-        #         self.curr_pos = pos
-        #         print(pos)
-        #         self.tabbed_area.contour_widget.horiz_line.setValue(pos)
-        #         self.updateImages()
         if (
             (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton) and
             (self.tabbed_area.contour_widget.viewtype_select.currentIndex() == Viewtype.Contour.value)
@@ -912,6 +900,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.settings.curr_pos = pos
                 self.tabbed_area.contour_widget.horiz_line.setValue(pos)
                 self.contourview.horiz_line.setValue(pos)
+                self.tabbed_area.csim_widget.vline.setValue(pos)
                 self.updateImages()
     
     def mouseClickedLeftContourChangeImage(self, evt):
@@ -949,6 +938,42 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.settings.curr_pos = pos
                 self.tabbed_area.contour_widget.horiz_line.setValue(pos)
                 self.contourview.horiz_line.setValue(pos)
+                self.tabbed_area.csim_widget.vline.setValue(pos)
+                self.updateImages()
+
+    def mouseClickedCsimChangeImage(self, evt):
+        """
+        Use the x axis value of the csim graph to swap to the image closest to
+        the cursor position.
+
+        :param evt: Mouse position
+        """
+        if (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton):
+            pos = int(
+                self.tabbed_area.csim_widget.view.vb.mapSceneToView(
+                    evt.scenePos()
+                ).x()
+            )
+            if (
+                (pos >= 0)
+                and (
+                    pos >= self.tabbed_area.csim_widget.view.getAxis("bottom").range[0]
+                )
+                and (
+                    pos
+                    < len(
+                        self.settings.tiflist[
+                            self.settings.keylist[self.settings.curr_key]
+                        ]
+                    )
+                )
+            ):
+                if self.timer.isActive():
+                    self.pause()
+                self.settings.curr_pos = pos
+                self.tabbed_area.contour_widget.horiz_line.setValue(pos)
+                self.contourview.horiz_line.setValue(pos)
+                self.tabbed_area.csim_widget.vline.setValue(pos)
                 self.updateImages()
 
     def vLineCheckbox_changed(self, evt):
