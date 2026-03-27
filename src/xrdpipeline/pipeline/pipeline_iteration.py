@@ -167,6 +167,18 @@ def run_iteration(
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
     """
+    # Sanity checks to adjust defaults
+    if not calc_outlier:
+        calc_splitting = False
+    if not calc_splitting:
+        calc_spot_stats = False
+        calc_grad_spottiness = False
+        calc_azim_Qs = False
+        use_radial_grad = False
+        use_azim_grad = False
+    if not (use_azim_grad or use_radial_grad):
+        calc_grad_spottiness = False
+
     output_directory = add_output_subdirectory(output_directory)
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
