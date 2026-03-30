@@ -1045,8 +1045,7 @@ class main_window(QtWidgets.QWidget):
         self.cache = {}
         self.has_made_cache = False
         self.cache_has_failed = False
-        # print("Directory: {0}, Ctrl file: {1}, Predef mask: {2}".format(dir_name,ctrl_name,predef_mask))
-        # self.process = main_process(dir_name,ctrl_name,predef_mask)
+
         # create subdirectories if needed
         self.output_directory = add_output_subdirectory(self.output_directory)
         if not os.path.exists(self.output_directory):
@@ -1069,6 +1068,67 @@ class main_window(QtWidgets.QWidget):
 
         self.num_success = 0
         self.num_failed = 0
+
+        # Log all options
+        if self.iotth_max.value() != 0.0:
+            tth_integration_range = [
+                self.iotth_min.value(),
+                self.iotth_max.value()
+            ]
+        else:
+            tth_integration_range = None
+        if (self.azim_min.value() != 0.0) or (os.path.splitext(self.imgctrl)[1] == ".poni"):
+            azim_integration_range = [
+                self.azim_min.value(),
+                self.azim_max.value()
+            ]
+        else:
+            azim_integration_range = None
+        if self.outChannels.value() != 0.0:
+            n_integration_bins = self.outChannels.value()
+        else:
+            n_integration_bins = None
+        if self.PolaVal.value() != 0.0:
+            polarization = [self.PolaVal.value(), False]
+        else:
+            polarization = None
+        if ((self.settings_widget.pixelSize_x_text.text() != "") and
+            (self.settings_widget.pixelSize_y_text.text() != "")):
+            pixelSize = [float(self.settings_widget.pixelSize_x_text.text()),
+                         float(self.settings_widget.pixelSize_y_text.text())]
+        else:
+            pixelSize = None
+        logging.getLogger(__name__).info(f"Options:\n"
+                                         f"cache location = {self.cache_location}\n"
+                                         f"input directory = {self.input_directory}\n"
+                                         f"output directory = {self.output_directory}\n"
+                                         f"image control file = {self.imgctrl}\n"
+                                         f"flatfield = {self.flatfield}\n"
+                                         f"image mask = {self.imgmask}\n"
+                                         f"bad pixel mask = {self.bad_pixels}\n"
+                                         f"esdMul = {self.settings_widget.madmult.value()}\n"
+                                         f"tth integration range = {tth_integration_range}\n"
+                                         f"azimuthal integration range = {azim_integration_range}\n"
+                                         f"number of integration bins = {n_integration_bins}\n"
+                                         f"polarization = {polarization}\n"
+                                         f"pixel size = {pixelSize}\n"
+                                         f"calculate outlier mask = {self.settings_widget.calc_outlier_checkbox.isChecked()}\n"
+                                         f"calculate spot/texture splitting = {self.settings_widget.calc_splitting_combobox.currentIndex() != 0}\n"
+                                         f"azim / Q shape minimum = {self.settings_widget.azim_q.value()}\n"
+                                         f"minimum cluster area = {self.settings_widget.min_cluster_area.value()}\n"
+                                         f"minimum arc area = {self.settings_widget.min_arc_area.value()}\n"
+                                         f"minimum azimuthal span = {self.settings_widget.min_azim_width.value()}\n"
+                                         f"maximum Q span = {self.settings_widget.max_q_width.value()}\n"
+                                         f"spot cutting threshold percentile = {self.settings_widget.radial_threshold_percentile.value()}\n"
+                                         f"on-arc threshold percentile = {self.settings_widget.azim_threshold_percentile.value()}\n"
+                                         f"use radial gradient = {(self.settings_widget.calc_splitting_combobox.currentIndex() == 2 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4)}\n"
+                                         f"use azimuthal gradient = {(self.settings_widget.calc_splitting_combobox.currentIndex() == 3 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4)}\n"
+                                         f"calculate and save spot statistics = {self.settings_widget.calc_spottiness_combobox.currentIndex() != 0}\n"
+                                         f"calculate and save gradient spot statistics = {self.settings_widget.calc_spottiness_combobox.currentIndex() == 2}\n"
+                                         f"calculate and save azim / Q ratios = {self.settings_widget.calc_azim_qs.isChecked()}\n"
+                                         f"csim first index = {self.settings_widget.csim_first_spinbox.value()}"
+                                         )
+
 
         # Grab existing file names and add them to the queue if option checked
         if self.process_both_radio.isChecked() or self.process_existing_only_radio.isChecked():
