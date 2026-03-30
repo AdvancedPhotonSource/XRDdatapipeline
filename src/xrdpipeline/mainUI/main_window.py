@@ -137,11 +137,17 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.view.scene().sigMouseClicked.connect(
             self.mouseClickedLeftContourChangeImage
         )
+        self.tabbed_area.csim_widget.view.scene().sigMouseClicked.connect(
+            self.mouseClickedCsimChangeImage
+        )
         self.tabbed_area.spottiness_widget.view.scene().sigMouseMoved.connect(
             self.mouseMovedSpottiness
         )
         self.tabbed_area.stats_widget.stats_view.scene().sigMouseMoved.connect(
             self.mouseMovedStats
+        )
+        self.tabbed_area.azimq_widget.azimq_view.scene().sigMouseMoved.connect(
+            self.mouseMovedAzimQ
         )
         # checkboxes for the vertical line and circle
         self.vLineCheckbox = QtWidgets.QCheckBox("2Th Line")
@@ -154,6 +160,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.linked_axes_checkbox.stateChanged.connect(
             self.linked_axes_checkbox_changed
         )
+        self.linked_axes_checkbox.setChecked(True)
 
         self.live_view_image_checkbox = QtWidgets.QCheckBox("Live update")
         self.live_view_image_checkbox.stateChanged.connect(
@@ -435,8 +442,10 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.integral_widget.update_integral_data()
         self.tabbed_area.contour_widget.horiz_line.setValue(self.settings.curr_pos)
         self.contourview.horiz_line.setValue(self.settings.curr_pos)
+        self.tabbed_area.csim_widget.vline.setValue(self.settings.curr_pos)
         self.tabbed_area.stats_widget.update_stats_data()
         self.tabbed_area.spottiness_widget.update_data()
+        self.tabbed_area.azimq_widget.update_stats_data()
 
     def update_user_data(self, data, location):
         """
@@ -449,18 +458,25 @@ class KeyPressWindow(QtWidgets.QWidget):
         """
         integral_plot = self.integral_widget.integral_view
         stats_plot = self.tabbed_area.stats_widget.stats_view
+        azim_q_plot = self.tabbed_area.azimq_widget.azimq_view
         if location != "Integral":
             if data.plotitem in integral_plot.listDataItems():
                 integral_plot.removeItem(data.plotitem)
         if location != "Stats":
             if data.plotitem in stats_plot.listDataItems():
                 stats_plot.removeItem(data.plotitem)
+        if location != "Azim/Q":
+            if data.plotitem in azim_q_plot.listDataItems():
+                azim_q_plot.removeItem(data.plotitem)
         if location == "Integral":
             if data.plotitem not in integral_plot.listDataItems():
                 self.integral_widget.integral_view.addItem(data.plotitem)
         elif location == "Stats":
             if data.plotitem not in stats_plot.listDataItems():
                 stats_plot.addItem(data.plotitem)
+        elif location == "Azim/Q":
+            if data.plotitem not in azim_q_plot.listDataItems():
+                azim_q_plot.addItem(data.plotitem)
 
     def remove_user_data(self, data):
         """
@@ -472,10 +488,13 @@ class KeyPressWindow(QtWidgets.QWidget):
         """
         integral_plot = self.integral_widget.integral_view
         stats_plot = self.tabbed_area.stats_widget.stats_view
+        azim_q_plot = self.tabbed_area.azimq_widget.azimq_view
         if data.plotitem in integral_plot.listDataItems():
             integral_plot.removeItem(data.plotitem)
         if data.plotitem in stats_plot.listDataItems():
             stats_plot.removeItem(data.plotitem)
+        if data.plotitem in azim_q_plot.listDataItems():
+            azim_q_plot.removeItem(data.plotitem)
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Right:
@@ -614,6 +633,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.integral_cursor_label.setPos(integral_point)
             self.tabbed_area.spottiness_widget.vLine.setPos(x)
             self.tabbed_area.stats_widget.vLine.setPos(x)
+            self.tabbed_area.azimq_widget.vLine.setPos(x)
             self.integral_cursor_label.setText(
                 "2\u03b8={0:0.2f}\u00b0\nQ={1:0.2f}\u212b\u207b\u00b9\nd={2:0.2f}\u212b".format(tth, Q, d)
             )
@@ -818,6 +838,33 @@ class KeyPressWindow(QtWidgets.QWidget):
                 d = tth_to_d(tth, self.settings.wavelength)
                 self.update_tth_lines(tth, Q, d)
 
+    def mouseMovedAzimQ(self,evt):
+        """
+        Slot for the signal emitted when the mouse moves over the azim_q widget canvas.
+        Updates the two-theta cursor mask on the main image as well as
+        the corresponding vertical lines in the integral, contour, and
+        other graphs.
+
+        :param evt: Mouse position
+        """
+        if (
+            self.vLineCheckbox.isChecked()
+            or self.circleCheckbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+            or self.contourview.tth_line_checkbox.isChecked()
+        ) and self.imageview.maps_loaded:
+            pos = evt
+            if self.tabbed_area.azimq_widget.azimq_view.sceneBoundingRect().contains(pos):
+                mousePoint = self.tabbed_area.azimq_widget.azimq_view.vb.mapSceneToView(pos)
+                if self.x_axis_choice.currentIndex() == 0:
+                    tth = mousePoint.x()
+                    Q = tth_to_q(tth, self.settings.wavelength)
+                elif self.x_axis_choice.currentIndex() == 1:
+                    Q = mousePoint.x()
+                    tth = q_to_tth(Q, self.settings.wavelength)
+                d = tth_to_d(tth, self.settings.wavelength)
+                self.update_tth_lines(tth, Q, d)
+
     def mouseClickedContourChangeImage(self, evt):
         """
         Use the y axis value of the contour graph to swap to the image closest to
@@ -825,22 +872,6 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         :param evt: Mouse position
         """
-        # global tiflist, keylist, curr_key, curr_pos
-        # evt.button() results = {1: left click, 2: right click, 4: middle click}
-        # print(evt.button())
-        # If left click
-        # Can also check for double-click (evt.double() == True)
-        # no longer outputting same evt.button() results
-        # if evt.button() == 1:
-        #     print("Recognized left click")
-        #     pos = int(self.tabbed_area.contour_widget.view.vb.mapSceneToView(evt.scenePos()).y())
-        #     if (pos >= 0) and (pos >= self.tabbed_area.contour_widget.view.getAxis("left").range[0]) and (pos < len(self.settings.tiflist[self.settings.keylist[self.settings.curr_key]])):
-        #         if self.timer.isActive():
-        #             self.pause()
-        #         self.curr_pos = pos
-        #         print(pos)
-        #         self.tabbed_area.contour_widget.horiz_line.setValue(pos)
-        #         self.updateImages()
         if (
             (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton) and
             (self.tabbed_area.contour_widget.viewtype_select.currentIndex() == Viewtype.Contour.value)
@@ -869,6 +900,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.settings.curr_pos = pos
                 self.tabbed_area.contour_widget.horiz_line.setValue(pos)
                 self.contourview.horiz_line.setValue(pos)
+                self.tabbed_area.csim_widget.vline.setValue(pos)
                 self.updateImages()
     
     def mouseClickedLeftContourChangeImage(self, evt):
@@ -906,6 +938,42 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.settings.curr_pos = pos
                 self.tabbed_area.contour_widget.horiz_line.setValue(pos)
                 self.contourview.horiz_line.setValue(pos)
+                self.tabbed_area.csim_widget.vline.setValue(pos)
+                self.updateImages()
+
+    def mouseClickedCsimChangeImage(self, evt):
+        """
+        Use the x axis value of the csim graph to swap to the image closest to
+        the cursor position.
+
+        :param evt: Mouse position
+        """
+        if (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton):
+            pos = int(
+                self.tabbed_area.csim_widget.view.vb.mapSceneToView(
+                    evt.scenePos()
+                ).x()
+            )
+            if (
+                (pos >= 0)
+                and (
+                    pos >= self.tabbed_area.csim_widget.view.getAxis("bottom").range[0]
+                )
+                and (
+                    pos
+                    < len(
+                        self.settings.tiflist[
+                            self.settings.keylist[self.settings.curr_key]
+                        ]
+                    )
+                )
+            ):
+                if self.timer.isActive():
+                    self.pause()
+                self.settings.curr_pos = pos
+                self.tabbed_area.contour_widget.horiz_line.setValue(pos)
+                self.contourview.horiz_line.setValue(pos)
+                self.tabbed_area.csim_widget.vline.setValue(pos)
                 self.updateImages()
 
     def vLineCheckbox_changed(self, evt):
@@ -942,11 +1010,15 @@ class KeyPressWindow(QtWidgets.QWidget):
             self.tabbed_area.stats_widget.stats_view.setXLink(
                 self.integral_widget.integral_view.getViewBox()
             )
+            self.tabbed_area.azimq_widget.azimq_view.setXLink(
+                self.integral_widget.integral_view.getViewBox()
+            )
         else:
             # self.tabbed_area.contour_widget.view.getViewBox().linkView(pg.ViewBox.XAxis,None)
             self.tabbed_area.contour_widget.view.setXLink(None)
             self.tabbed_area.spottiness_widget.view.setXLink(None)
             self.tabbed_area.stats_widget.stats_view.setXLink(None)
+            self.tabbed_area.azimq_widget.azimq_view.setXLink(None)
 
     def x_axis_changed(self, evt):
         """
@@ -965,6 +1037,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.contourview.change_x_axis_type(evt)
         self.tabbed_area.spottiness_widget.change_x_axis_type(evt)
         self.tabbed_area.stats_widget.change_x_axis_type(evt)
+        self.tabbed_area.azimq_widget.change_x_axis_type(evt)
 
     def live_view_image_checkbox_changed(self, evt):
         if self.live_view_image_checkbox.isChecked():

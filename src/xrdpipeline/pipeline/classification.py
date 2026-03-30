@@ -97,6 +97,7 @@ def qwidth_area_classification_groupby(
     image,
     Qmap,
     azmap,
+    min_cluster_area=3,
     min_arc_area=100,
     Q_max=0.1, # 0.08
     azim_min=3.5,
@@ -131,7 +132,8 @@ def qwidth_area_classification_groupby(
         'flipped_azimvalue': raveled_flipped_azmap[raveled_mask],
     })
     areas = df['label'].value_counts()
-    valid_labels = areas[areas > min_arc_area].index
+    valid_labels = areas[areas > min_cluster_area].index
+    arc_labels = areas[areas > min_arc_area].index
     max_azim_a = df[df['label'].isin(valid_labels)].groupby('label')['azimvalue'].max()
     min_azim_a = df[df['label'].isin(valid_labels)].groupby('label')['azimvalue'].min()
     diff_azim_a = max_azim_a - min_azim_a
@@ -150,12 +152,20 @@ def qwidth_area_classification_groupby(
     minazim_bool = diff_azim > azim_min
     azim_Q_bool = azim_vs_Q > azim_Q_shape_min
     arcs_bool = maxQ_bool & minazim_bool & azim_Q_bool
+    arcs_index = arcs_bool[arcs_bool].index.intersection(arc_labels)
+    leftover_arcs = arcs_bool[arcs_bool].index.difference(arc_labels)
+    spots_index = arcs_bool[~arcs_bool].index.union(leftover_arcs)
 
     df['classifier'] = np.zeros(len(raveled_labels[raveled_mask]))
-    df.loc[df['label'].isin(arcs_bool[arcs_bool].index), 'classifier'] = 2
-    df.loc[df['label'].isin(arcs_bool[~arcs_bool].index), 'classifier'] = 1
-    
-    return df, valid_labels, labeled_mask, raveled_mask
+    df.loc[df['label'].isin(arcs_index), 'classifier'] = 2
+    df.loc[df['label'].isin(spots_index), 'classifier'] = 1
+
+    azim_vs_Q = azim_vs_Q.to_frame()
+    azim_vs_Q.rename(columns={0:"azim_vs_Q"},inplace=True)
+    azim_vs_Q["diff_azim"] = diff_azim
+    azim_vs_Q["diff_Q"] = diff_Q
+
+    return df, valid_labels, labeled_mask, raveled_mask, azim_vs_Q
 
 
 def split_grad_with_Q_groupby(
@@ -166,7 +176,10 @@ def split_grad_with_Q_groupby(
     gradient_dict,
     predef,
     labeled_mask,
-    threshold_percentile = 0.1,
+    spot_threshold_percentile = 0.1,
+    arc_threshold_percentile = 10,
+    use_radial_grad = True,
+    use_azim_grad = True,
     report_times = True,
 ):
     """
@@ -233,8 +246,8 @@ def split_grad_with_Q_groupby(
 
     if report_times: t0 = time.time()
     non_nan_radial_grad_2 = radial_grad_2.ravel()[~np.isnan(radial_grad_2.ravel())]
-    threshold = np.percentile(non_nan_radial_grad_2, threshold_percentile)
-    on_arc_threshold = np.percentile(non_nan_radial_grad_2, 10)
+    threshold = np.percentile(non_nan_radial_grad_2, spot_threshold_percentile)
+    on_arc_threshold = np.percentile(non_nan_radial_grad_2, arc_threshold_percentile)
     if report_times:
         t1 = time.time()
         print(f"Threshold calc time: {t1-t0}")
@@ -291,9 +304,10 @@ def split_grad_with_Q_groupby(
     azim_gradient_mask[raveled_mask] = azim_gradient_mask_shortened
 
     # if there aren't any clusters, just skip this part entirely. Maximum will be False if nothing is there.
-    if np.max(azim_gradient_mask) > 0:
-        df = remove_azim_spots_numpy(df, image.shape, raveled_mask, azim_gradient_mask, diffQ, labeled_mask)
+    if use_azim_grad and np.max(azim_gradient_mask) > 0:
+        df = remove_azim_spots_numpy(df, image.shape, raveled_mask, azim_gradient_mask, diffQ, labeled_mask, use_radial_grad)
     else:
+        # function is not called if neither use_azim_grad nor use_radial_grad are True
         df["new_arc"] = (df["on_arc"] == 1) & (df["classifier"] == 2)
         df["new_spot"] = (df["on_arc"] == 0) | (df["classifier"] == 1)
 
@@ -306,7 +320,7 @@ def split_grad_with_Q_groupby(
 
     return spot_mask, arc_mask, df, azim_grad_2
 
-def remove_azim_spots_numpy(df, image_shape, raveled_mask, azim_gradient_mask, diffQ, labeled_mask):
+def remove_azim_spots_numpy(df, image_shape, raveled_mask, azim_gradient_mask, diffQ, labeled_mask, use_radial_grad):
     """
     Function for searching through 2nd azimuthal derivative threshold masks and turning them into
     spots to cut from tagged arc clusters.
@@ -382,15 +396,26 @@ def remove_azim_spots_numpy(df, image_shape, raveled_mask, azim_gradient_mask, d
     df["close_to_median_azim_flipped"] = close_to_median_azim_flipped
 
     # Final classification
-    new_arc = (on_arc == 1) & (classifier == 2)
-    swap = (
-        (close_to_median_azim & (azimvalues > 10) & (azimvalues < 350)) |
-        close_to_median_azim_flipped
-    )
-    new_arc[swap] = False
+    if use_radial_grad:
+        new_arc = (on_arc == 1) & (classifier == 2)
+        swap = (
+            (close_to_median_azim & (azimvalues > 10) & (azimvalues < 350)) |
+            close_to_median_azim_flipped
+        )
+        new_arc[swap] = False
 
-    new_spot = (on_arc == 0) | (classifier == 1)
-    new_spot[swap] = True
+        new_spot = (on_arc == 0) | (classifier == 1)
+        new_spot[swap] = True
+    else:
+        new_arc = classifier == 2
+        swap = (
+            (close_to_median_azim & (azimvalues > 10) & (azimvalues < 350)) |
+            close_to_median_azim_flipped
+        )
+        new_arc[swap] = False
+
+        new_spot = classifier == 1
+        new_spot[swap] = True
 
     df["new_arc"] = new_arc
     df["new_spot"] = new_spot
@@ -405,12 +430,19 @@ def current_splitting_method(
     azmap,
     gradient_dict,
     Qbins,
-    threshold_percentile=0.1,
+    spot_threshold_percentile=0.1,
+    arc_threshold_percentile=10,
     calc_spot_stats=True,
     calc_grad_spottiness=False,
+    calc_azim_Qs=True,
+    use_radial_grad=True,
+    use_azim_grad=True,
     azim_Q_shape_min=100,
     predef_mask=None,
+    min_cluster_area=3,
     min_arc_area=100,
+    min_azim_width=0,
+    max_Q_width=0.1,
     timing = None,
     timing_names = None,
 ):
@@ -437,14 +469,15 @@ def current_splitting_method(
     """
     if timing is not None:
         time0 = time.time()
-    df, valid_labels, labeled_mask, raveled_mask = qwidth_area_classification_groupby(
+    df, valid_labels, labeled_mask, raveled_mask, azim_vs_Q = qwidth_area_classification_groupby(
         om,
         image,
         qmap,
         azmap,
+        min_cluster_area=min_cluster_area,
         min_arc_area=min_arc_area,
-        Q_max=0.1,
-        azim_min=3.5,
+        Q_max=max_Q_width,
+        azim_min=min_azim_width,
         azim_Q_shape_min=azim_Q_shape_min,
     )
     if timing is not None:
@@ -455,30 +488,55 @@ def current_splitting_method(
         if timing_name not in timing_names:
             timing_names.append(timing_name)
         time0 = time.time()
-    spot_mask, arc_mask, df, azim_grad_2 = split_grad_with_Q_groupby(
-        image,
-        raveled_mask,
-        df,
-        valid_labels,
-        gradient_dict,
-        predef=predef_mask,
-        labeled_mask=labeled_mask,
-        threshold_percentile=threshold_percentile,
-        report_times=False,
-    )
-    if timing is not None:
-        time1 = time.time()
-        # print(f"Time for grad splitting: {time2-time1}")
-        timing.append(time1 - time0)
-        timing_name = "Gradient classification"
-        if timing_name not in timing_names:
-            timing_names.append(timing_name)
-        time0 = time.time()
-    # expecting a table of spot stats for the last return value
-    # to_return = [spot_mask, arc_mask, df["classifier"]]
-    to_return = [spot_mask, arc_mask]
+    if use_radial_grad or use_azim_grad:
+        spot_mask, arc_mask, df, azim_grad_2 = split_grad_with_Q_groupby(
+            image,
+            raveled_mask,
+            df,
+            valid_labels,
+            gradient_dict,
+            predef=predef_mask,
+            labeled_mask=labeled_mask,
+            spot_threshold_percentile=spot_threshold_percentile,
+            arc_threshold_percentile=arc_threshold_percentile,
+            use_radial_grad=use_radial_grad,
+            use_azim_grad=use_azim_grad,
+            report_times=False,
+        )
+        if timing is not None:
+            time1 = time.time()
+            # print(f"Time for grad splitting: {time2-time1}")
+            timing.append(time1 - time0)
+            timing_name = "Gradient classification"
+            if timing_name not in timing_names:
+                timing_names.append(timing_name)
+            time0 = time.time()
+        # expecting a table of spot stats for the last return value
+        # to_return = [spot_mask, arc_mask, df["classifier"]]
+        to_return = [spot_mask, arc_mask]
+
+        if calc_grad_spottiness:
+            spot_table_grad = spottiness_azim_grad(azim_grad_2, Qbins)
+            to_return.append(spot_table_grad)
+            if timing is not None:
+                time1 = time.time()
+                # print(f"Time for grad splitting: {time2-time1}")
+                timing.append(time1 - time0)
+                timing_name = "Spottiness calculation: 2nd azim grad info"
+                if timing_name not in timing_names:
+                    timing_names.append(timing_name)
+    else:
+        # label, intensity, Qvalue, azimvalue, flipped_azimvalue, classifier
+        raveled_spot = np.zeros_like(raveled_mask)
+        raveled_spot[raveled_mask] = df["classifier"].values == 1
+        raveled_arc = np.zeros_like(raveled_mask)
+        raveled_arc[raveled_mask] = df["classifier"].values == 2
+        spot_mask = raveled_spot.reshape(image.shape)
+        arc_mask = raveled_arc.reshape(image.shape)
+        to_return = [spot_mask, arc_mask]
 
     if calc_spot_stats:
+        # df expecting: Qvalue, intensity, on_arc
         spot_table_df = spottiness_df_stats(df, raveled_mask, spot_mask, Qbins)
         to_return.append(spot_table_df)
         if timing is not None:
@@ -488,16 +546,17 @@ def current_splitting_method(
             timing_name = "Spottiness calculation: stats DF"
             if timing_name not in timing_names:
                 timing_names.append(timing_name)
-    if calc_grad_spottiness:
-        spot_table_grad = spottiness_azim_grad(azim_grad_2, Qbins)
-        to_return.append(spot_table_grad)
-        if timing is not None:
-            time1 = time.time()
-            # print(f"Time for grad splitting: {time2-time1}")
-            timing.append(time1 - time0)
-            timing_name = "Spottiness calculation: 2nd azim grad info"
-            if timing_name not in timing_names:
-                timing_names.append(timing_name)
+
+    if calc_azim_Qs:
+        azim_vs_Q["classifier"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["classifier"].median()
+        if use_radial_grad or use_azim_grad:
+            azim_vs_Q["medianQ"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["medianQ"].median()
+        else:
+            azim_vs_Q["medianQ"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["Qvalue"].median()
+        azim_vs_Q["medianAzim"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["azimvalue"].median()
+        azim_vs_Q["medianAzimFlipped"] = df.loc[df['label'].isin(valid_labels)].groupby("label")["flipped_azimvalue"].median()
+        azim_vs_Q["area"] = df.loc[df['label'].isin(valid_labels), "label"].value_counts().sort_index()
+        to_return.append(azim_vs_Q)
 
     return to_return
 

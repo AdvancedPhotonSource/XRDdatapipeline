@@ -59,7 +59,7 @@ class ImageMonitor(RegexMatchingEventHandler):
         results = [r.match(event.src_path) for r in self.regexes]
         # print(results[0].group(0,1,2,3,4))
         print(
-            "Directory: {0}, Name: {1}, Number: {2}, Extension: {3}".format(
+            "Directory: {0}, Name: {1}, Extension: {2}".format(
                 results[0].group("input_directory"),
                 results[0].group("name"),
                 results[0].group("ext"),
@@ -257,8 +257,17 @@ class SingleIterator(QtCore.QObject):
         calc_outlier = True,
         calc_splitting = True,
         azim_Q_shape_min = 100,
+        min_cluster_area = 3,
+        min_arc_area = 100,
+        min_azim_width = 0,
+        max_q_width = 0.1,
+        spot_threshold_percentile = 0.1,
+        arc_threshold_percentile = 10,
         calc_spot_stats = True,
         calc_grad_spottiness = False,
+        calc_azim_Qs = True,
+        use_radial_grad = True,
+        use_azim_grad = True,
         csim_first_index = 0,
         timing=None,
         timing_names = None,
@@ -277,8 +286,17 @@ class SingleIterator(QtCore.QObject):
         self.calc_outlier = calc_outlier
         self.calc_splitting = calc_splitting
         self.azim_Q_shape_min = azim_Q_shape_min
+        self.min_cluster_area = min_cluster_area
+        self.min_arc_area = min_arc_area
+        self.min_azim_width = min_azim_width
+        self.max_q_width = max_q_width
+        self.spot_threshold_percentile = spot_threshold_percentile
+        self.arc_threshold_percentile = arc_threshold_percentile
         self.calc_spot_stats = calc_spot_stats
         self.calc_grad_spottiness = calc_grad_spottiness
+        self.calc_azim_Qs = calc_azim_Qs
+        self.use_radial_grad = use_radial_grad
+        self.use_azim_grad = use_azim_grad
         self.csim_first_index = csim_first_index
         self.timing = timing
         self.timing_names = timing_names
@@ -296,8 +314,17 @@ class SingleIterator(QtCore.QObject):
                 calc_outlier = self.calc_outlier,
                 calc_splitting = self.calc_splitting,
                 azim_Q_shape_min = self.azim_Q_shape_min,
+                min_cluster_area = self.min_cluster_area,
+                min_arc_area = self.min_arc_area,
+                min_azim_width=self.min_azim_width,
+                max_q_width=self.max_q_width,
+                spot_threshold_percentile = self.spot_threshold_percentile,
+                arc_threshold_percentile = self.arc_threshold_percentile,
                 calc_spot_stats = self.calc_spot_stats,
                 calc_grad_spottiness = self.calc_grad_spottiness,
+                calc_azim_Qs = self.calc_azim_Qs,
+                use_radial_grad = self.use_radial_grad,
+                use_azim_grad = self.use_azim_grad,
                 csim_first_index = self.csim_first_index,
                 timing = self.timing,
                 timing_names = self.timing_names,
@@ -317,37 +344,56 @@ class AdvancedSettings(QtWidgets.QWidget):
         super().__init__()
         self.settings = settings
 
-        # self.settings_label = QtWidgets.QLabel("Advanced Settings")
-        # self.override_config_label = QtWidgets.QLabel("Override Config Values: ")
-        self.override_label = QtWidgets.QLabel("Override configuration file values by checking the box and setting the value.")
-
-        self.madmult_override = QtWidgets.QCheckBox("Multiple of median absolute deviation for outlier masking:")
-        self.madmult_override_default = False
-        self.madmult_override.setChecked(self.madmult_override_default)
+        self.madmult_label = QtWidgets.QLabel("Multiple of median absolute deviation for outlier masking:")
         self.madmult = QtWidgets.QDoubleSpinBox()
         self.madmult_default = 3
         self.madmult.setMinimum(0)
         self.madmult.setMaximum(10)
         self.madmult.setSingleStep(0.1)
         self.madmult.setValue(self.madmult_default)
-        # self.madmult_label.setDisabled(True)
-        # self.madmult.setDisabled(True)
-        self.nbins_om_override = QtWidgets.QCheckBox("Number of 2theta bins for outlier masking:")
-        self.nbins_om_override_default = False
-        self.nbins_om_override.setChecked(self.nbins_om_override_default)
+        self.nbins_om_label = QtWidgets.QLabel("Number of 2theta bins for outlier masking:")
         self.nbins_om = QtWidgets.QSpinBox()
         self.nbins_om_default = 1000
         self.nbins_om.setMinimum(0)
         self.nbins_om.setMaximum(10000)
         self.nbins_om.setValue(self.nbins_om_default)
-        self.azim_q_override = QtWidgets.QCheckBox("Azim / Q classification ratio:")
-        self.azim_q_override_default = False
-        self.azim_q_override.setChecked(self.azim_q_override_default)
+        self.min_cluster_area_label = QtWidgets.QLabel("Minimum Cluster Area (pixels):")
+        self.min_cluster_area = QtWidgets.QSpinBox()
+        self.min_cluster_area_default = 3
+        self.min_cluster_area.setValue(self.min_cluster_area_default)
+        self.min_arc_area_label = QtWidgets.QLabel("Minimum Arc Area (pixels):")
+        self.min_arc_area = QtWidgets.QSpinBox()
+        self.min_arc_area_default = 100
+        self.min_arc_area.setMinimum(0)
+        self.min_arc_area.setMaximum(1000)
+        self.min_arc_area.setValue(self.min_arc_area_default)
+        self.min_azim_width_label = QtWidgets.QLabel("Minimum Azimuthal Width (\u00b0):")
+        self.min_azim_width = QtWidgets.QDoubleSpinBox()
+        self.min_azim_width_default = 0
+        self.min_azim_width.setMinimum(0)
+        self.min_azim_width.setMaximum(100)
+        self.min_azim_width.setValue(self.min_azim_width_default)
+        self.max_q_width_label = QtWidgets.QLabel("Maximum Q Width (\u212b\u207b\u00b9):")
+        self.max_q_width = QtWidgets.QDoubleSpinBox()
+        self.max_q_width_default = 0.1
+        self.max_q_width.setValue(self.max_q_width_default)
+        self.azim_q_label = QtWidgets.QLabel("Azim / Q classification ratio (\u00b0\u22c5\u212b):")
         self.azim_q = QtWidgets.QSpinBox()
         self.azim_q_default = 100
         self.azim_q.setMinimum(0)
         self.azim_q.setMaximum(1000)
         self.azim_q.setValue(self.azim_q_default)
+        self.calc_azim_qs = QtWidgets.QCheckBox("Calculate Azim / Q ratios")
+        self.calc_azim_qs_default = True
+        self.calc_azim_qs.setChecked(self.calc_azim_qs_default)
+        self.radial_threshold_percentile_label = QtWidgets.QLabel("Spot cutting threshold percentile:")
+        self.radial_threshold_percentile = QtWidgets.QDoubleSpinBox()
+        self.radial_threshold_percentile_default = 0.1
+        self.radial_threshold_percentile.setValue(self.radial_threshold_percentile_default)
+        self.azim_threshold_percentile_label = QtWidgets.QLabel("On arc threshold percentile:")
+        self.azim_threshold_percentile = QtWidgets.QDoubleSpinBox()
+        self.azim_threshold_percentile_default = 10
+        self.azim_threshold_percentile.setValue(self.azim_threshold_percentile_default)
         self.csim_first_label = QtWidgets.QLabel("Cosine Similarity: First image index for comparison")
         self.csim_first_default = 0
         self.csim_first_spinbox = QtWidgets.QSpinBox()
@@ -357,9 +403,18 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_outlier_default = True
         self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
         self.calc_outlier_checkbox.checkStateChanged.connect(self.toggle_outlier_settings)
-        self.calc_splitting_checkbox = QtWidgets.QCheckBox("Perform spot/texture outlier mask splitting")
-        self.calc_splitting_default = True
-        self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
+        self.calc_splitting_label = QtWidgets.QLabel("Perform spot/texture outlier mask splitting")
+        self.calc_splitting_combobox = QtWidgets.QComboBox()
+        self.calc_splitting_types = [
+            "None",
+            "Shape Only",
+            "Shape and 2nd Radial Derivative",
+            "Shape and 2nd Azimuthal Derivative",
+            "Shape and Both 2nd Derivatives"
+        ]
+        self.calc_splitting_combobox.addItems(self.calc_splitting_types)
+        self.calc_splitting_default = 4
+        self.calc_splitting_combobox.setCurrentIndex(self.calc_splitting_default)
         self.calc_spottiness_label = QtWidgets.QLabel("Calculate Spottiness of Rings")
         self.calc_spottiness_combobox = QtWidgets.QComboBox()
         self.calc_spottiness_types = [
@@ -371,12 +426,12 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_spottiness_default = 1
         self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
 
-        self.regex_include_label = QtWidgets.QLabel("Only include filenames with:")
+        self.regex_include_label = QtWidgets.QLabel("Only include filenames with (case-sensitive):")
         self.regex_include_text = QtWidgets.QLineEdit()
-        self.regex_exclude_label = QtWidgets.QLabel("Exclude filenames with:")
+        self.regex_exclude_label = QtWidgets.QLabel("Exclude filenames with (case-sensitive):")
         self.regex_exclude_text = QtWidgets.QLineEdit()
 
-        self.pixelSize_override = QtWidgets.QCheckBox("Pixel size:")
+        self.pixelSize_label = QtWidgets.QLabel("Pixel size (Leave blank for default values):")
         self.pixelSize_x_label = QtWidgets.QLabel("X:")
         self.pixelSize_y_label = QtWidgets.QLabel("Y:")
         self.pixelSize_x_text = QtWidgets.QLineEdit()
@@ -388,8 +443,6 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.pixelSize_layout.addWidget(self.pixelSize_y_label)
         self.pixelSize_layout.addWidget(self.pixelSize_y_text)
         self.pixelSize_widget.setLayout(self.pixelSize_layout)
-        self.pixelSize_x_text.textEdited.connect(self.check_pixelSize_edited)
-        self.pixelSize_x_text.textEdited.connect(self.check_pixelSize_edited)
 
         self.defaults_button = QtWidgets.QPushButton("Restore Defaults")
         self.defaults_button.released.connect(self.restore_defaults)
@@ -398,26 +451,38 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout = QtWidgets.QGridLayout()
         self.outlier_settings.setLayout(self.outlier_layout)
         self.settings_layout = QtWidgets.QGridLayout()
-        # self.settings_layout.addWidget(self.settings_label, 0, 0, 1, 2)
         self.settings_layout.addWidget(self.regex_include_label, 0, 0)
         self.settings_layout.addWidget(self.regex_include_text, 0, 1)
         self.settings_layout.addWidget(self.regex_exclude_label, 1, 0)
         self.settings_layout.addWidget(self.regex_exclude_text, 1, 1)
-        self.settings_layout.addWidget(self.pixelSize_override, 2, 0)
+        self.settings_layout.addWidget(self.pixelSize_label, 2, 0)
         self.settings_layout.addWidget(self.pixelSize_widget, 2, 1)
         self.settings_layout.addWidget(self.csim_first_label, 3, 0)
         self.settings_layout.addWidget(self.csim_first_spinbox, 3, 1)
         self.settings_layout.addWidget(self.calc_outlier_checkbox, 4, 0, 1, 2)
-        self.outlier_layout.addWidget(self.override_label, 0, 0, 1, 2)
-        self.outlier_layout.addWidget(self.madmult_override, 1, 0)
-        self.outlier_layout.addWidget(self.madmult, 1, 1)
-        self.outlier_layout.addWidget(self.nbins_om_override, 2, 0)
-        self.outlier_layout.addWidget(self.nbins_om, 2, 1)
-        self.outlier_layout.addWidget(self.calc_splitting_checkbox, 3, 0, 1, 2)
-        self.outlier_layout.addWidget(self.azim_q_override, 4, 0)
-        self.outlier_layout.addWidget(self.azim_q, 4, 1)
-        self.outlier_layout.addWidget(self.calc_spottiness_label, 5, 0)
-        self.outlier_layout.addWidget(self.calc_spottiness_combobox, 5, 1)
+        self.outlier_layout.addWidget(self.madmult_label, 0, 0)
+        self.outlier_layout.addWidget(self.madmult, 0, 1)
+        self.outlier_layout.addWidget(self.nbins_om_label, 1, 0)
+        self.outlier_layout.addWidget(self.nbins_om, 1, 1)
+        self.outlier_layout.addWidget(self.calc_splitting_label, 2, 0)
+        self.outlier_layout.addWidget(self.calc_splitting_combobox, 2, 1)
+        self.outlier_layout.addWidget(self.min_cluster_area_label, 3, 0)
+        self.outlier_layout.addWidget(self.min_cluster_area, 3, 1)
+        self.outlier_layout.addWidget(self.min_arc_area_label, 4, 0)
+        self.outlier_layout.addWidget(self.min_arc_area, 4, 1)
+        self.outlier_layout.addWidget(self.min_azim_width_label, 5, 0)
+        self.outlier_layout.addWidget(self.min_azim_width, 5, 1)
+        self.outlier_layout.addWidget(self.max_q_width_label, 6, 0)
+        self.outlier_layout.addWidget(self.max_q_width, 6, 1)
+        self.outlier_layout.addWidget(self.azim_q_label, 7, 0)
+        self.outlier_layout.addWidget(self.azim_q, 7, 1)
+        self.outlier_layout.addWidget(self.calc_azim_qs, 8, 0, 1, 2)
+        self.outlier_layout.addWidget(self.radial_threshold_percentile_label, 9, 0)
+        self.outlier_layout.addWidget(self.radial_threshold_percentile, 9, 1)
+        self.outlier_layout.addWidget(self.azim_threshold_percentile_label, 10, 0)
+        self.outlier_layout.addWidget(self.azim_threshold_percentile, 10, 1)
+        self.outlier_layout.addWidget(self.calc_spottiness_label, 11, 0)
+        self.outlier_layout.addWidget(self.calc_spottiness_combobox, 11, 1)
         self.settings_layout.addWidget(self.outlier_settings, 5, 0, 6, 2)
         self.settings_layout.addWidget(self.defaults_button, 11, 0)
 
@@ -430,20 +495,24 @@ class AdvancedSettings(QtWidgets.QWidget):
             self.outlier_settings.hide()
 
     def restore_defaults(self):
-        self.madmult_override.setChecked(self.madmult_override_default)
+        self.regex_exclude_text.clear()
+        self.regex_include_text.clear()
         self.madmult.setValue(self.madmult_default)
-        self.nbins_om_override.setChecked(self.nbins_om_override_default)
         self.nbins_om.setValue(self.nbins_om_default)
         self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
-        self.calc_splitting_checkbox.setChecked(self.calc_splitting_default)
+        self.calc_splitting_combobox.setCurrentIndex(self.calc_splitting_default)
         self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
         self.csim_first_spinbox.setValue(self.csim_first_default)
         self.pixelSize_x_text.clear()
         self.pixelSize_y_text.clear()
-        self.pixelSize_override.setChecked(False)
-
-    def check_pixelSize_edited(self):
-        self.pixelSize_override.setChecked(True)
+        self.calc_azim_qs.setChecked(self.calc_azim_qs_default)
+        self.min_cluster_area.setValue(self.min_cluster_area_default)
+        self.min_arc_area.setValue(self.min_arc_area_default)
+        self.min_azim_width.setValue(self.min_azim_width_default)
+        self.max_q_width.setValue(self.max_q_width_default)
+        self.radial_threshold_percentile.setValue(self.radial_threshold_percentile_default)
+        self.azim_threshold_percentile.setValue(self.azim_threshold_percentile_default)
+        self.azim_q.setValue(self.azim_q_default)
 
 
 class main_window(QtWidgets.QWidget):
@@ -582,7 +651,6 @@ class main_window(QtWidgets.QWidget):
 
         self.settings = {}
         self.settings_widget = AdvancedSettings(settings=self.settings)
-        self.settings_shown = False
 
         # Update imctrl data if a file was passed, then update any passed override settings
         if imctrl is not None:
@@ -611,23 +679,20 @@ class main_window(QtWidgets.QWidget):
             self.settings_widget.csim_first_spinbox.setValue(csim_first_index)
         if outlier_mad_mult is not None:
             self.settings_widget.madmult.setValue(outlier_mad_mult)
-            self.settings_widget.madmult_override.setChecked(True)
         if n_mask_bins is not None:
             self.settings_widget.nbins_om.setValue(n_mask_bins)
-            self.settings_widget.nbins_om_override.setChecked(True)
         if azim_Q_ratio is not None:
             self.settings_widget.azim_q.setValue(azim_Q_ratio)
-            self.settings_widget.azim_q_override.setChecked(True)
         if outlier_option is not None:
             if outlier_option == "splitting":
                 self.settings_widget.calc_outlier_checkbox.setChecked(True)
-                self.settings_widget.calc_splitting_checkbox.setChecked(True)
+                self.settings_widget.calc_splitting_combobox.setCurrentIndex(self.settings_widget.calc_splitting_default)
             elif outlier_option == "outlier_only":
                 self.settings_widget.calc_outlier_checkbox.setChecked(True)
-                self.settings_widget.calc_splitting_checkbox.setChecked(False)
+                self.settings_widget.calc_splitting_combobox.setCurrentIndex(0)
             elif outlier_option == "none":
                 self.settings_widget.calc_outlier_checkbox.setChecked(False)
-                self.settings_widget.calc_splitting_checkbox.setChecked(False)
+                self.settings_widget.calc_splitting_combobox.setCurrentIndex(0)
         if spottiness_option is not None:
             if spottiness_option == "none":
                 self.settings_widget.calc_spottiness_combobox.setCurrentIndex(0)
@@ -713,7 +778,7 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.start_button, 9, 0)
         self.window_layout.addWidget(self.clear_queue_button, 9, 1)
         self.window_layout.addWidget(self.stop_button, 9, 2)
-        self.window_layout.addWidget(self.settings_widget, 11, 0, 1, 3)
+        # self.window_layout.addWidget(self.settings_widget, 11, 0, 1, 3)
         self.window_layout.addWidget(self.process_existing_only_radio, 12, 0)
         self.window_layout.addWidget(self.process_both_radio, 12, 1)
         self.window_layout.addWidget(self.process_new_only_radio, 12, 2)
@@ -724,7 +789,7 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.open_resultsUI_button, 15, 2)
         # self.window_layout.addWidget(self.regex_label,7,0)
         # self.window_layout.addWidget(self.existing_images_regex,8,0)
-        self.settings_widget.hide()
+        # self.settings_widget.hide()
 
         self.setLayout(self.window_layout)
         self.show()
@@ -814,8 +879,14 @@ class main_window(QtWidgets.QWidget):
                         # set up iteration thread. Should set these up with a pool and just run, but for now, run one at a time.
                         self.timer.stop()
                         self.iteration_thread = QtCore.QThread()
-                        if not self.settings_widget.azim_q_override.isChecked():
-                            self.iteration_worker = SingleIterator(
+                        azim_Q_shape_min = self.settings_widget.azim_q.value()
+                        min_cluster_area = self.settings_widget.min_cluster_area.value()
+                        min_arc_area = self.settings_widget.min_arc_area.value()
+                        min_azim_width = self.settings_widget.min_azim_width.value()
+                        max_q_width = self.settings_widget.max_q_width.value()
+                        radial_threshold_percentile = self.settings_widget.radial_threshold_percentile.value()
+                        azim_threshold_percentile = self.settings_widget.azim_threshold_percentile.value()
+                        self.iteration_worker = SingleIterator(
                                 filename,
                                 self.imgctrl,
                                 self.imgmask,
@@ -826,33 +897,24 @@ class main_window(QtWidgets.QWidget):
                                 cache_location = self.cache_location,
                                 cache = self.cache,
                                 calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
-                                calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
+                                calc_splitting = self.settings_widget.calc_splitting_combobox.currentIndex() != 0,
+                                azim_Q_shape_min = azim_Q_shape_min,
+                                min_cluster_area = min_cluster_area,
+                                min_arc_area = min_arc_area,
+                                min_azim_width = min_azim_width,
+                                max_q_width = max_q_width,
+                                spot_threshold_percentile = radial_threshold_percentile,
+                                arc_threshold_percentile = azim_threshold_percentile,
                                 calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
                                 calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
+                                calc_azim_Qs = self.settings_widget.calc_azim_qs.isChecked(),
+                                use_radial_grad = self.settings_widget.calc_splitting_combobox.currentIndex() == 2 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4,
+                                use_azim_grad = self.settings_widget.calc_splitting_combobox.currentIndex() == 3 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4,
                                 csim_first_index = self.settings_widget.csim_first_spinbox.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
-                            )
-                        else:
-                            self.iteration_worker = SingleIterator(
-                                filename,
-                                self.imgctrl,
-                                self.imgmask,
-                                self.input_directory,
-                                self.output_directory,
-                                name,
-                                ext,
-                                cache_location = self.cache_location,
-                                cache = self.cache,
-                                azim_Q_shape_min = self.settings_widget.azim_q.value(),
-                                calc_outlier = self.settings_widget.calc_outlier_checkbox.isChecked(),
-                                calc_splitting = self.settings_widget.calc_splitting_checkbox.isChecked(),
-                                calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
-                                calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
-                                csim_first_index = self.settings_widget.csim_first_spinbox.value(),
-                                timing = self.list_of_times,
-                                timing_names = self.list_of_time_names,
-                            )
+                        )
+
                         self.iteration_worker.moveToThread(self.iteration_thread)
                         self.iteration_thread.started.connect(self.iteration_worker.run)
                         self.iteration_worker.finished.connect(
@@ -890,9 +952,7 @@ class main_window(QtWidgets.QWidget):
                             elif (len(self.queue) > 2) and os.path.exists(self.queue[2][0] + ".metadata"):
                                 filename = self.queue[2][0]
                             # else keep filename the same, handle missing metadata in cache creation
-                        esdMul = self.settings_widget.madmult_default
-                        if self.settings_widget.madmult_override.isChecked():
-                            esdMul = self.settings_widget.madmult.value()
+                        esdMul = self.settings_widget.madmult.value()
                         if self.iotth_max.value() != 0.0:
                             tth_integration_range = [
                                 self.iotth_min.value(),
@@ -915,8 +975,7 @@ class main_window(QtWidgets.QWidget):
                             polarization = [self.PolaVal.value(), False]
                         else:
                             polarization = None
-                        if (self.settings_widget.pixelSize_override.isChecked() and 
-                            (self.settings_widget.pixelSize_x_text.text() != "") and 
+                        if ((self.settings_widget.pixelSize_x_text.text() != "") and
                             (self.settings_widget.pixelSize_y_text.text() != "")):
                             pixelSize = [float(self.settings_widget.pixelSize_x_text.text()),
                                          float(self.settings_widget.pixelSize_y_text.text())]
@@ -1107,14 +1166,9 @@ class main_window(QtWidgets.QWidget):
 
     def advanced_settings_button_pressed(self):
         """
-        Show/hide the advanced settings widget.
+        Show the advanced settings widget.
         """
-        if self.settings_shown:
-            self.settings_shown = False
-            self.settings_widget.hide()
-        else:
-            self.settings_shown = True
-            self.settings_widget.show()
+        self.settings_widget.show()
 
     def start_button_pressed(self):
         if self.start_button.text() == "Start":

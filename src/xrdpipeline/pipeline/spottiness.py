@@ -38,7 +38,8 @@ def spottiness_df_stats(df,raveled_mask,spot_mask, qbins):
     # following is only True for those near the center of an arc, not spot
     # actually, looks like on_arc is calculated for all clusters
     # this does require the specific newly-labeled spot cluster to have a section near the center
-    spot_stat["on_arc"] = df.groupby("spot_stat_label")["on_arc"].max()
+    if "on_arc" in df.columns:
+        spot_stat["on_arc"] = df.groupby("spot_stat_label")["on_arc"].max()
     return spot_stat
 
 

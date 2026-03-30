@@ -132,8 +132,17 @@ def run_iteration(
         calc_outlier = True,
         calc_splitting = True,
         azim_Q_shape_min = 100,
+        min_cluster_area = 3,
+        min_arc_area = 100,
+        min_azim_width = 0,
+        max_q_width = 0.1,
+        spot_threshold_percentile = 0.1,
+        arc_threshold_percentile = 10,
         calc_spot_stats = True,
         calc_grad_spottiness = False,
+        calc_azim_Qs = True,
+        use_radial_grad = True,
+        use_azim_grad = True,
         csim_first_index = 0,
         timing = None,
         timing_names = None,
@@ -158,6 +167,18 @@ def run_iteration(
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
     """
+    # Sanity checks to adjust defaults
+    if not calc_outlier:
+        calc_splitting = False
+    if not calc_splitting:
+        calc_spot_stats = False
+        calc_grad_spottiness = False
+        calc_azim_Qs = False
+        use_radial_grad = False
+        use_azim_grad = False
+    if not (use_azim_grad or use_radial_grad):
+        calc_grad_spottiness = False
+
     output_directory = add_output_subdirectory(output_directory)
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
@@ -289,11 +310,19 @@ def run_iteration(
                     cache["pixelAzmap"],
                     cache["gradient"],
                     cache["Qbins"],
-                    azim_Q_shape_min=azim_Q_shape_min,
+                    spot_threshold_percentile=spot_threshold_percentile,
+                    arc_threshold_percentile=arc_threshold_percentile,
                     calc_spot_stats = calc_spot_stats,
                     calc_grad_spottiness=calc_grad_spottiness,
+                    calc_azim_Qs=calc_azim_Qs,
+                    use_radial_grad=use_radial_grad,
+                    use_azim_grad=use_azim_grad,
+                    azim_Q_shape_min=azim_Q_shape_min,
                     predef_mask=nonpositive_mask,
-                    min_arc_area=3,
+                    min_cluster_area=min_cluster_area,
+                    min_arc_area=min_arc_area,
+                    min_azim_width=min_azim_width,
+                    max_Q_width=max_q_width,
                     timing = local_times,
                     timing_names = timing_names,
                 )
@@ -305,38 +334,32 @@ def run_iteration(
                     cache["pixelAzmap"],
                     cache["gradient"],
                     cache["Qbins"],
-                    azim_Q_shape_min=azim_Q_shape_min,
+                    spot_threshold_percentile=spot_threshold_percentile,
+                    arc_threshold_percentile=arc_threshold_percentile,
                     calc_spot_stats = calc_spot_stats,
                     calc_grad_spottiness=calc_grad_spottiness,
+                    calc_azim_Qs=calc_azim_Qs,
+                    use_radial_grad=use_radial_grad,
+                    use_azim_grad=use_azim_grad,
+                    azim_Q_shape_min=azim_Q_shape_min,
                     predef_mask=nonpositive_mask,
-                    min_arc_area=3,
+                    min_cluster_area=min_cluster_area,
+                    min_arc_area=min_arc_area,
+                    min_azim_width=min_azim_width,
+                    max_Q_width=max_q_width,
                     timing = None,
                     timing_names = None,
                 )
-            if calc_spot_stats and calc_grad_spottiness:
-                (
-                    split_spots,
-                    split_arcs,
-                    spots_table_df,
-                    spots_table_grad,
-                ) = returned_items
-            elif calc_spot_stats:
-                (
-                    split_spots,
-                    split_arcs,
-                    spots_table_df,
-                ) = returned_items
-            elif calc_grad_spottiness:
-                (
-                    split_spots,
-                    split_arcs,
-                    spots_table_grad,
-                ) = returned_items
-            else:
-                (
-                    split_spots,
-                    split_arcs,
-                ) = returned_items
+            returned_items = list(returned_items)
+            split_spots = returned_items.pop(0)
+            split_arcs = returned_items.pop(0)
+            if calc_grad_spottiness:
+                spots_table_grad = returned_items.pop(0)
+            if calc_spot_stats:
+                spots_table_df = returned_items.pop(0)
+            if calc_azim_Qs:
+                azim_vs_Qs = returned_items.pop(0)
+
             imsave = Image.fromarray(split_spots)
             imsave.save(
                 os.path.join(
@@ -437,14 +460,16 @@ def run_iteration(
         timing_0 = time.time()
     
     stats_prefix = os.path.join(output_directory, "stats", name)
-    if calc_outlier:
+    if calc_outlier and calc_splitting:
         # spottiness
+        if calc_azim_Qs:
+            azim_vs_Qs.to_csv(stats_prefix + "_azim_vs_Qs.csv")
         if calc_spot_stats or calc_grad_spottiness:
             if calc_spot_stats:
                 spots_table_df.to_csv(stats_prefix + "_spots_stats_df.csv")
             if calc_grad_spottiness:
                 spots_table_grad.to_csv(stats_prefix + "_spots_stats_grad.csv")
-            qbins_filename = stats_prefix + "_qbinedges.npy"
+            qbins_filename = os.path.join(output_directory, "stats","qbinedges.npy")
             if not os.path.exists(qbins_filename):
                 with open(qbins_filename, "wb") as outfile:
                     np.save(outfile, cache["QbinEdges"])

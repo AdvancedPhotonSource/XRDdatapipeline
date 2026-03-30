@@ -38,7 +38,7 @@ class UserAddedDataInstance:
     file_name: str
     data: np.array
     plotitem: pg.PlotDataItem = field(init=False)
-    x_type: str = "tth"
+    # x_type: str = "tth"
     color: ColorSettings = field(init=False)
     offset: int = 0
     multiplier: float = 1
@@ -50,25 +50,25 @@ class UserAddedDataInstance:
         self.plotitem.setPen("black")
 
 
-def import_data_instance(file_name, name, x_type):
+def import_data_instance(file_name, name):
     """
     Function for importing data into a UserAddedDataInstance.
     Data must be organized in columns for x and y.
 
     :param file_name: Location of the file to import from
     :param name: Name to use in the legend of the target canvas
-    :param x_type: Scale for x values. Valid options are tth and Q
     """
     array_data = np.loadtxt(file_name)
-    return UserAddedDataInstance(name=name, file_name=file_name, data=array_data, x_type=x_type)
+    return UserAddedDataInstance(name=name, file_name=file_name, data=array_data)
 
 locations = {
     0: "Unset",
     1: "Integral",
     2: "Stats",
+    3: "Azim/Q",
 }
 
-x_types = ["tth", "Q"]
+# x_types = ["tth", "Q"]
 
 class UserAddedDataInstanceWidget(QtWidgets.QWidget):
     """
@@ -107,8 +107,8 @@ QPushButton:hover {{
         self.multiplier_field = QtWidgets.QSpinBox()
         self.multiplier_field.setValue(self.data_instance.multiplier)
         self.multiplier_field.setMaximum(1000000)
-        self.x_type_field = QtWidgets.QComboBox()
-        self.x_type_field.addItems(x_types)
+        # self.x_type_field = QtWidgets.QComboBox()
+        # self.x_type_field.addItems(x_types)
         self.location_field = QtWidgets.QComboBox()
         self.location_field.addItems(locations.values())
         self.remove_button = QtWidgets.QPushButton("Remove")
@@ -123,7 +123,7 @@ QPushButton:hover {{
         self.row_layout.addWidget(self.color_button, 1)
         self.row_layout.addWidget(self.offset_field, 1)
         self.row_layout.addWidget(self.multiplier_field, 1)
-        self.row_layout.addWidget(self.x_type_field, 1)
+        # self.row_layout.addWidget(self.x_type_field, 1)
         self.row_layout.addWidget(self.location_field, 1)
         self.row_layout.addWidget(self.remove_button, 1)
         self.setLayout(self.row_layout)
@@ -176,7 +176,7 @@ class UserAddedDataTab(QtWidgets.QWidget):
         self.user_data_colorlabel = QtWidgets.QLabel("Color")
         self.user_data_offsetlabel = QtWidgets.QLabel("Offset")
         self.user_data_multiplierlabel = QtWidgets.QLabel("Multiplier")
-        self.user_data_xtypelabel = QtWidgets.QLabel("X axis type")
+        # self.user_data_xtypelabel = QtWidgets.QLabel("X axis type")
         self.user_data_locationlabel = QtWidgets.QLabel("Display")
         self.user_data_removelabel = QtWidgets.QLabel("Remove")
         self.user_data = []
@@ -197,7 +197,7 @@ class UserAddedDataTab(QtWidgets.QWidget):
         self.user_data_titlebarlayout.addWidget(self.user_data_colorlabel, 1)
         self.user_data_titlebarlayout.addWidget(self.user_data_offsetlabel, 1)
         self.user_data_titlebarlayout.addWidget(self.user_data_multiplierlabel, 1)
-        self.user_data_titlebarlayout.addWidget(self.user_data_xtypelabel, 1)
+        # self.user_data_titlebarlayout.addWidget(self.user_data_xtypelabel, 1)
         self.user_data_titlebarlayout.addWidget(self.user_data_locationlabel, 1)
         self.user_data_titlebarlayout.addWidget(self.user_data_removelabel, 1)
         self.user_data_titlebar.setLayout(self.user_data_titlebarlayout)
@@ -216,7 +216,7 @@ class UserAddedDataTab(QtWidgets.QWidget):
             "",
         )[0]
         name = os.path.splitext(os.path.basename(filename))[0]
-        data = import_data_instance(filename, name, "tth")
+        data = import_data_instance(filename, name)
         self.user_data.append(UserAddedDataInstanceWidget(parent=self.user_data_table_visual,data_instance=data))
         self.user_data_table_layout.addWidget(self.user_data[-1])
         self.user_data[-1].delete_userdata_signal.connect(self.remove)
@@ -234,7 +234,7 @@ class UserAddedDataTab(QtWidgets.QWidget):
             # datum.data_instance.color.color = datum.color_field.text()
             datum.data_instance.offset = datum.offset_field.value()
             datum.data_instance.multiplier = datum.multiplier_field.value()
-            datum.data_instance.x_type = datum.x_type_field.currentData()
+            # datum.data_instance.x_type = datum.x_type_field.currentData()
             datum.data_instance.plotitem.setData(datum.data_instance.data[:,0], datum.data_instance.data[:,1] * datum.data_instance.multiplier + datum.data_instance.offset)
             datum.data_instance.plotitem.setPen(datum.data_instance.color.color)
             self.update_userdata_signal.emit(datum.data_instance, locations[datum.location_field.currentIndex()])

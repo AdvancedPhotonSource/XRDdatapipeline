@@ -45,12 +45,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             self.line[k] = self.view.plot()
             self.line_data[k] = None
             self.legend.addItem(self.line[k], k)
-        self.line["Grad median"].setPen("hotpink")
-        self.line["Grad MAD"].setPen("cyan")
-        self.line["Grad mean"].setPen("r")
-        self.line["Grad STD"].setPen("g")
-        self.line["Grad MAD-STD"].setPen("b")
-        self.line["Grad STD/MAD"].setPen("b")
+        self.update_colors()
 
         self.vLine = pg.InfiniteLine(angle=90, movable=False)
         self.view.addItem(self.vLine, ignoreBounds=True)
@@ -59,27 +54,11 @@ class SpottinessView(pg.GraphicsLayoutWidget):
         qbins_filename = os.path.join(
             self.settings.output_directory,
             "stats",
-            self.settings.keylist[self.settings.curr_key][:-1] + "_qbinedges.npy"
-        )
-        qbins_alt1 = os.path.join(
-            self.settings.output_directory,
-            "stats",
-            self.settings.keylist[self.settings.curr_key][:-1] + "-00000_qbinedges.npy"
-        )
-        qbins_alt2 = os.path.join(
-            self.settings.output_directory,
-            "stats",
-            self.settings.keylist[self.settings.curr_key][:-6] + "_qbinedges.npy"
+            "qbinedges.npy"
         )
         self.q_bins = []
         if os.path.exists(qbins_filename):
             with open(qbins_filename, 'rb') as infile:
-                self.q_bins = np.load(infile)
-        elif os.path.exists(qbins_alt1):
-            with open(qbins_alt1, 'rb') as infile:
-                self.q_bins = np.load(infile)
-        elif os.path.exists(qbins_alt2):
-            with open(qbins_alt2, 'rb') as infile:
                 self.q_bins = np.load(infile)
         else:
             print("Missing q bins file.")
@@ -93,6 +72,7 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             "stats",
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_spots_stats_grad.csv",
         )
+        self.update_colors()
         if os.path.exists(filename_grad):
             grad_stats = pd.read_csv(filename_grad)
             grad_stats.drop(grad_stats.loc[grad_stats["Qbin"] < 0].index, inplace=True)
@@ -146,4 +126,11 @@ class SpottinessView(pg.GraphicsLayoutWidget):
             print("Spottiness: Unknown axis type. Defaulting to 2theta.")
             self.update_tth()
 
+    def update_colors(self):
+        self.line["Grad median"].setPen(self.settings.colors["grad_spottiness_median"].color)
+        self.line["Grad MAD"].setPen(self.settings.colors["grad_spottiness_MAD"].color)
+        self.line["Grad mean"].setPen(self.settings.colors["grad_spottiness_mean"].color)
+        self.line["Grad STD"].setPen(self.settings.colors["grad_spottiness_STD"].color)
+        self.line["Grad MAD-STD"].setPen(self.settings.colors["grad_spottiness_diff"].color)
+        self.line["Grad STD/MAD"].setPen(self.settings.colors["grad_spottiness_div"].color)
 
