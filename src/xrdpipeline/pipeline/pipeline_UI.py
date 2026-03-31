@@ -386,14 +386,14 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_azim_qs = QtWidgets.QCheckBox("Calculate Azim / Q ratios")
         self.calc_azim_qs_default = True
         self.calc_azim_qs.setChecked(self.calc_azim_qs_default)
-        self.radial_threshold_percentile_label = QtWidgets.QLabel("Spot cutting threshold percentile:")
-        self.radial_threshold_percentile = QtWidgets.QDoubleSpinBox()
-        self.radial_threshold_percentile_default = 0.1
-        self.radial_threshold_percentile.setValue(self.radial_threshold_percentile_default)
-        self.azim_threshold_percentile_label = QtWidgets.QLabel("On arc threshold percentile:")
-        self.azim_threshold_percentile = QtWidgets.QDoubleSpinBox()
-        self.azim_threshold_percentile_default = 10
-        self.azim_threshold_percentile.setValue(self.azim_threshold_percentile_default)
+        self.spot_threshold_percentile_label = QtWidgets.QLabel("Spot cutting threshold percentile:")
+        self.spot_threshold_percentile = QtWidgets.QDoubleSpinBox()
+        self.spot_threshold_percentile_default = 0.1
+        self.spot_threshold_percentile.setValue(self.spot_threshold_percentile_default)
+        self.arc_threshold_percentile_label = QtWidgets.QLabel("On arc threshold percentile:")
+        self.arc_threshold_percentile = QtWidgets.QDoubleSpinBox()
+        self.arc_threshold_percentile_default = 10
+        self.arc_threshold_percentile.setValue(self.arc_threshold_percentile_default)
         self.csim_first_label = QtWidgets.QLabel("Cosine Similarity: First image index for comparison")
         self.csim_first_default = 0
         self.csim_first_spinbox = QtWidgets.QSpinBox()
@@ -477,10 +477,10 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.azim_q_label, 7, 0)
         self.outlier_layout.addWidget(self.azim_q, 7, 1)
         self.outlier_layout.addWidget(self.calc_azim_qs, 8, 0, 1, 2)
-        self.outlier_layout.addWidget(self.radial_threshold_percentile_label, 9, 0)
-        self.outlier_layout.addWidget(self.radial_threshold_percentile, 9, 1)
-        self.outlier_layout.addWidget(self.azim_threshold_percentile_label, 10, 0)
-        self.outlier_layout.addWidget(self.azim_threshold_percentile, 10, 1)
+        self.outlier_layout.addWidget(self.spot_threshold_percentile_label, 9, 0)
+        self.outlier_layout.addWidget(self.spot_threshold_percentile, 9, 1)
+        self.outlier_layout.addWidget(self.arc_threshold_percentile_label, 10, 0)
+        self.outlier_layout.addWidget(self.arc_threshold_percentile, 10, 1)
         self.outlier_layout.addWidget(self.calc_spottiness_label, 11, 0)
         self.outlier_layout.addWidget(self.calc_spottiness_combobox, 11, 1)
         self.settings_layout.addWidget(self.outlier_settings, 5, 0, 6, 2)
@@ -510,8 +510,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.min_arc_area.setValue(self.min_arc_area_default)
         self.min_azim_width.setValue(self.min_azim_width_default)
         self.max_q_width.setValue(self.max_q_width_default)
-        self.radial_threshold_percentile.setValue(self.radial_threshold_percentile_default)
-        self.azim_threshold_percentile.setValue(self.azim_threshold_percentile_default)
+        self.spot_threshold_percentile.setValue(self.spot_threshold_percentile_default)
+        self.arc_threshold_percentile.setValue(self.arc_threshold_percentile_default)
         self.azim_q.setValue(self.azim_q_default)
 
 
@@ -534,9 +534,19 @@ class main_window(QtWidgets.QWidget):
             csim_first_index=None,
             outlier_mad_mult=None,
             n_mask_bins=None,
+            min_cluster_area=None,
+            min_arc_area=None,
+            min_azim_width=None,
+            max_q_width=None,
             azim_Q_ratio=None,
+            pixel_size=None,
             outlier_option=None,
+            use_radial_grad=None,
+            use_azim_grad=None,
+            spot_threshold_percentile=None,
+            arc_threshold_percentile=None,
             spottiness_option=None,
+            calc_azim_Qs=None,
             files_must_include=None,
             files_must_exclude=None,
         ):
@@ -681,18 +691,40 @@ class main_window(QtWidgets.QWidget):
             self.settings_widget.madmult.setValue(outlier_mad_mult)
         if n_mask_bins is not None:
             self.settings_widget.nbins_om.setValue(n_mask_bins)
+        if min_cluster_area is not None:
+            self.settings_widget.min_cluster_area.setValue(min_cluster_area)
+        if min_arc_area is not None:
+            self.settings_widget.min_arc_area.setValue(min_arc_area)
+        if min_azim_width is not None:
+            self.settings_widget.min_azim_width.setValue(min_azim_width)
+        if max_q_width is not None:
+            self.settings_widget.max_q_width.setValue(max_q_width)
         if azim_Q_ratio is not None:
             self.settings_widget.azim_q.setValue(azim_Q_ratio)
+        if pixel_size is not None:
+            self.settings_widget.pixelSize_x_text.setText(str(pixel_size[0]))
+            self.settings_widget.pixelSize_y_text.setText(str(pixel_size[1]))
         if outlier_option is not None:
             if outlier_option == "splitting":
                 self.settings_widget.calc_outlier_checkbox.setChecked(True)
                 self.settings_widget.calc_splitting_combobox.setCurrentIndex(self.settings_widget.calc_splitting_default)
+                if use_radial_grad is not None and use_azim_grad is not None:
+                    if use_radial_grad and use_azim_grad:
+                        self.settings_widget.calc_splitting_combobox.setCurrentIndex(4)
+                    elif use_radial_grad:
+                        self.settings_widget.calc_splitting_combobox.setCurrentIndex(2)
+                    elif use_azim_grad:
+                        self.settings_widget.calc_splitting_combobox.setCurrentIndex(3)
             elif outlier_option == "outlier_only":
                 self.settings_widget.calc_outlier_checkbox.setChecked(True)
                 self.settings_widget.calc_splitting_combobox.setCurrentIndex(0)
             elif outlier_option == "none":
                 self.settings_widget.calc_outlier_checkbox.setChecked(False)
                 self.settings_widget.calc_splitting_combobox.setCurrentIndex(0)
+        if spot_threshold_percentile is not None:
+            self.settings_widget.spot_threshold_percentile.setValue(spot_threshold_percentile)
+        if arc_threshold_percentile is not None:
+            self.settings_widget.arc_threshold_percentile.setValue(arc_threshold_percentile)
         if spottiness_option is not None:
             if spottiness_option == "none":
                 self.settings_widget.calc_spottiness_combobox.setCurrentIndex(0)
@@ -700,6 +732,8 @@ class main_window(QtWidgets.QWidget):
                 self.settings_widget.calc_spottiness_combobox.setCurrentIndex(1)
             elif spottiness_option == "spot_and_gradient":
                 self.settings_widget.calc_spottiness_combobox.setCurrentIndex(2)
+        if calc_azim_Qs is not None:
+            self.settings_widget.calc_azim_qs.setChecked(calc_azim_Qs)
         if files_must_include is not None:
             self.settings_widget.regex_include_text.setText(files_must_include)
         if files_must_exclude is not None:
@@ -884,8 +918,8 @@ class main_window(QtWidgets.QWidget):
                         min_arc_area = self.settings_widget.min_arc_area.value()
                         min_azim_width = self.settings_widget.min_azim_width.value()
                         max_q_width = self.settings_widget.max_q_width.value()
-                        radial_threshold_percentile = self.settings_widget.radial_threshold_percentile.value()
-                        azim_threshold_percentile = self.settings_widget.azim_threshold_percentile.value()
+                        spot_threshold_percentile = self.settings_widget.spot_threshold_percentile.value()
+                        arc_threshold_percentile = self.settings_widget.arc_threshold_percentile.value()
                         self.iteration_worker = SingleIterator(
                                 filename,
                                 self.imgctrl,
@@ -903,8 +937,8 @@ class main_window(QtWidgets.QWidget):
                                 min_arc_area = min_arc_area,
                                 min_azim_width = min_azim_width,
                                 max_q_width = max_q_width,
-                                spot_threshold_percentile = radial_threshold_percentile,
-                                arc_threshold_percentile = azim_threshold_percentile,
+                                spot_threshold_percentile = spot_threshold_percentile,
+                                arc_threshold_percentile = arc_threshold_percentile,
                                 calc_spot_stats = self.settings_widget.calc_spottiness_combobox.currentIndex() != 0,
                                 calc_grad_spottiness = self.settings_widget.calc_spottiness_combobox.currentIndex() == 2,
                                 calc_azim_Qs = self.settings_widget.calc_azim_qs.isChecked(),
@@ -1119,8 +1153,8 @@ class main_window(QtWidgets.QWidget):
                                          f"minimum arc area = {self.settings_widget.min_arc_area.value()}\n"
                                          f"minimum azimuthal span = {self.settings_widget.min_azim_width.value()}\n"
                                          f"maximum Q span = {self.settings_widget.max_q_width.value()}\n"
-                                         f"spot cutting threshold percentile = {self.settings_widget.radial_threshold_percentile.value()}\n"
-                                         f"on-arc threshold percentile = {self.settings_widget.azim_threshold_percentile.value()}\n"
+                                         f"spot cutting threshold percentile = {self.settings_widget.spot_threshold_percentile.value()}\n"
+                                         f"on-arc threshold percentile = {self.settings_widget.arc_threshold_percentile.value()}\n"
                                          f"use radial gradient = {(self.settings_widget.calc_splitting_combobox.currentIndex() == 2 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4)}\n"
                                          f"use azimuthal gradient = {(self.settings_widget.calc_splitting_combobox.currentIndex() == 3 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4)}\n"
                                          f"calculate and save spot statistics = {self.settings_widget.calc_spottiness_combobox.currentIndex() != 0}\n"

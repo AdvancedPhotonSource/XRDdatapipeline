@@ -161,8 +161,17 @@ def run_iteration(
     :param calc_outlier: Whether to calculate an outlier mask. Default is True.
     :param calc_splitting: Whether to split the outlier mask into spot-tagged and texture-tagged clusters. Default is True.
     :param azim_Q_shape_min: Ratio of the azimuthal to Q widths to use for an early cut when splitting spots from textures. Default is 100.
+    :param min_cluster_area: Clusters must be larger than this pixel area to be classified as spot or arc
+    :param min_arc_area: Minimum cluster area in pixels to be determined a texture arc
+    :param min_azim_width: Minimum azimuthal width in degrees for a cluster to be determined a texture arc
+    :param max_q_width: Maximum Q width for a cluster to be determined a texture arc
+    :param spot_threshold_percentile: Percentile of the radial second derivative intensities to use as a threshold to find spots in texture arcs
+    :param arc_threshold_percentile: Percentile of the radial second derivative intensities to use as a threshold to determine if a cluster is on a powder ring
     :param calc_spot_stats: Whether to calculate spottiness statistics based on the stats collected on spot-tagged clusters. Does not add a lot of computation time. Default is True.
     :param calc_grad_spottiness: Whether to use information on the second azimuthal and Q derivatives of the image to calculate spottiness statistics. Adds significant computation time. Default is False.
+    :param calc_azim_Qs: Calculate and save azimuth / Q spans for all clusters
+    :param use_radial_grad: Use radial second derivative information to check if clusters are on a powder arc
+    :param use_azim_grad: Use azimuthal second derivative information to cut spots from texture arc candidates
     :param csim_first_index: Cosine similarity is calculated in comparison to the previous image in the set and the first image in the dataset. This is the index marking the first image. Default is 0.
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
@@ -575,10 +584,19 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input_directory", required=True, help="Location of the input image directory")
     parser.add_argument("-o", "--output_directory", required=True, help="Location to place the output files from this pipeline")
     parser.add_argument("-c", "--cache_location", required=True, help="Cache location")
-    parser.add_argument("--csim_first_index", type=int, default=0, help="Numerical index for the file which should be considered first when calculating cosine similarity.")
-    parser.add_argument("-a", "--azim_Q_ratio", type=int, default=100, help="Azimuthal to Q width ratio used for classifying spots. Default is 100.")
     parser.add_argument("--outlier_option", choices=["splitting", "outlier_only", "none"], default="splitting", help="Choose whether to perform no outlier masking, outlier masking only, or outlier masking with spot/texture splitting.")
+    parser.add_argument("--min_cluster_area", type=int, default=3, help="Clusters must be larger than this pixel area to be classified as spot or arc")
+    parser.add_argument("--min_arc_area", type=int, default=100, help="Minimum cluster area in pixels to be determined a texture arc")
+    parser.add_argument("--min_azim_width", type=float, default=0, help="Minimum azimuthal width in degrees for a cluster to be determined a texture arc")
+    parser.add_argument("--max_q_width", type=float, default=0.1, help="Maximum Q width for a cluster to be determined a texture arc")
+    parser.add_argument("-a", "--azim_Q_ratio", type=int, default=100, help="Azimuthal to Q width ratio used for classifying spots. Default is 100.")
+    parser.add_argument("--skip_radial_grad", dest="use_radial_grad", action='store_false', help="Skip use of radial second derivative information to check if clusters are on a powder arc")
+    parser.add_argument("--skip_azim_grad", dest="use_azim_grad", action='store_false', help="Skip use of azimuthal second derivative information to cut spots from texture arc candidates")
+    parser.add_argument("--spot_threshold_percentile", type=float, default=0.1, help="Percentile of the radial second derivative intensities to use as a threshold to find spots in texture arcs")
+    parser.add_argument("--arc_threshold_percentile", type=float, default=10, help="Percentile of the radial second derivative intensities to use as a threshold to determine if a cluster is on a powder ring")
     parser.add_argument("--spottiness_option", choices=["spot_and_gradient","spot_area_only","none"], default="spot_area_only", help="Choose whether to perform spottiness statistics calculations.")
+    parser.add_argument("--skip_calc_azim_Qs", dest="calc_azim_Qs", action='store_false', help="Do not calculate and save azimuth / Q spans for all clusters")
+    parser.add_argument("--csim_first_index", type=int, default=0, help="Numerical index for the file which should be considered first when calculating cosine similarity.")
     parser.add_argument("--files_must_include", help="Process only files in the directory which include the provided string in their name.")
     parser.add_argument("--files_must_exclude", help="Exclude files in the directory which have the provided string in their name.")
     args = parser.parse_args()
@@ -608,7 +626,7 @@ if __name__ == "__main__":
             reg = r"(?P<input_directory>.*[\\\/])(?P<name>.*)(?P<ext>\.tif|\.png)$"
         results = re.match(reg, args.filename)
         print(
-            "Directory: {0}, Name: {1}, Number: {2}, Extension: {3}".format(
+            "Directory: {0}, Name: {1}, Extension: {2}".format(
                 results.group("input_directory"),
                 results.group("name"),
                 results.group("ext"),
@@ -640,6 +658,29 @@ if __name__ == "__main__":
         fh.setFormatter(formatter)
         logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(fh)
 
+        # Place all arguments in the log file
+        logging.getLogger(__name__).info("Options:"
+                                         f"{args.filename=}\n"
+                                         f"{args.input_directory=}\n"
+                                         f"{args.output_directory=}\n"
+                                         f"{args.cache_location=}\n"
+                                         f"{args.outlier_option=}\n"
+                                         f"{args.min_cluster_area=}\n"
+                                         f"{args.min_arc_area=}\n"
+                                         f"{args.min_azim_width=}\n"
+                                         f"{args.max_q_width=}\n"
+                                         f"{args.azim_Q_ratio=}\n"
+                                         f"{args.use_radial_grad=}\n"
+                                         f"{args.use_azim_grad=}\n"
+                                         f"{args.spot_threshold_percentile=}\n"
+                                         f"{args.arc_threshold_percentile=}\n"
+                                         f"{args.spottiness_option=}\n"
+                                         f"{args.calc_azim_Qs=}\n"
+                                         f"{args.csim_first_index=}\n"
+                                         f"{args.files_must_include=}\n"
+                                         f"{args.files_must_exclude=}\n"
+                                         )
+
         timing = []
         timing_names = []
         try:
@@ -656,6 +697,15 @@ if __name__ == "__main__":
                 azim_Q_shape_min = args.azim_Q_ratio,
                 calc_spot_stats = calc_spot_stats,
                 calc_grad_spottiness = calc_grad_spottiness,
+                min_cluster_area = args.min_cluster_area,
+                min_arc_area = args.min_arc_area,
+                min_azim_width = args.min_azim_width,
+                max_q_width = args.max_q_width,
+                spot_threshold_percentile = args.spot_threshold_percentile,
+                arc_threshold_percentile = args.arc_threshold_percentile,
+                calc_azim_Qs = args.calc_azim_Qs,
+                use_radial_grad = args.use_radial_grad,
+                use_azim_grad = args.use_azim_grad,
                 csim_first_index = args.csim_first_index,
                 timing = timing,
                 timing_names = timing_names,
