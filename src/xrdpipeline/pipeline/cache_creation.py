@@ -522,6 +522,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_integration_bins", type=float, help="Number of bins to use for integration, if overriding or not included in the config file.")
     parser.add_argument("-p", "--polarization", type=float, help="Polarization of the image")
     parser.add_argument("--outlier_mad_mult", type=float, default=3.0, help="Multiplier of median absolute deviation to use when considering a value an outlier. Default is 3.")
+    parser.add_argument("--pixel_size", nargs=2, type=int, help="Pixel size in um. Provide x and y values separated by a space.")
     parser.add_argument("-l", "--cache_location", help="Output location to place the cache. If left as None, this will use a default location inside the output directory with a name based on all arguments. Recommended to leave as None.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print extra logging statements.")
 
@@ -553,6 +554,23 @@ if __name__ == "__main__":
     logging.getLogger(".".join(__name__.split(".")[:-2])).addHandler(fh)
 
     try:
+        # Log all arguments
+        logging.getLogger(__name__).info("Options:"
+                                         f"{args.filename=}\n"
+                                         f"{args.output_directory=}\n"
+                                         f"{args.imctrl=}\n"
+                                         f"{args.flatfield=}\n"
+                                         f"{args.imgmask=}\n"
+                                         f"{args.bad_pixels=}\n"
+                                         f"{args.tth_integration_range=}\n"
+                                         f"{args.azim_integration_range=}\n"
+                                         f"{args.n_integration_bins=}\n"
+                                         f"{args.polarization=}\n"
+                                         f"{args.outlier_mad_mult=}\n"
+                                         f"{args.pixel_size=}\n"
+                                         f"{args.cache_location=}\n"
+                                         f"{args.verbose=}\n"
+                                         )
         create_cache(
             cache = {},
             filename = args.filename,
@@ -566,6 +584,7 @@ if __name__ == "__main__":
             bad_pixels = args.bad_pixels,
             flatfield = args.flatfield,
             esdMul = args.outlier_mad_mult,
+            pixSize = args.pixel_size,
             cache_location = args.cache_location,
             verbose = args.verbose,
         )

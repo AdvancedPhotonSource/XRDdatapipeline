@@ -224,14 +224,15 @@ def split_grad_with_Q_groupby(
         gradient_dict["kernel_x"],
         gradient_dict["kernel_y"],
     )
-    azim_grad_2, = radial_and_azim_gradient(
-        azim_grad,
-        gradient_dict["r_hat"],
-        gradient_dict["phi_hat"],
-        gradient_dict["kernel_x"],
-        gradient_dict["kernel_y"],
-        r=False,
-    )
+    if use_azim_grad:
+        azim_grad_2, = radial_and_azim_gradient(
+            azim_grad,
+            gradient_dict["r_hat"],
+            gradient_dict["phi_hat"],
+            gradient_dict["kernel_x"],
+            gradient_dict["kernel_y"],
+            r=False,
+        )
     radial_grad_2, = radial_and_azim_gradient(
         radial_grad,
         gradient_dict["r_hat"],
@@ -287,29 +288,35 @@ def split_grad_with_Q_groupby(
         t1 = time.time()
         print(f"Finding central values: {t1-t0}")
 
-    # on arc by radial grad consideration
-    radial_grad_percentile = df[df["central_values"]].groupby("label")["second_radial"].agg(lambda x: np.percentile(x, 20))
-    df["on_arc"] = -1
-    on_arc = radial_grad_percentile < on_arc_threshold
-    # need to extrapolate that info out to all valid_labels, not just central_values
-    df.loc[df["label"].isin(valid_labels),"on_arc"] = (on_arc.loc[df.loc[df["label"].isin(valid_labels),"label"]].values) * 1
+    if use_radial_grad:
+        # on arc by radial grad consideration
+        radial_grad_percentile = df[df["central_values"]].groupby("label")["second_radial"].agg(lambda x: np.percentile(x, 20))
+        df["on_arc"] = -1
+        on_arc = radial_grad_percentile < on_arc_threshold
+        # need to extrapolate that info out to all valid_labels, not just central_values
+        df.loc[df["label"].isin(valid_labels),"on_arc"] = (on_arc.loc[df.loc[df["label"].isin(valid_labels),"label"]].values) * 1
     
-    # azimuthal gradient sections
-    azim_gradient_mask = azim_grad_2 < threshold
-    # &and this with those labeled as on arc
-    azim_gradient_mask = azim_gradient_mask.ravel()
-    # df has the raveled_mask applied
-    azim_gradient_mask_shortened = azim_gradient_mask[raveled_mask]
-    azim_gradient_mask_shortened &= (df["on_arc"].values == 1)
-    azim_gradient_mask[raveled_mask] = azim_gradient_mask_shortened
+    if use_azim_grad:
+        # azimuthal gradient sections
+        azim_gradient_mask = azim_grad_2 < threshold
+        # &and this with those labeled as on arc
+        azim_gradient_mask = azim_gradient_mask.ravel()
+        # df has the raveled_mask applied
+        azim_gradient_mask_shortened = azim_gradient_mask[raveled_mask]
+        if use_radial_grad:
+            azim_gradient_mask_shortened &= (df["on_arc"].values == 1)
+        azim_gradient_mask[raveled_mask] = azim_gradient_mask_shortened
 
     # if there aren't any clusters, just skip this part entirely. Maximum will be False if nothing is there.
     if use_azim_grad and np.max(azim_gradient_mask) > 0:
         df = remove_azim_spots_numpy(df, image.shape, raveled_mask, azim_gradient_mask, diffQ, labeled_mask, use_radial_grad)
     else:
-        # function is not called if neither use_azim_grad nor use_radial_grad are True
-        df["new_arc"] = (df["on_arc"] == 1) & (df["classifier"] == 2)
-        df["new_spot"] = (df["on_arc"] == 0) | (df["classifier"] == 1)
+        if use_radial_grad:
+            df["new_arc"] = (df["on_arc"] == 1) & (df["classifier"] == 2)
+            df["new_spot"] = (df["on_arc"] == 0) | (df["classifier"] == 1)
+        else:
+            df["new_arc"] = df["classifier"] == 2
+            df["new_spot"] = df["classifier"] == 1
 
     raveled_new_spot = np.zeros_like(raveled_mask)
     raveled_new_spot[raveled_mask] = df["new_spot"].values
@@ -318,7 +325,10 @@ def split_grad_with_Q_groupby(
     spot_mask = raveled_new_spot.reshape(image.shape)
     arc_mask = raveled_new_arc.reshape(image.shape)
 
-    return spot_mask, arc_mask, df, azim_grad_2
+    if use_azim_grad:
+        return spot_mask, arc_mask, df, azim_grad_2
+    else:
+        return spot_mask, arc_mask, df
 
 def remove_azim_spots_numpy(df, image_shape, raveled_mask, azim_gradient_mask, diffQ, labeled_mask, use_radial_grad):
     """
@@ -349,7 +359,8 @@ def remove_azim_spots_numpy(df, image_shape, raveled_mask, azim_gradient_mask, d
     azimvalues = df["azimvalue"].values
     flippedvalues = df["flipped_azimvalue"].values
     labels = df["label"].values
-    on_arc = df["on_arc"].values
+    if use_radial_grad:
+        on_arc = df["on_arc"].values
     classifier = df["classifier"].values
 
     # Compute Qwidths
@@ -489,20 +500,36 @@ def current_splitting_method(
             timing_names.append(timing_name)
         time0 = time.time()
     if use_radial_grad or use_azim_grad:
-        spot_mask, arc_mask, df, azim_grad_2 = split_grad_with_Q_groupby(
-            image,
-            raveled_mask,
-            df,
-            valid_labels,
-            gradient_dict,
-            predef=predef_mask,
-            labeled_mask=labeled_mask,
-            spot_threshold_percentile=spot_threshold_percentile,
-            arc_threshold_percentile=arc_threshold_percentile,
-            use_radial_grad=use_radial_grad,
-            use_azim_grad=use_azim_grad,
-            report_times=False,
-        )
+        if use_azim_grad:
+            spot_mask, arc_mask, df, azim_grad_2 = split_grad_with_Q_groupby(
+                image,
+                raveled_mask,
+                df,
+                valid_labels,
+                gradient_dict,
+                predef=predef_mask,
+                labeled_mask=labeled_mask,
+                spot_threshold_percentile=spot_threshold_percentile,
+                arc_threshold_percentile=arc_threshold_percentile,
+                use_radial_grad=use_radial_grad,
+                use_azim_grad=use_azim_grad,
+                report_times=False,
+            )
+        else:
+            spot_mask, arc_mask, df = split_grad_with_Q_groupby(
+                image,
+                raveled_mask,
+                df,
+                valid_labels,
+                gradient_dict,
+                predef=predef_mask,
+                labeled_mask=labeled_mask,
+                spot_threshold_percentile=spot_threshold_percentile,
+                arc_threshold_percentile=arc_threshold_percentile,
+                use_radial_grad=use_radial_grad,
+                use_azim_grad=use_azim_grad,
+                report_times=False,
+            )
         if timing is not None:
             time1 = time.time()
             # print(f"Time for grad splitting: {time2-time1}")
