@@ -234,6 +234,7 @@ class SingleIterator(QtCore.QObject):
     processing time.
     :param csim_first_index: Index number for which image should be considered the first
     in a dataset for cosine similarity comparison.
+    :param n_mask_bins: Number of 2theta bins to use for outlier masking. Default is 1000.
     :param timing: Whether to return timing information for each step
     :param timing_names: List of names to append to for each timing checkpoint
     """
@@ -269,6 +270,7 @@ class SingleIterator(QtCore.QObject):
         use_radial_grad = True,
         use_azim_grad = True,
         csim_first_index = 0,
+        n_mask_bins = 1000,
         timing=None,
         timing_names = None,
     ):
@@ -298,6 +300,7 @@ class SingleIterator(QtCore.QObject):
         self.use_radial_grad = use_radial_grad
         self.use_azim_grad = use_azim_grad
         self.csim_first_index = csim_first_index
+        self.n_mask_bins = n_mask_bins
         self.timing = timing
         self.timing_names = timing_names
 
@@ -326,6 +329,7 @@ class SingleIterator(QtCore.QObject):
                 use_radial_grad = self.use_radial_grad,
                 use_azim_grad = self.use_azim_grad,
                 csim_first_index = self.csim_first_index,
+                n_mask_bins = self.n_mask_bins,
                 timing = self.timing,
                 timing_names = self.timing_names,
             )
@@ -945,6 +949,7 @@ class main_window(QtWidgets.QWidget):
                                 use_radial_grad = self.settings_widget.calc_splitting_combobox.currentIndex() == 2 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4,
                                 use_azim_grad = self.settings_widget.calc_splitting_combobox.currentIndex() == 3 or self.settings_widget.calc_splitting_combobox.currentIndex() == 4,
                                 csim_first_index = self.settings_widget.csim_first_spinbox.value(),
+                                n_mask_bins = self.settings_widget.nbins_om.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
                         )

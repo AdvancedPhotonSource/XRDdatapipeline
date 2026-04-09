@@ -144,6 +144,7 @@ def run_iteration(
         use_radial_grad = True,
         use_azim_grad = True,
         csim_first_index = 0,
+        n_mask_bins = 1000,
         timing = None,
         timing_names = None,
     ):
@@ -173,6 +174,7 @@ def run_iteration(
     :param use_radial_grad: Use radial second derivative information to check if clusters are on a powder arc
     :param use_azim_grad: Use azimuthal second derivative information to cut spots from texture arc candidates
     :param csim_first_index: Cosine similarity is calculated in comparison to the previous image in the set and the first image in the dataset. This is the index marking the first image. Default is 0.
+    :param n_mask_bins: Number of 2theta bins to use for outlier masking. Default is 1000.
     :param timing: Timing information.
     :param timing_names: Names to print for each timing checkpoint. These will be generated if None is passed. Default is None.
     """
@@ -260,6 +262,7 @@ def run_iteration(
             esdMul=esdMul,
             FrameMask=predef_and_nonpositive,
             ThetaMap=cache["pixelTAmap"],
+            numChans=n_mask_bins,
         )
         # outlier_mask = img.data['Masks']['SpotMask']['spotMask']
         outlier_mask = image_dict["Masks"]["SpotMask"]["spotMask"]

@@ -157,6 +157,7 @@ def launch_no_ui(
             calc_grad_spottiness=calc_grad_spottiness,
             calc_azim_Qs=calc_azim_Qs,
             csim_first_index=csim_first_index,
+            n_mask_bins=n_mask_bins,
         )
 
 

@@ -828,6 +828,7 @@ def GeneratePixelMask(
     ThetaMap=None,
     fastmode=True,
     combineMasks=False,
+    numChans=None,
 ):
     """Generate a Pixel mask with True at the location of pixels that are
     statistical outliers (in comparison with others with the same 2theta
@@ -879,6 +880,8 @@ def GeneratePixelMask(
         used for different regions of the image (by setting
         :attr:`ttmin` & :attr:`ttmax`) so that the outlier level
         can be tuned by combining different searches.
+    :param int numChans: Number of 2theta bins to use for outlier detection.
+        If None (default), it is calculated automatically based on detector geometry.
     """
     import math
 
@@ -913,7 +916,8 @@ def GeneratePixelMask(
     x1 = GetDetectorXY2(dsp1, 0.0, Controls)[0]
     if not np.any(x0) or not np.any(x1):
         raise Exception
-    numChans = int(1000 * (x1 - x0) / Controls["pixelSize"][0]) // 2
+    if numChans is None:
+        numChans = int(1000 * (x1 - x0) / Controls["pixelSize"][0]) // 2
 
     import fmask
 
