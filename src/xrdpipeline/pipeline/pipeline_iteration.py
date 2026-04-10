@@ -143,6 +143,7 @@ def run_iteration(
         calc_azim_Qs = True,
         use_radial_grad = True,
         use_azim_grad = True,
+        calc_csim = True,
         csim_first_index = 0,
         n_mask_bins = 1000,
         timing = None,
@@ -173,6 +174,7 @@ def run_iteration(
     :param calc_azim_Qs: Calculate and save azimuth / Q spans for all clusters
     :param use_radial_grad: Use radial second derivative information to check if clusters are on a powder arc
     :param use_azim_grad: Use azimuthal second derivative information to cut spots from texture arc candidates
+    :param calc_csim: Whether to calculate cosine similarity. Default is True.
     :param csim_first_index: Cosine similarity is calculated in comparison to the previous image in the set and the first image in the dataset. This is the index marking the first image. Default is 0.
     :param n_mask_bins: Number of 2theta bins to use for outlier masking. Default is 1000.
     :param timing: Timing information.
@@ -497,6 +499,7 @@ def run_iteration(
     # Find and read in previous image given current image number
     if style != ImageNumberStyle.NoNumber:
         prev_number = ""
+    if calc_csim:
         number_int_prev = int(number) - 1
         if number_int_prev < 0:
             # first image (00000) will have no previous image; just compare to self
@@ -524,7 +527,7 @@ def run_iteration(
         except:
             print("Exception finding previous image for cosine similarity; using current instead.")
             previous_image = image_dict["image"].astype(np.float32)
-
+    
         try:
             first_image = None
             for split in num_splits:
@@ -558,7 +561,7 @@ def run_iteration(
         except:
             print("Exception finding first image for cosine similarity; using current instead.")
             first_image = image_dict["image"].astype(np.float32)
-
+    
         csim_f = 1 - spatial.distance.cosine(
             np.array(image_dict["image"], dtype=np.float32).ravel(),
             first_image.ravel(),
@@ -571,16 +574,18 @@ def run_iteration(
             outfile.write(
                 "{first:0.9f}\t{prev:0.9f}\n".format(first=csim_f, prev=csim_p)
             )
-
+    
         if timing is not None:
             timing_1 = time.time()
             local_times.append(timing_1-timing_0)
             timing_name = "Cosine Similarity"
             if timing_name not in timing_names:
                 timing_names.append(timing_name)
-            timing.append(local_times)
-
-
+    
+    if timing is not None:
+        timing.append(local_times)
+    
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--filename", required=True, help="Input file")
@@ -599,6 +604,7 @@ if __name__ == "__main__":
     parser.add_argument("--arc_threshold_percentile", type=float, default=10, help="Percentile of the radial second derivative intensities to use as a threshold to determine if a cluster is on a powder ring")
     parser.add_argument("--spottiness_option", choices=["spot_and_gradient","spot_area_only","none"], default="spot_area_only", help="Choose whether to perform spottiness statistics calculations.")
     parser.add_argument("--skip_calc_azim_Qs", dest="calc_azim_Qs", action='store_false', help="Do not calculate and save azimuth / Q spans for all clusters")
+    parser.add_argument("--skip_csim", dest="calc_csim", action='store_false', help="Skip cosine similarity calculation")
     parser.add_argument("--csim_first_index", type=int, default=0, help="Numerical index for the file which should be considered first when calculating cosine similarity.")
     parser.add_argument("--files_must_include", help="Process only files in the directory which include the provided string in their name.")
     parser.add_argument("--files_must_exclude", help="Exclude files in the directory which have the provided string in their name.")

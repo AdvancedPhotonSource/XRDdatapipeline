@@ -273,6 +273,7 @@ class SingleIterator(QtCore.QObject):
         n_mask_bins = 1000,
         timing=None,
         timing_names = None,
+        calc_csim = True,
     ):
         super().__init__()
         self.filename = filename
@@ -303,6 +304,7 @@ class SingleIterator(QtCore.QObject):
         self.n_mask_bins = n_mask_bins
         self.timing = timing
         self.timing_names = timing_names
+        self.calc_csim = calc_csim
 
     def run(self):
         try:
@@ -332,6 +334,7 @@ class SingleIterator(QtCore.QObject):
                 n_mask_bins = self.n_mask_bins,
                 timing = self.timing,
                 timing_names = self.timing_names,
+                calc_csim = self.calc_csim,
             )
             self.succeeded.emit()
         except:
@@ -403,6 +406,15 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.csim_first_spinbox = QtWidgets.QSpinBox()
         self.csim_first_spinbox.setValue(self.csim_first_default)
 
+        self.calc_csim_checkbox = QtWidgets.QCheckBox("Calculate Cosine Similarity")
+        self.calc_csim_default = True
+        self.calc_csim_checkbox.setChecked(self.calc_csim_default)
+        self.calc_csim_checkbox.checkStateChanged.connect(self.toggle_csim_settings)
+
+        self.csim_settings = QtWidgets.QWidget()
+        self.csim_layout = QtWidgets.QGridLayout()
+        self.csim_settings.setLayout(self.csim_layout)
+
         self.calc_outlier_checkbox = QtWidgets.QCheckBox("Perform outlier masking")
         self.calc_outlier_default = True
         self.calc_outlier_checkbox.setChecked(self.calc_outlier_default)
@@ -461,9 +473,11 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.settings_layout.addWidget(self.regex_exclude_text, 1, 1)
         self.settings_layout.addWidget(self.pixelSize_label, 2, 0)
         self.settings_layout.addWidget(self.pixelSize_widget, 2, 1)
-        self.settings_layout.addWidget(self.csim_first_label, 3, 0)
-        self.settings_layout.addWidget(self.csim_first_spinbox, 3, 1)
-        self.settings_layout.addWidget(self.calc_outlier_checkbox, 4, 0, 1, 2)
+        self.settings_layout.addWidget(self.calc_csim_checkbox, 3, 0, 1, 2)
+        self.csim_layout.addWidget(self.csim_first_label, 0, 0)
+        self.csim_layout.addWidget(self.csim_first_spinbox, 0, 1)
+        self.settings_layout.addWidget(self.csim_settings, 4, 0, 1, 2)
+        self.settings_layout.addWidget(self.calc_outlier_checkbox, 5, 0, 1, 2)
         self.outlier_layout.addWidget(self.madmult_label, 0, 0)
         self.outlier_layout.addWidget(self.madmult, 0, 1)
         self.outlier_layout.addWidget(self.nbins_om_label, 1, 0)
@@ -487,8 +501,8 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.outlier_layout.addWidget(self.arc_threshold_percentile, 10, 1)
         self.outlier_layout.addWidget(self.calc_spottiness_label, 11, 0)
         self.outlier_layout.addWidget(self.calc_spottiness_combobox, 11, 1)
-        self.settings_layout.addWidget(self.outlier_settings, 5, 0, 6, 2)
-        self.settings_layout.addWidget(self.defaults_button, 11, 0)
+        self.settings_layout.addWidget(self.outlier_settings, 6, 0, 6, 2)
+        self.settings_layout.addWidget(self.defaults_button, 12, 0)
 
         self.setLayout(self.settings_layout)
 
@@ -497,6 +511,12 @@ class AdvancedSettings(QtWidgets.QWidget):
             self.outlier_settings.show()
         else:
             self.outlier_settings.hide()
+
+    def toggle_csim_settings(self):
+        if self.calc_csim_checkbox.isChecked():
+            self.csim_settings.show()
+        else:
+            self.csim_settings.hide()
 
     def restore_defaults(self):
         self.regex_exclude_text.clear()
@@ -507,6 +527,7 @@ class AdvancedSettings(QtWidgets.QWidget):
         self.calc_splitting_combobox.setCurrentIndex(self.calc_splitting_default)
         self.calc_spottiness_combobox.setCurrentIndex(self.calc_spottiness_default)
         self.csim_first_spinbox.setValue(self.csim_first_default)
+        self.calc_csim_checkbox.setChecked(self.calc_csim_default)
         self.pixelSize_x_text.clear()
         self.pixelSize_y_text.clear()
         self.calc_azim_qs.setChecked(self.calc_azim_qs_default)
@@ -553,6 +574,7 @@ class main_window(QtWidgets.QWidget):
             calc_azim_Qs=None,
             files_must_include=None,
             files_must_exclude=None,
+            calc_csim=None,
         ):
         super().__init__()
         # Set up logging
@@ -738,6 +760,8 @@ class main_window(QtWidgets.QWidget):
                 self.settings_widget.calc_spottiness_combobox.setCurrentIndex(2)
         if calc_azim_Qs is not None:
             self.settings_widget.calc_azim_qs.setChecked(calc_azim_Qs)
+        if calc_csim is not None:
+            self.settings_widget.calc_csim_checkbox.setChecked(calc_csim)
         if files_must_include is not None:
             self.settings_widget.regex_include_text.setText(files_must_include)
         if files_must_exclude is not None:
@@ -952,6 +976,7 @@ class main_window(QtWidgets.QWidget):
                                 n_mask_bins = self.settings_widget.nbins_om.value(),
                                 timing = self.list_of_times,
                                 timing_names = self.list_of_time_names,
+                                calc_csim = self.settings_widget.calc_csim_checkbox.isChecked(),
                         )
 
                         self.iteration_worker.moveToThread(self.iteration_thread)

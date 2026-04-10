@@ -158,6 +158,7 @@ def launch_no_ui(
             calc_azim_Qs=calc_azim_Qs,
             csim_first_index=csim_first_index,
             n_mask_bins=n_mask_bins,
+            calc_csim=not args.skip_csim,
         )
 
 
@@ -188,6 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--spot_threshold_percentile", type=float, default=0.1, help="Percentile of the radial second derivative intensities to use as a threshold to find spots in texture arcs")
     parser.add_argument("--arc_threshold_percentile", type=float, default=10, help="Percentile of the radial second derivative intensities to use as a threshold to determine if a cluster is on a powder ring")
     parser.add_argument("--spottiness_option", choices=["spot_and_gradient","spot_area_only","none"], default="spot_area_only", help="Choose whether to perform spottiness statistics calculations.")
+    parser.add_argument("--skip_csim", action="store_true", help="Skip cosine similarity calculation.")
     parser.add_argument("--skip_calc_azim_Qs", dest="calc_azim_Qs", action='store_false', help="Do not calculate and save azimuth / Q spans for all clusters")
     parser.add_argument("--files_must_include", help="Process only files in the directory which include the provided string in their name.")
     parser.add_argument("--files_must_exclude", help="Exclude files in the directory which have the provided string in their name.")
@@ -301,5 +303,6 @@ if __name__ == "__main__":
                 calc_azim_Qs=args.calc_azim_Qs,
                 files_must_include=args.files_must_include,
                 files_must_exclude=args.files_must_exclude,
+                calc_csim=not args.skip_csim,
             )
             sys.exit(app.exec())
