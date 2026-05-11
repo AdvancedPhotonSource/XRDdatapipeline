@@ -38,6 +38,13 @@ def pol_correct(image, polmap):
     )  # polmap showing high values in center column dropping to low values at right/left edges
     return image_p
 
+# distance correction
+def dist_correct(image, distmap):
+    image_d = np.array(image)
+    image_d = np.array(
+        image_d * distmap ** 1.5   
+    )  # the dist map is squared distance, here it needs to be cubic
+    return image_d
 
 # flat-field correction
 def flatfield_correct(image, flatfield):
