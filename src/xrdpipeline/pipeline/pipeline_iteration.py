@@ -92,6 +92,18 @@ def pytorch_data_setup(image, raveled_pol, raveled_dist):
     )
     return data
 
+def pytorch_data_setup_2(image):
+    """
+    Prepare the image data to be integrated using pytorch methods
+
+    The image has been correted for polarization and distance already, so this just ravels and turns to torch.
+
+    :param image: 2d image data
+    """
+    data = image.ravel()
+    data = torch.from_numpy(data)
+    return data
+
 
 def pytorch_integrate(
     data, mask, tth_idx, tth_val, tth_size
@@ -234,7 +246,21 @@ def run_iteration(
                 name + "_flatfield_correct.tif"
             )
         )
-    image_dict["corrected_image"] = None
+
+    if cache["polscalemap"] is not None:
+        image_dict["image"] = pol_correct(
+            image_dict["image"], cache["polscalemap"]
+        )
+    else:
+        print("polscalemap not found in cache; skipping polarization correction.")
+    if cache["pixelsampledistmap"] is not None:
+        image_dict["image"] = dist_correct(
+            image_dict["image"], cache["pixelsampledistmap"]
+        )
+    else:
+        print("pixelsampledistmap not found in cache; skipping distance correction.")
+    #image_dict["corrected_image"] = None
+    image_dict["corrected_image"] = image_dict["image"].astype(np.int32)
     nonpositive_mask = ~nonzeromask(image_dict["image"], mask_negative=True)
     predef_and_nonpositive = np.logical_or(
         nonpositive_mask, cache["predef_mask"]["image"]
@@ -400,7 +426,8 @@ def run_iteration(
 
 
     # prep data
-    corrected_image_data = pytorch_data_setup(image_dict["image"], cache["raveled_pol"], cache["raveled_dist"])
+    #corrected_image_data = pytorch_data_setup(image_dict["image"], cache["raveled_pol"], cache["raveled_dist"])
+    corrected_image_data = pytorch_data_setup_2(image_dict["corrected_image"])
     # integrate
     base_mask = predef_and_nonpositive | cache["AzimMask"]
     hist_base = pytorch_integrate(
