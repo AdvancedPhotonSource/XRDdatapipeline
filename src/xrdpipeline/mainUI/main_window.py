@@ -123,12 +123,22 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.integral_widget.integral_view.scene().sigMouseMoved.connect(
             self.mouseMovedIntegral
         )
+        self.imageview.view.scene().sigMouseClicked.connect(self.toggle_tth_tracking)
+        self.integral_widget.integral_view.scene().sigMouseClicked.connect(
+            self.toggle_tth_tracking
+        )
         # self.integral_widget.integral_view.scene().sigMouseHover.connect(self.mouseHoverIntegral)
         self.tabbed_area.contour_widget.view.scene().sigMouseMoved.connect(
             self.mouseMovedContour
         )
+        self.tabbed_area.contour_widget.view.scene().sigMouseClicked.connect(
+            self.toggle_tth_tracking
+        )
         self.contourview.view.scene().sigMouseMoved.connect(
             self.mouseMovedLeftContour
+        )
+        self.contourview.view.scene().sigMouseClicked.connect(
+            self.toggle_tth_tracking
         )
         # self.tabbed_area.stats_widget.stats_view.scene().sigMouseMoved.connect(self.mouseMovedStats)
         self.tabbed_area.contour_widget.view.scene().sigMouseClicked.connect(
@@ -143,11 +153,20 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.tabbed_area.spottiness_widget.view.scene().sigMouseMoved.connect(
             self.mouseMovedSpottiness
         )
+        self.tabbed_area.spottiness_widget.view.scene().sigMouseClicked.connect(
+            self.toggle_tth_tracking
+        )
         self.tabbed_area.stats_widget.stats_view.scene().sigMouseMoved.connect(
             self.mouseMovedStats
         )
+        self.tabbed_area.stats_widget.stats_view.scene().sigMouseClicked.connect(
+            self.toggle_tth_tracking
+        )
         self.tabbed_area.azimq_widget.azimq_view.scene().sigMouseMoved.connect(
             self.mouseMovedAzimQ
+        )
+        self.tabbed_area.azimq_widget.azimq_view.scene().sigMouseClicked.connect(
+            self.toggle_tth_tracking
         )
         # checkboxes for the vertical line and circle
         self.vLineCheckbox = QtWidgets.QCheckBox("2Th Line")
@@ -251,6 +270,7 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.show()
 
         self.timer = QtCore.QTimer()
+        self.tth_tracking_active = True
 
         # Prompt user for directory on startup
         if show_directory_prompt:
@@ -649,6 +669,15 @@ class KeyPressWindow(QtWidgets.QWidget):
                     % (tth, Q, d)
                 )
 
+    def toggle_tth_tracking(self, evt):
+        """
+        Toggle whether the shared 2-theta cursor overlays track mouse movement.
+
+        :param evt: Mouse click event
+        """
+        if evt.button() == pg.QtCore.Qt.MouseButton.LeftButton:
+            self.tth_tracking_active = not self.tth_tracking_active
+
     def mouseMovedImage(self, evt):
         """
         Slot for the signal emitted when the mouse moves over the main image.
@@ -689,7 +718,8 @@ class KeyPressWindow(QtWidgets.QWidget):
                     "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f,    z=%0.0f</span>,   <span style='color: red; font-size: 12pt'>2\u03b8=%0.2f\u00b0,    Azim=%0.1f\u00b0,</span>    <span style='font-size: 12pt'>Q=%0.2f\u212b\u207b\u00b9,    d=%0.2f\u212b</span>"
                     % (mousePoint.x(), mousePoint.y(), z, tth, azim, Q, d)
                 )
-                self.update_tth_lines(tth, Q, d, update_image_location_text=False)
+                if self.tth_tracking_active:
+                    self.update_tth_lines(tth, Q, d, update_image_location_text=False)
 
     def mouseMovedIntegral(self, evt):
         """
@@ -705,7 +735,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             or self.circleCheckbox.isChecked()
             or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ) and self.imageview.maps_loaded:
+        ) and self.imageview.maps_loaded and self.tth_tracking_active:
             pos = evt
             if self.integral_widget.integral_view.sceneBoundingRect().contains(pos):
                 mousePoint = self.integral_widget.integral_view.vb.mapSceneToView(pos)
@@ -740,7 +770,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             or self.circleCheckbox.isChecked()
             or self.tabbed_area.contour_widget.tth_line_checkbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ) and self.imageview.maps_loaded:
+        ) and self.imageview.maps_loaded and self.tth_tracking_active:
             pos = evt
             if self.tabbed_area.contour_widget.view.sceneBoundingRect().contains(pos):
                 mousePoint = self.tabbed_area.contour_widget.view.vb.mapSceneToView(pos)
@@ -769,7 +799,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             or self.circleCheckbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ) and self.imageview.maps_loaded:
+        ) and self.imageview.maps_loaded and self.tth_tracking_active:
             pos = evt
             if self.contourview.view.sceneBoundingRect().contains(pos):
                 mousePoint = self.contourview.view.vb.mapSceneToView(pos)
@@ -797,7 +827,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             or self.circleCheckbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ) and self.imageview.maps_loaded:
+        ) and self.imageview.maps_loaded and self.tth_tracking_active:
             pos = evt
             if self.tabbed_area.spottiness_widget.view.sceneBoundingRect().contains(pos):
                 mousePoint = self.tabbed_area.spottiness_widget.view.vb.mapSceneToView(pos)
@@ -825,7 +855,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             or self.circleCheckbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ) and self.imageview.maps_loaded:
+        ) and self.imageview.maps_loaded and self.tth_tracking_active:
             pos = evt
             if self.tabbed_area.stats_widget.stats_view.sceneBoundingRect().contains(pos):
                 mousePoint = self.tabbed_area.stats_widget.stats_view.vb.mapSceneToView(pos)
@@ -852,7 +882,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             or self.circleCheckbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
             or self.contourview.tth_line_checkbox.isChecked()
-        ) and self.imageview.maps_loaded:
+        ) and self.imageview.maps_loaded and self.tth_tracking_active:
             pos = evt
             if self.tabbed_area.azimq_widget.azimq_view.sceneBoundingRect().contains(pos):
                 mousePoint = self.tabbed_area.azimq_widget.azimq_view.vb.mapSceneToView(pos)
