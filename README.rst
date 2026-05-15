@@ -36,9 +36,20 @@ Installation
 
 This software was designed for Python version 3.10.8, download this version of python from https://www.python.org/downloads/release/python-3108/
 
-Creat a project folder on your local machine, set up a `virtual environment`_ in that folder, then run:
+Creat a project folder on your local machine, set up a `virtual environment`_ in that folder by:
 
 .. _`virtual environment`: https://docs.python.org/3/library/venv.html
+
+Open your terminal or command prompt, navigate to your project folder, and run: 
+Windows: ``python -m venv .venv``
+macOS/Linux: ``python3 -m venv .venv``
+Note, .venv is the name of the folder for the environment. you may pick a different name
+
+Activate the virtual environment by:
+Windows: ``.venv\Scripts\activate``
+macOS/Linux: ``source .venv/bin/activate``
+
+then run:
 
 ``git clone https://github.com/AdvancedPhotonSource/XRDdatapipeline.git``
 
@@ -46,7 +57,7 @@ Creat a project folder on your local machine, set up a `virtual environment`_ in
         The cookiecutter template applied by Miaoqi should let this be pip-installable, but it needs to be registered with pypi first.
         In the meantime, the URL will need to be updated if/when this repository moves.
 
-To install dependencies, next run:
+To install dependencies, navigate to where ``requirements.txt`` is, and run:
 
 ``python -m pip install -r requirements.txt``
 
