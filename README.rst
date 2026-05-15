@@ -34,7 +34,9 @@ Features
 Installation
 ------------
 
-This software was designed for Python version 3.10.8. Set up and start a `virtual environment`_ in that version, then run:
+This software was designed for Python version 3.10.8, download this version of python from https://www.python.org/downloads/release/python-3108/
+
+Creat a project folder on your local machine, set up a `virtual environment`_ in that folder, then run:
 
 .. _`virtual environment`: https://docs.python.org/3/library/venv.html
 
