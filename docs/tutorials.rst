@@ -19,7 +19,7 @@ Pipeline UI Overview
 
 Launching the pipeline will open the following window:
 
-.. image:: tutorial_images/pipeline_UI_empty.png
+.. image:: tutorial_images/pipeline_main.png
 
 Clicking the buttons on the left will open a file dialog to select the directory or file for each component.
 The Input Directory, Output Directory, and Config file are all required.
@@ -29,7 +29,7 @@ While the pipeline runs, it will add any new images which enter this directory t
 Set it to the location of the GuiliangJun25 directory.
 
 The Output Directory is the directory which will hold the output integrals, masks, and other data from the pipeline.
-This can be the same directory as the input directory: all of the outputs will be in labelled subdirectories.
+This can be the same directory as the input directory: a subdirectory named "XRDdatapipeline_output" will be created to hold all of the outputs in labelled subdirectories.
 
 The Config file may be either a GSASII .imctrl file or a PyFAI .poni file. If using the latter, please set the 2theta and azimuthal integration ranges,
 the number of integration bins, and the polarization in this step.
@@ -41,7 +41,7 @@ This will not be used in the tutorial.
 
 The Experimental Mask is an image file which contains the overall mask to use based on the experimental setup.
 The one provided covers the shadow of the beam stop and was made with the mask_widget tool using a polygon mask.
-The image is also located in GuiliangJun25_tutorial/configs.
+The image is also located in GuiliangJun25_tutorial/configs. You may also use the mask creation widget to create your own mask by clicking the "Open Mask Creation Program" button. The mask creation widget tutorial is located at the end of this tutorial.
 
 The Bad Pixel Mask is an optional file masking any known faulty pixels in the detector. This will not be used in the tutorial.
 Note that the pipeline will automatically mask out any zero-intensity pixels, which will catch any dead pixels from the detector.
@@ -67,8 +67,8 @@ Results UI
 ----------
 
 Once you have started the pipeline, it will begin to output image masks, integrals, and other data into subfolders in the Output Directory.
-To visualize this data, launch pyqtgraph_layout.py. This will open two windows: the main UI and a small window asking for the Input Directory, Output Directory, and Image Control file (or Config file) again.
-Click Browse to give these the same inputs as you gave to the pipeline, then hit Okay.
+To visualize this data, launch pyqtgraph_layout.py or click the "Open Data Viewer" button in the main pipeline window. This will open two windows: the main UI and a small window asking for the Input Directory, Output Directory, and Image Control file (or Config file) again.
+Click Browse to give these the same inputs as you gave to the pipeline, except for the output directory now should point to the "XRDdatapipeline_output" subdirectory. If you use the "Open Data Viewer" button, these should autopopulate. Once done, hit Okay.
 
 .. image:: tutorial_images/results_UI_blank.png
 
