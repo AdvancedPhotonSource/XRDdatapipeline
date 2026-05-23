@@ -94,16 +94,33 @@ def read_imctrl(imctrlname):
     image_controls = {}
     with open(imctrlname,'r') as imctrlfile:
         lines = imctrlfile.readlines()
-        LoadControls(lines,image_controls)
+        ext = os.path.splitext(imctrlname)[1].lower()
+        if ext == ".poni":
+            LoadControlsPONI(lines, image_controls)
+            # PyFAI PONI files do not include some GSAS-II fields used by map generation.
+            image_controls.setdefault("PolaVal", [1.0, False])
+            image_controls.setdefault("DetDepth", 0.0)
+            image_controls.setdefault("DetDepthRef", False)
+            image_controls.setdefault("azmthOff", 0.0)
+        else:
+            LoadControls(lines, image_controls)
     return image_controls
 
 
 def get_save_file_location(ext):
+    # Create proper filter string for QFileDialog
+    if ext == ".tif":
+        file_filter = "TIFF files (*.tif)"
+    elif ext == ".immask":
+        file_filter = "Immask files (*.immask)"
+    else:
+        file_filter = f"All files (*{ext})"
+    
     location = QtWidgets.QFileDialog.getSaveFileName(
         None,
         "Save as...",
         ".",
-        ext,
+        file_filter,
     )
     start, typed_end = os.path.splitext(location[0])
     if start == "":
@@ -191,7 +208,7 @@ help_text = {
         "You may continue adjusting it by selecting the arc in the table above; "
         "the handles will reappear and you may continue adjusting them.\n"
         "You may also edit the second column of the table to adjust the exact values.",
-    "New Spot": "Clicking \"New Spot\" initializes the spot at the origin (typically the lower-left) of the image.\n"
+    "New Spot": "Clicking \"New Spot\" waits for you to left-click on the image to define the spot's center.\n"
         "There will be two handles: one at the center to move the spot, and one on the edge to resize it.\n"
         "When done adjusting it, click \"Complete Spot\" and the handles will become temporarily disabled. "
         "To re-enable editing, select the object in the table above.",
@@ -1302,10 +1319,15 @@ class Ring(Polygon):
 class Spot(pg.CircleROI):
     def __init__(self, image_size, start_enabled=True, *args, **kwargs):
         self.is_enabled = start_enabled
-        super().__init__(pos=(0,0), radius=1, movable=False, rotatable=True, resizable=False, *args, **kwargs)
+        super().__init__(pos=(0,0), radius=5, movable=False, rotatable=True, resizable=False, *args, **kwargs)
         self.image_size = image_size
         self.table_label = pg.QtWidgets.QTableWidgetItem("Spot")
         self.table_item = pg.QtWidgets.QTableWidgetItem()
+
+    def initialize_handles(self, point):
+        """Position spot at the clicked point with a default radius."""
+        self.setPos(point)
+        self.setSize((20, 20))  # diameter = 2 * radius = 2 * 10 = 20
 
     def _addHandles(self):
         self.addTranslateHandle([0.5,0.5],name="Center_point")
@@ -1547,7 +1569,7 @@ class MainWindow(pg.GraphicsLayoutWidget):
         self.preview_mask_checkbox = QtWidgets.QCheckBox(
             "Preview Mask"
         )
-        self.preview_mask_checkbox.setChecked(True)
+        self.preview_mask_checkbox.setChecked(False)
         self.preview_mask_checkbox.checkStateChanged.connect(self.preview_mask_toggle)
         self.mask_color_button = QtWidgets.QPushButton("Change Color")
         self.mask_color_button.setStyleSheet(f"""
@@ -1731,17 +1753,24 @@ QPushButton:hover {{
         self.image_changed()
 
     def load_imctrl_file_popup(self):
-        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","imctrl files (*.imctrl)")[0]
+        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","Imctrl and PONI files (*.imctrl *.poni)")[0]
         if imctrl_file_name != "":
             self.load_imctrls(imctrl_file_name=imctrl_file_name)
 
     def load_imctrls(self, imctrl_file_name):
         if os.path.exists(self.image_file_name + ".metadata"):
-            _,data,_,_ = GetTifData(self.image_file_name)
+            _, data, _, _ = GetTifData(self.image_file_name)
+            pixelSize = data.get("pixelSize", None)
         else:
-            pixelSize = self.prompt_pixel_size()
-            data = {"size":self.main_image.image_data.shape,
-                    "pixelSize":pixelSize}
+            shape = self.main_image.image_data.shape
+            if shape == (2048, 2048):
+                pixelSize = [200, 200]
+            elif shape == (2880, 2880):
+                pixelSize = [150, 150]
+            else:
+                pixelSize = self.prompt_pixel_size()
+            data = {"size": self.main_image.image_data.shape,
+                    "pixelSize": pixelSize}
         if pixelSize is None:
             # pop up error, then stop loading info
             error_box = QtWidgets.QMessageBox.question(
@@ -1754,7 +1783,7 @@ QPushButton:hover {{
             error_box
             return
         self.cache = data
-        getmaps(self.cache, imctrl_file_name,".", save=False) # use os path
+        getmaps(self.cache, imctrl_file_name, ".", save=False) # use os path
         Arc.tthmap = self.cache['pixelTAmap']
         Arc.azmap = self.cache['pixelAzmap']
         Arc.center = self.cache['center']
@@ -1882,8 +1911,14 @@ QPushButton:hover {{
             self.polygons_table.setCurrentItem(self.main_image.objects[-1].table_label)
         elif cur_text == "New Spot":
             self.add_spot()
-            # self.polygons_table.setRangeSelected(pg.QtWidgets.QTableWidgetSelectionRange(self.polygons_table.rowCount() - 1, 0, self.polygons_table.rowCount() - 1, 0), True)
+            self.add_object_button.setText("Complete Spot")
+            self.creating_object = True
+            self.main_image.current_spot = self.main_image.objects[-1]
             self.polygons_table.setCurrentItem(self.main_image.objects[-1].table_label)
+        elif cur_text == "Complete Spot":
+            self.done_creating()
+            self.add_object_button.setText("New Spot")
+            self.creating_object = False
         elif cur_text == "New Ring":
             if not self.hasLoadedConfig:
                 QtWidgets.QMessageBox.question(self,"Exit","Please load an image control file before using arcs and rings.",QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
@@ -1958,6 +1993,7 @@ QPushButton:hover {{
         self.main_image.current_point = None
         self.main_image.current_arc = None
         self.main_image.current_ring = None
+        self.main_image.current_spot = None
 
     def add_point(self):
         point = Point(image_size=self.main_image.image_data.shape)
@@ -2387,7 +2423,19 @@ QPushButton:hover {{
         selected = self.polygons_table.selectedItems()[0]
         selected_row = selected.row()
         label_text = self.polygons_table.item(selected_row, 0).text()
-        # print("Deleting {0} object at row {1}".format(label_text,selected_row))
+        object_to_delete = self.main_image.objects[selected_row]
+        deleting_current_object = False
+
+        if self.creating_object:
+            if label_text == "Polygon" and object_to_delete == self.main_image.current_polygon:
+                deleting_current_object = True
+            elif label_text == "Frame" and object_to_delete == self.main_image.current_polygon:
+                deleting_current_object = True
+            elif label_text == "Arc" and object_to_delete == self.main_image.current_arc:
+                deleting_current_object = True
+            elif label_text == "Ring" and object_to_delete == self.main_image.current_ring:
+                deleting_current_object = True
+
         if label_text == "Polygon":
             self.clear_polygon(index=selected_row)
         elif label_text == "Frame":
@@ -2404,6 +2452,27 @@ QPushButton:hover {{
             self.clear_spot(index=selected_row)
         elif label_text == "Ring":
             self.clear_ring(index=selected_row)
+
+        if deleting_current_object:
+            self.creating_object = False
+            if label_text == "Polygon":
+                self.add_object_button.setText("New Polygon")
+                self.main_image.current_polygon = None
+            elif label_text == "Frame":
+                self.add_object_button.setText("New Frame")
+                self.main_image.current_polygon = None
+            elif label_text == "Arc":
+                self.add_object_button.setText("New Arc")
+                self.main_image.current_arc = None
+            elif label_text == "Ring":
+                self.add_object_button.setText("New Ring")
+                self.main_image.current_ring = None
+            elif label_text == "Spot":
+                self.add_object_button.setText("New Spot")
+                self.main_image.current_spot = None
+
+        if self.preview_mask_checkbox.isChecked():
+            self.preview_mask(override_checkbox=True)
 
     def update_objects_from_table(self):
        for index in range(len(self.main_image.objects)):
@@ -2484,6 +2553,7 @@ class MainImage(pg.GraphicsLayoutWidget):
         self.current_point = None
         self.current_arc = None
         self.current_ring = None
+        self.current_spot = None
         self.objects = []
 
         self.view.addItem(self.image)
@@ -2600,6 +2670,12 @@ class MainImage(pg.GraphicsLayoutWidget):
     def set_ring_point(self, point):
         self.current_ring.initialize_handles(point)
 
+    def set_spot_point(self, point):
+        self.current_spot.initialize_handles(point)
+
+    def set_spot_point(self, point):
+        self.current_spot.initialize_handles(point)
+
     def add_line(self, orientation):
         line = Line(self.image_data.shape,orientation=orientation)
         self.view.addItem(line)
@@ -2635,6 +2711,8 @@ class MainImage(pg.GraphicsLayoutWidget):
             elif self.current_ring != None:
                 # self.set_ring_point(mousePoint.toPoint())
                 self.add_ring_point(mousePoint.toPoint())
+            elif self.current_spot != None:
+                self.set_spot_point(mousePoint.toPoint())
             # self.add_point(mousePoint)
             # self.add_point(evt.pos())
             # self.qpicture = self.paint_polygon()
