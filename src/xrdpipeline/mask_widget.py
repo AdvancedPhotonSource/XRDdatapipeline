@@ -2567,7 +2567,11 @@ class MainImage(pg.GraphicsLayoutWidget):
         self.intensityBar.gradient.showTicks(show=False)
         self.addItem(self.intensityBar)
 
+        self.coord_label = pg.LabelItem(justify="left")
+        self.addItem(self.coord_label, row=1, col=0, colspan=2)
+
         self.view.scene().sigMouseClicked.connect(self.mouse_click)
+        self.view.scene().sigMouseMoved.connect(self.mouse_moved)
         # self.view.scene().sigMouseReleased.connect(self.mouse_release)
 
         # self.polygons = []
@@ -2724,6 +2728,23 @@ class MainImage(pg.GraphicsLayoutWidget):
         #     self.clear_polygon()
 
     #     self.sendHoverEvents(ev)  ## let items prepare for next click/drag
+    def mouse_moved(self, scene_pos):
+        if self.view.sceneBoundingRect().contains(scene_pos):
+            view_pos = self.view.vb.mapSceneToView(scene_pos)
+            x = int(np.floor(view_pos.x()))
+            y = int(np.floor(view_pos.y()))
+            if 0 <= y < self.image_data.shape[0] and 0 <= x < self.image_data.shape[1]:
+                intensity = self.image_data[y, x]
+                if np.issubdtype(type(intensity), np.floating):
+                    intensity_str = f"{intensity:.4g}"
+                else:
+                    intensity_str = f"{intensity}"
+                self.coord_label.setText(f"x={x}, y={y}, Intensity={intensity_str}")
+            else:
+                self.coord_label.setText("")
+        else:
+            self.coord_label.setText("")
+
     def mouseReleaseEvent(self, evt):
         if (evt.button() == 1) or (evt.button() == pg.QtCore.Qt.MouseButton.LeftButton):
             if len(self.objects) > 0:
