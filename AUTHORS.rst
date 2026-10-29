@@ -7,6 +7,7 @@ Development Lead
 
 * Anna Henckel Merritt <amerritt@anl.gov>
 * Miaoqi Chu <mqichu@anl.gov>
+* Wenqian Xu <wenqianxu@anl.gov>
 
 Contributors
 ------------
