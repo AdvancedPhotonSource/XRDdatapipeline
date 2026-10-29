@@ -17,7 +17,7 @@ XRDPipeline
 
 
 
-A package for automated XRD data masking and integration.
+A package for automated 2D XRD data masking and integration.
 
 ..
         * Free software: MIT license
@@ -27,7 +27,7 @@ A package for automated XRD data masking and integration.
 Features
 --------
 
-* Automated analysis pipeline for incoming or existing XRD data
+* Automated analysis pipeline for incoming or existing 2D XRD data
 * Outlier masking and classification into spot or texture sources
 * UI to display results live
 
@@ -36,7 +36,7 @@ Installation
 
 This software was designed for Python version 3.10.8, download this version of python from https://www.python.org/downloads/release/python-3108/
 
-Creat a project folder on your local machine, set up a `virtual environment`_ in that folder by:
+Create a project folder on your local machine, set up a `virtual environment`_ in that folder by:
 
 .. _`virtual environment`: https://docs.python.org/3/library/venv.html
 
@@ -79,7 +79,13 @@ To launch the analysis pipeline, ensure your virtual environment is running and 
 
 ``python src/xrdpipeline/pipeline_queue.py``
 
-This will open the pipeline UI.
+This will open the pipeline UI. You may also create a .bat file to activate the enviroment and launch the pipeline. It should contain the following two lines:
+
+```
+call path\to\your\virtualenv\Scripts\activate
+python path\to\your\XRDdatapipeline\src\xrdpipeline\pipeline_queue.py
+```
+
 The input directory is where the analysis pipeline will watch for incoming XRD images and add them to the queue to be processed.
 
 The output directory will hold results such as outlier mask files, integrated powder patterns, and other statistical information.
@@ -89,13 +95,13 @@ If using a .poni file, you must manually enter the integration range, number of 
 If using an .imctrl file, you may optionally overwrite the configuration values.
 
 The flat-field file, experimental mask, and bad pixel masks are optional.
-It is recommended to make an experimental mask using the ``mask_widget.py`` file to block out sections such as the beamstop.
+The ``Open Mask Creation Program`` button will launch ``mask_widget.py`` file for generating an experimental mask.
+It is recommended to block out sections such as the beamstop and sample environment shadow that should not contribute to the analysis.
 The pipeline will automatically mask out dead (zero intensity) pixels, but if there is a known detector mask, place it in the bad pixel mask.
 
 Before starting, choose whether you wish to process images already existing in the input directory by selecting the box in the lower left.
 
 Advanced Settings let you customize certain threshold values or skip parts of the pipeline entirely.
-If you wish to change a particular value, make sure to also check the box by its name to indicate it is being overwritten.
 There is a Restore Defaults button for the Advanced Settings should you wish to return to the defaults for a later run.
 
 When you are ready to begin processing images, hit the Start button.
@@ -129,7 +135,7 @@ Instructions: Results UI
 ------------------------
 
 A user interface displaying the results of the analysis pipeline may be run alongside that pipeline to get a live view of its output.
-To run this, type:
+To run this, use the ``Open Data Viewer`` button in the main pipeline UI, or alternatively, type in the command line:
 
 ``python src/xrdpipeline/pyqtgraph_layout.py``
 
@@ -150,6 +156,8 @@ The view may be swapped between any of the available integral lines and defaults
 
 The lower right has multiple tabbed sections, including a copy of the contour plot (to better align with the above integral lines), various statistics on the spot-tagged clusters, the cosine similarity between images, and the User Data section.
 The User Data section allows loading in simulated profiles, such as those output by CrystalMaker, to be shown in other graphs. The two current display options are the integral window and spot statistics window.
+
+Note, do not change name or location of the files and folders in the output directory, as this may cause the Results Viewer to not be able to display the results.
 
 Instructions: Mask creation widget
 ----------------------------------
@@ -182,11 +190,11 @@ The center handle can be dragged to move the entire arc segment.
 Two handles exist for each of the 2theta and azimuthal range.
 If you select Preview Mask and do not see an arc appear in one of the draggable arc objects, ensure you have not swapped the inner and outer handles, then select Clear Preview and Preview Mask again.
 
-X Lines, Y Lines, Spots, and Rings do not currently have a UI implementation, but can still be read in and manually set or adjusted.
+For Spots, select New Spot and click a location on the image where you want the spot to be. Two draggable handles will appear at the selected location, one in the center of the spot for moving it and one at the edge to adjust the radius.
 
-X Lines and Y Lines require text in the format [pos], where pos is the integer number of the pixel line being masked.
+For Rings, select New Ring and click two locations on the image where you want the ring's inner and outer edge to be. 
 
-The Preview Mask button lets you preview the current mask. Save Mask will save a .tif file which can be used in the analysis pipeline.
+The Preview Mask checkbox lets you preview the current mask. Save Mask will save a .tif file which can be used in the data pipeline.
 
 Tutorials
 ---------
