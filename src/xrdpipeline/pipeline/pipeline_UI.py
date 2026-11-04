@@ -649,12 +649,12 @@ class main_window(QtWidgets.QWidget):
         self.PolaVal.setMaximum(1.0)
         self.PolaVal.setSingleStep(0.1)
         self.poni_config_defaults = {
-            self.iotth_min: 0.0,
-            self.iotth_max: 10.0,
+            self.iotth_min: 0.5,
+            self.iotth_max: 10.5,
             self.azim_min: 0.0,
             self.azim_max: 360.0,
             self.outChannels: 2000,
-            self.PolaVal: 1.0
+            self.PolaVal: 0.99
         }
         for k, v in self.poni_config_defaults.items():
             k.setValue(v)
