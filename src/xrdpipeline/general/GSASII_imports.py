@@ -14,6 +14,7 @@ import numpy as np
 import skimage as ski
 import tifffile as tf
 import time
+import math
 
 # Get the directory where the current script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -362,56 +363,65 @@ def LoadControlsPONI(Slines, data):
 
 # from pyfai.geometry.fit2d.convert_to_Fit2d
 def poni_to_gsasii(controls):
-    cos_tilt = np.cos(controls["Rot1"]) * np.cos(controls["Rot2"])
-    sin_tilt = np.sqrt(1.0 - cos_tilt * cos_tilt)
-    tan_tilt = sin_tilt / cos_tilt
+    """Convert radial geometry for a flat detector, orientation 3.
 
-    # PyFai's 'tilt plane rotation'
-    if sin_tilt == 0:
-        # tilt plane rotation undefined when there is no tilt
-        cos_tilt = 1.0
-        sin_tilt = 0.0
-        cos_tpr = 1.0
-        sin_tpr = 0.0
-    else:
-        cos_tpr = max(-1.0, min(1.0, -np.cos(controls["Rot2"]) * np.sin(controls["Rot1"]) / sin_tilt))
-        sin_tpr = np.sin(controls["Rot2"]) / sin_tilt
-    directDist = 1.0e3 * controls["Distance"] / cos_tilt
-    tilt = np.degrees(np.arccos(cos_tilt))
-    if sin_tpr < 0:
-        tpr = -np.degrees(np.arccos(cos_tpr))
-    else:
-        tpr = np.degrees(np.arccos(cos_tpr))
+    Inputs:
+        Distance, Poni1, Poni2: meters
+        Rot1, Rot2, Rot3: radians
+        Wavelength: meters
 
-    # centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) / controls["Detector_config"]["pixel2"]
-    centerX = (controls["Poni2"] + controls["Distance"] * tan_tilt * cos_tpr) * 1000
-    if abs(tilt) < 1e-5: # in degrees
-        # centerY = (controls["Poni1"]) / controls["Detector_config"]["pixel1"]
-        centerY = (controls["Poni1"]) * 1000
-    else:
-        # centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) / controls["Detector_config"]["pixel1"]
-        centerY = (controls["Poni1"] + controls["Distance"] * tan_tilt * sin_tpr) * 1000
-    
-    # further corrections to match GSASII: angle is off by 90 degrees
-    
-    tilt = -tilt
-    tpr = 360-tpr
-    if tpr > 360:
-        tpr -= 360
-    tpr -= 90.
-    if tpr < 0:
-        tpr += 360
+    Outputs:
+        distance, center: millimeters
+        tilt, rotation: degrees
+        wavelength: angstroms
+
+    Assumes matching image coordinates in pyFAI and GSAS-II.
+    """
+    r1 = float(controls["Rot1"])
+    r2 = float(controls["Rot2"])
+    distance = float(controls["Distance"])
+    wavelength = float(controls["Wavelength"])
+
+    c1, s1 = math.cos(r1), math.sin(r1)
+    c2, s2 = math.cos(r2), math.sin(r2)
+
+    cos_tilt = c1 * c2
+
+    if distance <= 0 or wavelength <= 0:
+        raise ValueError("Distance and wavelength must be positive.")
+    if cos_tilt <= 0:
+        raise ValueError("Detector must face the incident beam.")
+
+    a = c2 * s1
+    b = s2
+    sin_tilt = math.hypot(a, b)
+
+    tilt = math.degrees(math.atan2(sin_tilt, cos_tilt))
+
+    # Positive-tilt convention used by the working converter.
+    rotation = (
+        math.degrees(math.atan2(a, b)) % 360.0
+        if sin_tilt > 1e-14
+        else 0.0
+    )
+
+    center_x = (
+        float(controls["Poni2"]) - distance * math.tan(r1)
+    ) * 1000.0
+
+    center_y = (
+        float(controls["Poni1"]) + distance * math.tan(r2) / c1
+    ) * 1000.0
 
     out = {}
-    out["distance"] = directDist
+    out["distance"] = distance * 1.0e3
     out["tilt"] = tilt
-    out["rotation"] = tpr
-    out["center"] = [centerX, centerY]
-    out["wavelength"] = controls["Wavelength"] * 1e10
+    out["rotation"] = rotation
+    out["center"] = [center_x, center_y]
+    out["wavelength"] = wavelength * 1e10
     print(out)
 
     return out
-
 
 # G2fil; used to read in user-defined GSAS-II masks
 def readMasks(filename, masks, ignoreThreshold):
