@@ -12,6 +12,7 @@ import glob
 import re
 import os, sys
 import subprocess
+import tempfile
 import time
 import threading
 import logging
@@ -808,6 +809,12 @@ class main_window(QtWidgets.QWidget):
         self.open_resultsUI_button.released.connect(self.open_resultsUI)
         self.open_maskwidget_button = QtWidgets.QPushButton("Open Mask Creation Program")
         self.open_maskwidget_button.released.connect(self.open_maskwidget)
+        self.open_calibration_program_button = QtWidgets.QPushButton(
+            "Open Calibration Program"
+        )
+        self.open_calibration_program_button.clicked.connect(
+            self.open_calibration_program
+        )
 
         # self.is_running_process = False
 
@@ -831,6 +838,13 @@ class main_window(QtWidgets.QWidget):
         self.window_layout.addWidget(self.input_directory_widget, 0, 0, 1, 3)
         self.window_layout.addWidget(self.output_directory_widget, 1, 0, 1, 3)
         self.window_layout.addWidget(self.config_widget, 2, 0, 1, 3)
+        self.config_widget.layout().removeWidget(self.config_widget.file_name)
+        self.config_widget.layout().addWidget(
+            self.config_widget.file_name, 0, 1, 1, 2
+        )
+        self.config_widget.layout().addWidget(
+            self.open_calibration_program_button, 0, 3
+        )
         self.window_layout.addWidget(self.poni_config_options, 3, 1, 3, 2)
         self.window_layout.addWidget(self.flatfield_widget, 6, 0, 1, 3)
         self.window_layout.addWidget(self.predef_mask_widget, 7, 0, 1, 3)
@@ -1416,6 +1430,107 @@ class main_window(QtWidgets.QWidget):
         self.mask_widget = MainWindow(opened_from_pipeline=True, imctrl_file=self.config_widget.file_name.text())
         self.mask_widget.show()
         self.mask_widget.mask_location.connect(self.update_predef_mask)
+
+    def open_calibration_program(self):
+        """Launch the calibrator and receive its saved image-control file."""
+        package_directory = os.path.dirname(os.path.dirname(
+            os.path.realpath(__file__)
+        ))
+        calibration_script = os.path.join(
+            package_directory, "calibration_widget.py"
+        )
+        if not os.path.isfile(calibration_script):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Calibration Program Not Found",
+                f"Could not find calibration_widget.py at:\n{calibration_script}",
+            )
+            return
+
+        running_process = getattr(self, "calibration_process", None)
+        if (
+            running_process is not None
+            and running_process.state() != QtCore.QProcess.ProcessState.NotRunning
+        ):
+            QtWidgets.QMessageBox.information(
+                self,
+                "Calibration Program Already Open",
+                "Finish or close the currently open calibration program first.",
+            )
+            return
+
+        descriptor, handoff_file = tempfile.mkstemp(
+            prefix="xrdpipeline_calibration_",
+            suffix=".txt",
+        )
+        os.close(descriptor)
+
+        process = QtCore.QProcess(self)
+        process.finished.connect(
+            lambda _code, _status, path=handoff_file:
+                self._handle_calibration_program_finished(path)
+        )
+        process.finished.connect(process.deleteLater)
+        process.errorOccurred.connect(
+            lambda error, path=handoff_file, proc=process:
+                self._handle_calibration_program_error(error, path, proc)
+        )
+        self.calibration_process = process
+        process.start(
+            sys.executable,
+            [calibration_script, "--pipeline-handoff", handoff_file],
+        )
+
+    def _handle_calibration_program_finished(self, handoff_file):
+        self.calibration_process = None
+        saved_path = ""
+        try:
+            with open(handoff_file, "r", encoding="utf-8") as handoff:
+                saved_path = handoff.read().strip()
+        except OSError:
+            pass
+        finally:
+            try:
+                os.remove(handoff_file)
+            except OSError:
+                pass
+
+        if not saved_path:
+            return
+        if not os.path.isfile(saved_path):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Calibration File Not Found",
+                f"The saved image-control file no longer exists:\n{saved_path}",
+            )
+            return
+
+        self.config_widget.file_name.setText(saved_path)
+        try:
+            self.update_imctrl_data()
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Unable to Load Calibration File",
+                str(exc),
+            )
+
+    def _handle_calibration_program_error(self, error, handoff_file, process):
+        if error != QtCore.QProcess.ProcessError.FailedToStart:
+            return
+
+        self.calibration_process = None
+
+        try:
+            os.remove(handoff_file)
+        except OSError:
+            pass
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Unable to Open Calibration Program",
+            process.errorString(),
+        )
+        process.deleteLater()
 
     def update_predef_mask(self, location):
         self.predef_mask_widget.file_name.setText(location)
