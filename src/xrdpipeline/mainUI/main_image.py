@@ -210,19 +210,18 @@ class MainImageView(pg.GraphicsLayoutWidget):
 
     def update_image_data(self, xy_reset=False, z_reset=False):
         # check for flatfield-corrected images first
-        if os.path.exists(
-            os.path.join(
-                self.settings.output_directory,
-                "flatfield",
-                self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
-            )
-        ):
+        corrected_path = os.path.join(
+            self.settings.output_directory,
+            "flatfield",
+            self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
+        )
+        use_corrected = os.path.exists(corrected_path)
+        if use_corrected:
+            with tf.TiffFile(corrected_path) as corrected_file:
+                use_corrected = corrected_file.series[0].dtype.kind != "b"
+        if use_corrected:
             self.image_data = tf.imread(
-                os.path.join(
-                    self.settings.output_directory,
-                    "flatfield",
-                    self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos] + "_flatfield_correct.tif"
-                )
+                corrected_path
             )
         else:
             self.image_data = tf.imread(
