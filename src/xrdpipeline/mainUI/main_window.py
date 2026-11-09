@@ -316,7 +316,11 @@ class KeyPressWindow(QtWidgets.QWidget):
                 if reread_imctrl_wavelength:
                     matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
                     self.settings.wavelength = float(matches[0]) * (10**10)
-        self.update_tiflist()
+        if not self.update_tiflist():
+            QtWidgets.QMessageBox.warning(
+                self, "No Images", "No non-boolean TIFF images were found."
+            )
+            return
         self.update_num()
         self.imageview.update_dir()
         # self.csimview.update_dir()
@@ -343,7 +347,11 @@ class KeyPressWindow(QtWidgets.QWidget):
     def update_settings(self):
         self.settings.curr_key = 0
         self.settings.curr_pos = 0
-        self.update_tiflist()
+        if not self.update_tiflist():
+            QtWidgets.QMessageBox.warning(
+                self, "No Images", "No non-boolean TIFF images were found."
+            )
+            return
         self.update_num()
         self.imageview.update_dir()
         self.integral_widget.update_dir()
@@ -366,6 +374,12 @@ class KeyPressWindow(QtWidgets.QWidget):
         tiflist = {}
         numlist = {}
         for tif in fulltiflist: # Probably losing sort here
+            try:
+                with tf.TiffFile(tif) as image_file:
+                    if image_file.series[0].dtype.kind == "b":
+                        continue
+            except (OSError, ValueError, IndexError):
+                continue
             base_name = os.path.splitext(os.path.split(tif)[1])[0]
             key, number, style = find_name_number(base_name)
             if key not in keylist:
@@ -378,6 +392,11 @@ class KeyPressWindow(QtWidgets.QWidget):
         self.settings.keylist = keylist
         self.settings.tiflist = tiflist
         self.settings.numlist = numlist
+        if not keylist:
+            return False
+        self.settings.curr_key = min(self.settings.curr_key, len(keylist) - 1)
+        current_images = tiflist[keylist[self.settings.curr_key]]
+        self.settings.curr_pos = min(self.settings.curr_pos, len(current_images) - 1)
         # get size of first image, if it exists
         self.settings.image_size = self.get_image_size(
             os.path.join(
@@ -385,6 +404,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 self.settings.tiflist[self.settings.keylist[self.settings.curr_key]][self.settings.curr_pos]+".tif"
             )
         )
+        return True
 
     def get_image_size(self, imagename):
         image = tf.imread(imagename)
@@ -399,7 +419,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         # First thing saved: zero mask
         # Last things saved: integrals
         # Check integral list against tiflist
-        self.update_tiflist()
+        if not self.update_tiflist():
+            return
         # Find key of most recent file
         integral_filelist = sorted(
             glob.glob(
@@ -427,6 +448,8 @@ class KeyPressWindow(QtWidgets.QWidget):
             result = re.search(r"(\d{5})", last_completed)
             if result is not None:
                 key = last_completed[0 : result.start(0)]
+                if key not in self.settings.keylist:
+                    return
                 key_idx = self.settings.keylist.index(key)
                 if key_idx != self.settings.curr_key:
                     self.navigation_bar.dataset_select.setCurrentIndex(key_idx)
@@ -437,9 +460,12 @@ class KeyPressWindow(QtWidgets.QWidget):
                 last_completed = self.tabbed_area.contour_widget.integral_filelist[-1]
                 last_completed = os.path.splitext(os.path.split(last_completed)[1])[0]
                 last_completed = "".join(last_completed.split("_")[:-1])
-                completed_pos = self.settings.tiflist[
+                current_images = self.settings.tiflist[
                     self.settings.keylist[self.settings.curr_key]
-                ].index(last_completed)
+                ]
+                if last_completed not in current_images:
+                    return
+                completed_pos = current_images.index(last_completed)
                 # print(completed_pos)
                 if completed_pos != self.settings.curr_pos:
                     self.settings.curr_pos = completed_pos
@@ -548,6 +574,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         Move to the next image
         """
         # global tiflist, keylist, curr_key, curr_pos
+        if not self.settings.keylist:
+            return
         self.settings.curr_pos += 1
         self.settings.curr_pos = self.settings.curr_pos % len(
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
@@ -561,6 +589,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         Move to the previous image
         """
         # global tiflist, keylist, curr_key, curr_pos
+        if not self.settings.keylist:
+            return
         self.settings.curr_pos -= 1
         self.settings.curr_pos = self.settings.curr_pos % len(
             self.settings.tiflist[self.settings.keylist[self.settings.curr_key]]
@@ -575,6 +605,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         in the list
         """
         # global tiflist, keylist, curr_key, curr_pos
+        if not self.settings.keylist:
+            return
         self.settings.curr_pos = 0
         self.settings.curr_key -= 1
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
@@ -597,6 +629,8 @@ class KeyPressWindow(QtWidgets.QWidget):
         in the list
         """
         # global tiflist, keylist, curr_key, curr_pos
+        if not self.settings.keylist:
+            return
         self.settings.curr_pos = 0
         self.settings.curr_key += 1
         self.settings.curr_key = self.settings.curr_key % len(self.settings.keylist)
@@ -619,6 +653,8 @@ class KeyPressWindow(QtWidgets.QWidget):
 
         :param evt: Index of selected dataset
         """
+        if not self.settings.keylist or not 0 <= evt < len(self.settings.keylist):
+            return
         self.settings.curr_pos = 0
         self.settings.curr_key = evt
         self.update_num()
