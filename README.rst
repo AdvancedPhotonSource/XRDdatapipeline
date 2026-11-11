@@ -90,7 +90,8 @@ The input directory is where the analysis pipeline will watch for incoming XRD i
 
 The output directory will hold results such as outlier mask files, integrated powder patterns, and other statistical information.
 
-The configuration file may be either an .imctrl (GSASII) or .poni (PyFAI) calibration file.
+The configuration file can be created using the pipeline's calibration program, or loaded from an existing .imctrl (GSAS-II) or .poni (PyFAI) file.
+To create a new configuration file from scratch, click "open calibration program" button and follow the guidelines provided inside.
 If using a .poni file, you must manually enter the integration range, number of integration bins, and polarization to correct for.
 If using an .imctrl file, you may optionally overwrite the configuration values.
 
