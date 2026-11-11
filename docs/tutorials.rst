@@ -31,9 +31,10 @@ Set it to the location of the GuiliangJun25 directory.
 The Output Directory is the directory which will hold the output integrals, masks, and other data from the pipeline.
 This can be the same directory as the input directory: a subdirectory named "XRDdatapipeline_output" will be created to hold all of the outputs in labelled subdirectories.
 
-The Config file may be either a GSASII .imctrl file or a PyFAI .poni file. If using the latter, please set the 2theta and azimuthal integration ranges,
+The Config file can be created from scratch using the pipeline's calibration program, or loaded from either an existing GSASII .imctrl file or a PyFAI .poni file. 
+If using the .poni file, please set the 2theta and azimuthal integration ranges,
 the number of integration bins, and the polarization in this step.
-GSASII .imctrl files contain this information; loading one in will autofill this information.
+GSASII .imctrl files contain this information; loading one in will autofill this information, though you may overwrite it if needed.
 For this tutorial, the config file is located in GuiliangJun25_tutorial/configs.
 
 The flat-field file is an optional input which contains information about any flat-field corrections which need to be made to the images.
