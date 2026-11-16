@@ -71,6 +71,12 @@ Once you have started the pipeline, it will begin to output image masks, integra
 To visualize this data, launch pyqtgraph_layout.py or click the "Open Data Viewer" button in the main pipeline window. This will open two windows: the main UI and a small window asking for the Input Directory, Output Directory, and Image Control file (or Config file) again.
 Click Browse to give these the same inputs as you gave to the pipeline, except for the output directory now should point to the "XRDdatapipeline_output" subdirectory. If you use the "Open Data Viewer" button, these should autopopulate. Once done, hit Okay.
 
+The image position readout uses the 2theta and azimuth maps in the output
+directory whose names match the selected image control file. If those maps are
+missing or have different image dimensions, run the pipeline with the selected
+calibration to generate them. Regenerate the maps after changing a calibration
+file, including when a different file has the same name.
+
 .. image:: tutorial_images/results_UI_blank.png
 
 .. image:: tutorial_images/results_UI_file_select_filled.png

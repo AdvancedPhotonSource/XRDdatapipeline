@@ -323,6 +323,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             return
         self.update_num()
         self.imageview.update_dir()
+        self.warn_missing_maps()
         # self.csimview.update_dir()
         self.contourview.update_dir()
         self.integral_widget.update_dir()
@@ -354,6 +355,7 @@ class KeyPressWindow(QtWidgets.QWidget):
             return
         self.update_num()
         self.imageview.update_dir()
+        self.warn_missing_maps()
         self.integral_widget.update_dir()
         self.tabbed_area.update_dir()
         # self.name_label.setText(
@@ -364,6 +366,18 @@ class KeyPressWindow(QtWidgets.QWidget):
                 ]
             )
         )
+
+    def warn_missing_maps(self):
+        if not self.imageview.maps_loaded:
+            self.cursor_label.setText("2\u03b8, Azim, Q, d: unavailable")
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Calibration Maps Unavailable",
+                "No matching 2theta and azimuth maps with the image dimensions "
+                "were found for the selected image control file. Image position "
+                "readouts are unavailable. Run the pipeline with this calibration "
+                "and the selected output directory to generate the maps.",
+            )
 
     def update_tiflist(self):
         # global tiflist, keylist, curr_key, curr_pos
@@ -744,10 +758,13 @@ class KeyPressWindow(QtWidgets.QWidget):
                         Q = 0
                         d = 0
                 else:
-                    tth = 0
-                    azim = 0
-                    Q = 0
-                    d = 0
+                    z = self.imageview.image_data[y_val, x_val]
+                    self.cursor_label.setText(
+                        "<span style='font-size: 12pt'>x=%0.0f,   y=%0.0f,    z=%0.0f</span>, "
+                        "<span style='font-size: 12pt'>2\u03b8, Azim, Q, d: unavailable</span>"
+                        % (mousePoint.x(), mousePoint.y(), z)
+                    )
+                    return
                 # calc intensity of underlying image
                 z = self.imageview.image_data[int(mousePoint.y()), int(mousePoint.x())]
                 self.cursor_label.setText(
