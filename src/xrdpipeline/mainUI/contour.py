@@ -169,8 +169,6 @@ class ContourView(pg.GraphicsLayoutWidget):
         self.manual_controls_list.append(self.integral_step)
 
     def update_dir(self):
-        self.tthvals = []
-        self.qvals = []
         self.reset_integral_data(reset_z=True, reset_xy=True)
 
     def update_integral_list(self, reset_z=False, manual = False):
@@ -359,7 +357,8 @@ class ContourView(pg.GraphicsLayoutWidget):
 
     def reset_integral_data(self, manual=False, reset_z = False, reset_xy = False):
         self.integral_data = []
-        self.xvals = []
+        self.tthvals = []
+        self.qvals = []
         self.yvals = []
         if manual:
             self.live_spacing = self.integral_step.value()
