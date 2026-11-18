@@ -278,7 +278,7 @@ class GSAS2CalibratorApp(QtWidgets.QWidget):
 
         integration_pens = (
             pg.mkPen("#ad1457", width=1.5, style=QtCore.Qt.PenStyle.DashLine),
-            pg.mkPen("#1565c0", width=1.5, style=QtCore.Qt.PenStyle.DashLine),
+            pg.mkPen("pink", width=1.5, style=QtCore.Qt.PenStyle.DashLine),
             pg.mkPen("#2e7d32", width=1.5, style=QtCore.Qt.PenStyle.DashLine),
             pg.mkPen("#2e7d32", width=1.5, style=QtCore.Qt.PenStyle.DashLine),
         )
