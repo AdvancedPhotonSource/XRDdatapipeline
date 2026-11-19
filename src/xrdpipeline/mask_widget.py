@@ -7,6 +7,7 @@ https://github.com/AdvancedPhotonSource/XRDdatapipeline/blob/main/LICENSE
 This file defines a mask creation widget.
 """
 
+import ast
 import os, sys
 import numpy as np
 import PySide6
@@ -30,6 +31,13 @@ def pixel_to_mm(distance, pixel_size):
 def mm_to_pixel(distance, pixel_size):
     scale = pixel_size / 1000
     return distance / scale
+
+
+def angular_mask_parameters(values, kind):
+    values = tuple(map(float, values))
+    if not np.all(np.isfinite(values)) or values[-1] < 0:
+        raise ValueError(f"{kind} parameters must be finite, and width must be non-negative.")
+    return values
 
 
 def choose_file():
@@ -914,6 +922,12 @@ class Arc(pg.ROI):
         self.mask_RGBA[:,:,2] = 255
         self.is_enabled = True
         self.segments = []
+        # Keep numeric bounds exact until the pixel-positioned handles are edited.
+        self._exact_parameters = None
+        self.sigRegionChanged.connect(self._clear_exact_parameters)
+
+    def _clear_exact_parameters(self, *args):
+        self._exact_parameters = None
         
     def initialize_handles(self,point):
         while len(self.handles) > 0:
@@ -996,70 +1010,60 @@ class Arc(pg.ROI):
             mapped_points = {}
             for i in range(len(scene_points)):
                 mapped_points[scene_points[i][0]] = self.getViewBox().mapSceneToView(scene_points[i][1])
-            maxtth_pos = [int(mapped_points['Tth_high'].y()),int(mapped_points['Tth_high'].x())]
-            if check_in_bounds(maxtth_pos, self.tthmap.shape):
-                maxtth = self.tthmap[maxtth_pos[0]][maxtth_pos[1]]
+            if self._exact_parameters is not None:
+                center, minazim, maxazim, width = self._exact_parameters
+                mintth, maxtth = center - width / 2, center + width / 2
             else:
-                maxtth = np.max(self.tthmap)
-            mintth_pos = [int(mapped_points['Tth_low'].y()),int(mapped_points['Tth_low'].x())]
-            # not likely meant to be OoB, but this avoids problems if it's dragged OoB temporarily
-            if check_in_bounds(mintth_pos, self.tthmap.shape):
-                mintth = self.tthmap[mintth_pos[0]][mintth_pos[1]]
-            else:
-                mintth = np.max(self.tthmap)
-            mintth = self.tthmap[mintth_pos[0]][mintth_pos[1]]
-            maxazim_pos = [int(mapped_points['Azim_left'].y()),int(mapped_points['Azim_left'].x())]
-            maxazim_pos = find_closest_valid(maxazim_pos, self.tthmap.shape)
-            maxazim = self.azmap[maxazim_pos[0]][maxazim_pos[1]]
-            minazim_pos = [int(mapped_points['Azim_right'].y()),int(mapped_points['Azim_right'].x())]
-            minazim_pos = find_closest_valid(minazim_pos, self.tthmap.shape)
-            minazim = self.azmap[minazim_pos[0]][minazim_pos[1]]
-            # print(mintth, maxtth, minazim, maxazim)
+                maxtth_pos = [int(mapped_points['Tth_high'].y()),int(mapped_points['Tth_high'].x())]
+                if check_in_bounds(maxtth_pos, self.tthmap.shape):
+                    maxtth = self.tthmap[maxtth_pos[0]][maxtth_pos[1]]
+                else:
+                    maxtth = np.max(self.tthmap)
+                mintth_pos = [int(mapped_points['Tth_low'].y()),int(mapped_points['Tth_low'].x())]
+                if check_in_bounds(mintth_pos, self.tthmap.shape):
+                    mintth = self.tthmap[mintth_pos[0]][mintth_pos[1]]
+                else:
+                    mintth = np.max(self.tthmap)
+                maxazim_pos = [int(mapped_points['Azim_left'].y()),int(mapped_points['Azim_left'].x())]
+                maxazim_pos = find_closest_valid(maxazim_pos, self.tthmap.shape)
+                maxazim = self.azmap[maxazim_pos[0]][maxazim_pos[1]]
+                minazim_pos = [int(mapped_points['Azim_right'].y()),int(mapped_points['Azim_right'].x())]
+                minazim_pos = find_closest_valid(minazim_pos, self.tthmap.shape)
+                minazim = self.azmap[minazim_pos[0]][minazim_pos[1]]
+            self._update_mask(mintth, maxtth, minazim, maxazim)
 
-            self.mask_data = self.tthmap >= mintth
-            self.mask_data &= self.tthmap <= maxtth
-            if maxazim > minazim:
-                self.mask_data &= self.azmap >= minazim
-                self.mask_data &= self.azmap <= maxazim
-            else:
-                temp = self.azmap <= maxazim
-                temp |= self.azmap >= minazim
-                self.mask_data &= temp
-            
-            self.mask_RGBA[:,:,3] = 175*self.mask_data
-
-            self.tth_center = maxtth-.5*(maxtth-mintth)
-            self.startazim = minazim
-            self.endazim = maxazim
+    def _update_mask(self, mintth, maxtth, minazim, maxazim):
+        self.mask_data = (self.tthmap >= mintth) & (self.tthmap <= maxtth)
+        if maxazim > minazim:
+            self.mask_data &= (self.azmap >= minazim) & (self.azmap <= maxazim)
+        else:
+            self.mask_data &= (self.azmap <= maxazim) | (self.azmap >= minazim)
+        self.mask_RGBA[:,:,3] = 175*self.mask_data
+        if self._exact_parameters is not None:
+            self.tth_center, self.startazim, self.endazim, self.tthwidth = self._exact_parameters
+        else:
+            self.tth_center = maxtth - .5*(maxtth-mintth)
+            self.startazim, self.endazim = minazim, maxazim
             self.tthwidth = maxtth-mintth
-
-            # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=maxtth-.5*(maxtth-mintth),startazim=minazim,endazim=maxazim,tthwidth=maxtth-mintth))
-            self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
+        self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
 
     def updateFromTable(self):
-        # checking self.isMoving does not help
-        # change to update table when handle is let go
-        match = re.match(r'\[(?P<tth>\d+\.*\d*),\s*\[(?P<startazim>\d+\.*\d*),\s*(?P<endazim>\d+\.*\d*)\],\s*(?P<tthwidth>\d+\.*\d*)\]',self.table_item.text())
-        # print(match.group('tth'))
-        tth_center = float(match.group('tth'))
-        tthwidth = float(match.group('tthwidth'))
+        center, azimuths, width = ast.literal_eval(self.table_item.text())
+        start, end = azimuths
+        center, start, end, width = angular_mask_parameters((center, start, end, width), "Arc")
+        self.set_parameters(center, start, end, width, preserve=True)
+
+    def set_parameters(self, tth_center, minazim, maxazim, tthwidth, preserve=False):
+        self._exact_parameters = None
         tthmin = tth_center - 0.5*tthwidth
         tthmax = tth_center + 0.5*tthwidth
-        minazim = float(match.group('startazim'))
-        maxazim = float(match.group('endazim'))
         self.tth_center = tth_center
         self.startazim = minazim
         self.endazim = maxazim
         self.tthwidth = tthwidth
 
-        if minazim < 0:
-            minazim = 360 + minazim
-        elif minazim > 360:
-            minazim -= 360
-        if maxazim < 0:
-            maxazim = 360 + maxazim
-        elif maxazim > 360:
-            maxazim -= 360
+        minazim %= 360
+        maxazim %= 360
         if minazim <= maxazim:
             center_azim = 0.5*(maxazim+minazim)
         else:
@@ -1073,6 +1077,9 @@ class Arc(pg.ROI):
         # print(tthmin, tthmax, tth_center, minazim, maxazim)
         # print(tth_low, tth_high, center_point, azim_right, azim_left)
 
+        # Moving the center translates and rotates the other handles.
+        center_handle = next(handle for handle in self.handles if handle['name'] == "Center_point")
+        center_handle['item'].movePoint(center_point)
         for handle in self.handles:
             if handle['name'] == "Tth_high":
                 handle['item'].movePoint(tth_high)
@@ -1082,12 +1089,15 @@ class Arc(pg.ROI):
                 handle['item'].movePoint(azim_left)
             elif handle['name'] == "Azim_right":
                 handle['item'].movePoint(azim_right)
-            elif handle['name'] == "Center_point":
-                handle['item'].movePoint(center_point)
+        if preserve:
+            self._exact_parameters = (tth_center, minazim, maxazim, tthwidth)
+            self._update_mask(tthmin, tthmax, minazim, maxazim)
+            self.update()
 
     def find_closest_point(self,tth,azim):
         # handle cases near azim=0
-        z = (self.tthmap - tth)**2 + (self.azmap-azim)**2
+        azim_delta = (self.azmap - azim + 180) % 360 - 180
+        z = (self.tthmap - tth)**2 + azim_delta**2
         p_yx = np.unravel_index(np.argmin(z),z.shape)
         # print("closest point:",tth,azim,pxy)
         point = pg.QtCore.QPoint(p_yx[1],p_yx[0])
@@ -1220,6 +1230,16 @@ class Ring(Polygon):
 
         self.tth_center = 0
         self.tthwidth = 0
+        self._exact_parameters = None
+        self.sigRegionChanged.connect(self._clear_exact_parameters)
+
+    def _clear_exact_parameters(self, *args):
+        self._exact_parameters = None
+
+    def movePoint(self, handle, pos, modifiers=None, finish=True, coords="parent"):
+        self._clear_exact_parameters()
+        super().movePoint(handle, pos, modifiers, finish, coords)
+        self.update()
 
     def addSegment(self, h1, h2, index=None):
         seg = ToggleablePolyLineSegment(handles=(h1, h2), start_enabled = self.is_enabled, pen=self.pen, hoverPen=self.hoverPen,
@@ -1267,30 +1287,34 @@ class Ring(Polygon):
             mapped_points = []
             for i in range(len(scene_points)):
                 mapped_points.append(self.getViewBox().mapSceneToView(scene_points[i][1]))
-            tth1 = self.tthmap[int(mapped_points[0].y())][int(mapped_points[0].x())]
-            tth2 = self.tthmap[int(mapped_points[1].y())][int(mapped_points[1].x())]
-            if tth1 < tth2:
-                mintth = tth1
-                maxtth = tth2
+            if self._exact_parameters is not None:
+                center, width = self._exact_parameters
+                mintth, maxtth = center - width / 2, center + width / 2
             else:
-                mintth = tth2
-                maxtth = tth1
+                tth1 = self.tthmap[int(mapped_points[0].y())][int(mapped_points[0].x())]
+                tth2 = self.tthmap[int(mapped_points[1].y())][int(mapped_points[1].x())]
+                mintth, maxtth = min(tth1, tth2), max(tth1, tth2)
+            self._update_mask(mintth, maxtth)
 
-            self.mask_data = self.tthmap >= mintth
-            self.mask_data &= self.tthmap <= maxtth
-            
-            self.mask_RGBA[:,:,3] = 175*self.mask_data
-
-            self.tth_center = maxtth-.5*(maxtth-mintth)
+    def _update_mask(self, mintth, maxtth):
+        self.mask_data = (self.tthmap >= mintth) & (self.tthmap <= maxtth)
+        self.mask_RGBA[:,:,3] = 175*self.mask_data
+        if self._exact_parameters is not None:
+            self.tth_center, self.tthwidth = self._exact_parameters
+        else:
+            self.tth_center = maxtth - .5*(maxtth-mintth)
             self.tthwidth = maxtth-mintth
-
-            # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=maxtth-.5*(maxtth-mintth),startazim=minazim,endazim=maxazim,tthwidth=maxtth-mintth))
-            self.table_item.setText("[{tthcenter},{tthwidth}]".format(tthcenter=self.tth_center,tthwidth=self.tthwidth))
+        self.table_item.setText("[{tthcenter},{tthwidth}]".format(tthcenter=self.tth_center,tthwidth=self.tthwidth))
 
     def updateFromTable(self):
-        match = re.match(r'\[(?P<center_tth>\d+\.*\d*),\s*(?P<tth_width>\d+\.*\d*)\]',self.table_item.text())
-        self.tth_center = float(match.group('center_tth'))
-        self.tthwidth = float(match.group('tth_width'))
+        center, width = ast.literal_eval(self.table_item.text())
+        center, width = angular_mask_parameters((center, width), "Ring")
+        self.set_parameters(center, width, preserve=True)
+
+    def set_parameters(self, center, width, preserve=False):
+        self._exact_parameters = None
+        self.tth_center = center
+        self.tthwidth = width
         tth_low = self.tth_center - 0.5 * self.tthwidth
         tth_high = self.tth_center + 0.5 * self.tthwidth
         h1_pos = self.find_closest_point(tth_low, 45)
@@ -1303,7 +1327,12 @@ class Ring(Polygon):
             h2['item'].movePoint(h2_pos)
         else:
             self.clearPoints()
-            self.setPoints([h1_pos, h2_pos])
+            local_points = [self.mapFromScene(pos) for pos in (h1_pos, h2_pos)]
+            self.setPoints([(pos.x(), pos.y()) for pos in local_points])
+        if preserve:
+            self._exact_parameters = (center, width)
+            self._update_mask(tth_low, tth_high)
+            self.update()
 
     def find_closest_point(self,tth,azim):
         # handle cases near azim=0
@@ -2200,9 +2229,9 @@ QPushButton:hover {{
                     # arcs_list.append(i.table_item.text())
                     # self.table_item.setText("[{tth},[{startazim},{endazim}],{tthwidth}]".format(tth=self.tth_center,startazim=self.startazim,endazim=self.endazim,tthwidth=self.tthwidth))
                     arcs_list.append([
-                        i.tth_center,
-                        [i.startazim,i.endazim],
-                        i.tthwidth
+                        float(i.tth_center),
+                        [float(i.startazim), float(i.endazim)],
+                        float(i.tthwidth)
                     ])
                 elif type(i) == Line:
                     if i.orientation == "horizontal":
@@ -2257,7 +2286,7 @@ QPushButton:hover {{
                         )
                     points.append([x_mm, y_mm, d_mm])
                 elif type(i) == Ring:
-                    rings_list.append([i.center_tth, i.tth_width])
+                    rings_list.append([float(i.tth_center), float(i.tthwidth)])
 
             # outfilename = os.path.join(".", "mask.immask")
             with open(outfilename,'w') as outfile:
@@ -2320,7 +2349,6 @@ QPushButton:hover {{
                     "Direct translations between the two would make ellipses."
                 )
             for spot in masks["Points"]:
-                self.add_spot()
                 x, y, d = spot
                 x_pix = mm_to_pixel(x, self.cache["pixelSize"][0])
                 y_pix = mm_to_pixel(y, self.cache["pixelSize"][1])
@@ -2334,19 +2362,29 @@ QPushButton:hover {{
                             + self.cache["pixelSize"][1] **2
                         )
                     )
-                spot = [x_pix, y_pix, r_pix]
-                self.main_image.objects[-1].table_item.setText(str(spot))
-                self.main_image.objects[-1].updateFromTable()
+                x_pix, y_pix, r_pix = float(x_pix), float(y_pix), float(r_pix)
+                if not np.all(np.isfinite([x_pix, y_pix, r_pix])) or r_pix < 0:
+                    raise ValueError("Spot coordinates and radius must be finite, and radius must be non-negative.")
+                self.add_spot()
+                spot = self.main_image.objects[-1]
+                spot.center = [y_pix, x_pix]
+                spot.radius = r_pix
+                spot.setSize((2 * r_pix, 2 * r_pix))
+                spot.setPos((x_pix - r_pix, y_pix - r_pix))
+                spot.table_item.setText(str([x_pix, y_pix, r_pix]))
             for ring in masks["Rings"]:
+                center, width = ring
+                center, width = angular_mask_parameters((center, width), "Ring")
                 self.add_ring()
-                self.main_image.objects[-1].table_item.setText(str(ring))
-                self.main_image.objects[-1].updateFromTable()
+                self.main_image.objects[-1].set_parameters(center, width, preserve=True)
             for arc in masks["Arcs"]:
+                center, azimuths, width = arc
+                start, end = azimuths
+                center, start, end, width = angular_mask_parameters((center, start, end, width), "Arc")
                 self.add_arc()
                 self.main_image.set_arc_point(pg.QtCore.QPoint(0, 0))
                 self.done_creating()
-                self.main_image.objects[-1].table_item.setText(str(arc))
-                self.main_image.objects[-1].updateFromTable()
+                self.main_image.objects[-1].set_parameters(center, start, end, width, preserve=True)
             for xline in masks["Xlines"]:
                 self.add_line(orientation="horizontal")
                 self.main_image.objects[-1].table_item.setText(str(xline))

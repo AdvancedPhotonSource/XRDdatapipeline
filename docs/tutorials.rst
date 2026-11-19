@@ -271,6 +271,8 @@ Point Mask
 
 Point masks will create a circular mask. After clicking "New Point", this will initialize at the origin of the image.
 You may adjust the center position and radius using the two handles for the point.
+Imported immask ``Points`` specify the center and diameter in millimeters; the widget converts them to pixels using the calibrated pixel size.
+For non-square pixels, the circular pixel mask is an approximation.
 
 To adjust the values using the table, use the following format:
 
@@ -298,3 +300,7 @@ These can be dragged to adjust the bounds of the ring.
 The values in the table use the following format:
 
 ``[2 theta center, 2 theta range]``
+
+Imported ring and arc masks retain their numeric bounds for the preview and
+saved mask. Their handles are positioned at nearby image pixels; moving a
+handle updates the bounds based on its new pixel position.
