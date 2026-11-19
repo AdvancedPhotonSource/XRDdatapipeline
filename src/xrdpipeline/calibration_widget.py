@@ -168,10 +168,11 @@ def gsas2_metric_projection(pts_x, pts_y, x0, y0, distance, tilt, tilt_rotation,
 # MAIN WINDOW USER INTERFACE ECOSYSTEM
 # ==============================================================================
 class GSAS2CalibratorApp(QtWidgets.QWidget):
-    def __init__(self, pipeline_handoff_file=None):
+    def __init__(self, pipeline_handoff_file=None, image_directory=None):
         super().__init__()
 
         self.pipeline_handoff_file = pipeline_handoff_file
+        self.image_directory = image_directory or ""
 
         self.setWindowTitle("2D Diffraction Calibrator")
         self.resize(1300, 850)
@@ -850,7 +851,7 @@ class GSAS2CalibratorApp(QtWidgets.QWidget):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             "Choose Test Image",
-            "",
+            self.image_directory,
             "TIFF files (*.tif *.tiff);;All files (*)",
         )
 
@@ -3259,19 +3260,25 @@ class GSAS2CalibratorApp(QtWidgets.QWidget):
 # RUNTIME EXECUTION ENTRY POINT
 # ==============================================================================
 
-if __name__ == "__main__":
+def main():
     pipeline_handoff_file = None
+    image_directory = None
     image_filename = None
     arguments = iter(sys.argv[1:])
     for argument in arguments:
         if argument == "--pipeline-handoff":
             pipeline_handoff_file = next(arguments, None)
+        elif argument == "--image-directory":
+            image_directory = next(arguments, None)
+            if image_directory is None:
+                raise SystemExit("--image-directory requires a value")
         elif image_filename is None:
             image_filename = argument
 
     app = QtWidgets.QApplication(sys.argv)
     window = GSAS2CalibratorApp(
-        pipeline_handoff_file=pipeline_handoff_file
+        pipeline_handoff_file=pipeline_handoff_file,
+        image_directory=image_directory,
     )
     window.show()
 
@@ -3279,4 +3286,8 @@ if __name__ == "__main__":
     if image_filename is not None:
         window.load_image(image_filename)
 
-    sys.exit(app.exec())
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

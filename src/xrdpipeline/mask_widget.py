@@ -1403,11 +1403,12 @@ class InitialFilesWindow(QtWidgets.QWidget):
 
     files_selected = pg.QtCore.Signal(str,str,str)
 
-    def __init__(self, image_file=None, imctrl_file=None, immask_file=None):
+    def __init__(self, image_file=None, imctrl_file=None, immask_file=None, image_directory=None):
         super().__init__()
         self.image_file = image_file
         self.imctrl_file = imctrl_file
         self.immask_file = immask_file
+        self.image_directory = image_directory or "."
 
         self.test_image_label = QtWidgets.QLabel("Test image (required):")
         self.test_image_text = QtWidgets.QLineEdit()
@@ -1462,7 +1463,7 @@ class InitialFilesWindow(QtWidgets.QWidget):
         image_directory_name = QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Select Test Image",
-            ".",
+            self.image_directory,
             )
         self.test_image_text.setText(image_directory_name[0])
 
@@ -1470,7 +1471,7 @@ class InitialFilesWindow(QtWidgets.QWidget):
         imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Choose Configuration File",
-            ".",
+            self.image_directory,
             "Imctrl and PONI files (*.imctrl *.poni)"
         )
         self.imctrl_file_text.setText(imctrl_file_name[0])
@@ -1479,7 +1480,7 @@ class InitialFilesWindow(QtWidgets.QWidget):
         output_directory_name = QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Select Immask File",
-            ".",
+            self.image_directory,
             "Immask files (*.immask)")
         self.immask_file_text.setText(output_directory_name[0])
 
@@ -1537,17 +1538,19 @@ class MainWindow(pg.GraphicsLayoutWidget):
 
     mask_location = pg.QtCore.Signal(str)
 
-    def __init__(self, opened_from_pipeline=False, image_file=None, imctrl_file=None, immask_file=None):
+    def __init__(self, opened_from_pipeline=False, image_file=None, imctrl_file=None, immask_file=None, image_directory=None):
         super().__init__()
         self.opened_from_pipeline = opened_from_pipeline
         self.image_file_name = image_file
         self.imctrl_file_name = imctrl_file
         self.immask_file_name = immask_file
+        self.image_directory = image_directory or "."
         self.setMinimumSize(1000,600)
         self.file_select_window = InitialFilesWindow(
             image_file=self.image_file_name,
             imctrl_file=self.imctrl_file_name,
-            immask_file=self.immask_file_name
+            immask_file=self.immask_file_name,
+            image_directory=self.image_directory,
             )
         self.file_select_window.files_selected.connect(self.load_files)
         if self.image_file_name is not None:
@@ -1744,7 +1747,7 @@ QPushButton:hover {{
     #     self.file_select_window.show()
 
     def load_image_popup(self):
-        image_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Test Image",".")[0]
+        image_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Test Image",self.image_directory)[0]
         self.load_image(image_file_name=image_file_name)
 
     def load_image(self, image_file_name):
@@ -1753,7 +1756,7 @@ QPushButton:hover {{
         self.image_changed()
 
     def load_imctrl_file_popup(self):
-        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",".","Imctrl and PONI files (*.imctrl *.poni)")[0]
+        imctrl_file_name = QtWidgets.QFileDialog.getOpenFileName(None,"Choose Image Control File",self.image_directory,"Imctrl and PONI files (*.imctrl *.poni)")[0]
         if imctrl_file_name != "":
             self.load_imctrls(imctrl_file_name=imctrl_file_name)
 
@@ -2282,7 +2285,7 @@ QPushButton:hover {{
 
     def load_immask_file_popup(self):
         infilename = QtWidgets.QFileDialog.getOpenFileName(
-            None, "Choose Image Mask", ".", "Immask files (*.immask)"
+            None, "Choose Image Mask", self.image_directory, "Immask files (*.immask)"
         )[0]
         self.load_immask(infilename)
 

@@ -4,18 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xrdpipeline"
-version = "0.1.0"
+version = "0.2.0"
+requires-python = ">=3.10"
 description = "A package for XRD data masking and reduction"
 readme = "README.rst"
 authors = [
   {name = "Anna Henckel Merritt", email = "amerritt@anl.gov"},
-  {name = "Miaoqi Chu", email = "mqichu@anl.gov"}
+  {name = "Miaoqi Chu", email = "mqichu@anl.gov"},
+  {name = "Wenqian Xu", email = "wenqianxu@anl.gov"}
 ]
 maintainers = [
-  {name = "Anna Henckel Merritt", email = "amerritt@anl.gov"}
+  {name = "Wenqian Xu", email = "wenqianxu@anl.gov"}
 ]
 classifiers = [
-
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.14",
 ]
 license = {text = "MIT license"}
 dependencies = [
@@ -44,7 +47,7 @@ dev = [
 
 [project.urls]
 
-homepage = "https://github.com/ahmerritt/XRDdatapipeline/"
+homepage = "https://github.com/AdvancedPhotonSource/XRDdatapipeline/"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -169,8 +169,8 @@ static PyObject *fmask_func(PyObject *self, PyObject *args) {
     return makeTypeException("Arg 2 (TA): array size does not match image.");	
   if (size != PyArray_DIM(outMask, 0))
     return makeTypeException("Arg 5 (outMask): array size does not match image.");
-  if ((outImg) & (size != PyArray_DIM(outImg, 0))) {
-    return makeTypeException("Arg 8 (outImg, optional): array size does not match image.")
+  if ((outImg) && (size != PyArray_DIM(outImg, 0))) {
+    return makeTypeException("Arg 8 (outImg, optional): array size does not match image.");
   }
 
   /* prepare to access Python arrays */
@@ -466,6 +466,6 @@ static struct PyModuleDef fmaskmodule = { /* define the module */
 };
 
 PyMODINIT_FUNC PyInit_fmask(void) { /* initialize the module */
-    return PyModule_Create(&fmaskmodule);
     import_array();
+    return PyModule_Create(&fmaskmodule);
 }

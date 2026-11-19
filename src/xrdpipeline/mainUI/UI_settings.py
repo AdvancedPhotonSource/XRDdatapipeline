@@ -405,15 +405,15 @@ class SettingsWindow(QtWidgets.QWidget):
         if ".imctrl" in imctrl_file_name[0]:
             with open(imctrl_file_name[0], "r") as infile:
                 filetext = infile.read()
-            matches = re.findall("wavelength:([\d\.]+)", filetext)
+            matches = re.findall(r"wavelength:([\d\.]+)", filetext)
             self.wavelength_text.setText(matches[0])
-            matches = re.findall("outChannels:([\d.]+)", filetext)
+            matches = re.findall(r"outChannels:([\d.]+)", filetext)
             self.outChannels_text.setText(matches[0])
             # print(matches[0])
         elif ".poni" in imctrl_file_name[0]:
             with open(imctrl_file_name[0], "r") as infile:
                 filetext = infile.read()
-            matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
+            matches = re.findall(r"Wavelength: ([\d.e+-]+)", filetext)
             self.wavelength_text.setText(matches[0]) * (10**10)
             self.outChannels_text.setText(1000)  # pick a default value
 

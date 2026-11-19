@@ -474,8 +474,8 @@ def MakeMaskMap(data, masks, iLim, jLim, tamp):
     tay, tax = np.mgrid[
         iLim[0] + 0.5 : iLim[1] + 0.5, jLim[0] + 0.5 : jLim[1] + 0.5
     ]  # bin centers not corners
-    tax = np.asfarray(tax * scalex, dtype=np.float32).flatten()
-    tay = np.asfarray(tay * scaley, dtype=np.float32).flatten()
+    tax = np.asarray(tax * scalex, dtype=np.float32).flatten()
+    tay = np.asarray(tay * scaley, dtype=np.float32).flatten()
     nI = iLim[1] - iLim[0]
     nJ = jLim[1] - jLim[0]
     # make position masks here
@@ -629,8 +629,8 @@ def Make2ThetaAzimuthMap(data, iLim, jLim):  # most expensive part of integratio
     tay, tax = np.mgrid[
         iLim[0] + 0.5 : iLim[1] + 0.5, jLim[0] + 0.5 : jLim[1] + 0.5
     ]  # bin centers not corners
-    tax = np.asfarray(tax * scalex, dtype=np.float32).flatten()
-    tay = np.asfarray(tay * scaley, dtype=np.float32).flatten()
+    tax = np.asarray(tax * scalex, dtype=np.float32).flatten()
+    tay = np.asarray(tay * scaley, dtype=np.float32).flatten()
     nI = iLim[1] - iLim[0]
     nJ = jLim[1] - jLim[0]
     TA = np.empty((4, nI, nJ))
@@ -728,8 +728,8 @@ def MakeFrameMask(data, frame):
             tax, tay = np.mgrid[
                 iBeg + 0.5 : iFin + 0.5, jBeg + 0.5 : jFin + 0.5
             ]  # bin centers not corners
-            tax = np.asfarray(tax * scalex, dtype=np.float32)
-            tay = np.asfarray(tay * scaley, dtype=np.float32)
+            tax = np.asarray(tax * scalex, dtype=np.float32)
+            tay = np.asarray(tay * scaley, dtype=np.float32)
             tamp = np.ma.make_mask_none((1024 * 1024))
             tamp = (
                 np.ma.make_mask(

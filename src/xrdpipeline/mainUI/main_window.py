@@ -304,17 +304,17 @@ class KeyPressWindow(QtWidgets.QWidget):
                 with open(self.settings.imagecontrol, "r") as infile:
                     filetext = infile.read()
                 if reread_imctrl_wavelength:
-                    matches = re.findall("wavelength:([\d\.]+)", filetext)
+                    matches = re.findall(r"wavelength:([\d\.]+)", filetext)
                     self.settings.wavelength = float(matches[0])
                 if reread_imctrl_outChannels:
-                    matches = re.findall("outChannels:([\d.]+)", filetext)
+                    matches = re.findall(r"outChannels:([\d.]+)", filetext)
                     self.settings.outChannels = int(matches[0])
                 # print(matches[0])
             elif ".poni" in self.settings.imagecontrol:
                 with open(self.settings.imagecontrol, "r") as infile:
                     filetext = infile.read()
                 if reread_imctrl_wavelength:
-                    matches = re.findall("Wavelength: ([\d.e+-]+)", filetext)
+                    matches = re.findall(r"Wavelength: ([\d.e+-]+)", filetext)
                     self.settings.wavelength = float(matches[0]) * (10**10)
         if not self.update_tiflist():
             QtWidgets.QMessageBox.warning(
@@ -749,7 +749,7 @@ class KeyPressWindow(QtWidgets.QWidget):
                 and y_val < self.imageview.image_data.shape[0]
             ):
                 if self.imageview.maps_loaded:
-                    tth = self.imageview.tth_map[y_val, x_val]
+                    tth = float(self.imageview.tth_map[y_val, x_val])
                     azim = self.imageview.azim_map[y_val, x_val]
                     if self.settings.wavelength != 0:
                         Q = tth_to_q(tth, self.settings.wavelength)

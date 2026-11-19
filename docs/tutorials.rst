@@ -32,6 +32,7 @@ The Output Directory is the directory which will hold the output integrals, mask
 This can be the same directory as the input directory: a subdirectory named "XRDdatapipeline_output" will be created to hold all of the outputs in labelled subdirectories.
 
 The Config file can be created from scratch using the pipeline's calibration program, or loaded from either an existing GSASII .imctrl file or a PyFAI .poni file. 
+When opened from the pipeline, the calibration program's image dialog starts in the selected input directory.
 If using the .poni file, please set the 2theta and azimuthal integration ranges,
 the number of integration bins, and the polarization in this step.
 GSASII .imctrl files contain this information; loading one in will autofill this information, though you may overwrite it if needed.
@@ -50,6 +51,8 @@ Note that the pipeline will automatically mask out any zero-intensity pixels, wh
 .. image:: tutorial_images/pipeline_UI_filled.png
 
 Once these files have been chosen, click on “Process existing images” so the pipeline knows to search the directory for any existing files rather than simply wait for new ones, then click Start.
+To skip existing images with a matching ``integrals/<image name>_base.chi`` file in the output directory, select “Skip already-processed files”.
+This checks for the base integral only; it does not verify that all other outputs were completed.
 There will be a delay as the pipeline creates the cache on the first file, then processing will speed up for the rest of the images in the directory.
 When the queue size goes back down to zero, click Stop and exit the program.
 You may start the UI tutorial while this runs.
@@ -202,6 +205,7 @@ Setup
 ~~~~~
 
 When first launched, the mask creation widget will prompt for a test image to use.
+When opened from the pipeline, the test-image, image-control, and immask dialogs start in the pipeline's input directory, if one is selected.
 Once loaded, there is the option to load in an image control file in order to use the 2 theta threshold, Arc, and Ring mask options; this button is located at the upper right of the window.
 The "Load immask" and "Save immask" buttons will allow you to import and export the current mask as an .immask file.
 To use the created mask with this software's analysis pipeline, please use the "Save mask" option in the lower right of the window; this will save the mask as a tiff file.

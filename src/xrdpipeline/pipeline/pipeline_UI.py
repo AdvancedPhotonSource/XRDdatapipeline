@@ -1226,32 +1226,30 @@ class main_window(QtWidgets.QWidget):
                 ignore_regs = r".*" + re.escape(self.exclude_regex) + r".*"
             for filename in existing_files:
                 results = re.match(regs, filename)
-                if results is not None and ignore_regs is not None:
-                    if re.match(ignore_regs, filename):
-                        continue
-                # If skipping already-processed files, check for an existing integral file for that name+number
+                if results is None or (ignore_regs is not None and re.match(ignore_regs, filename)):
+                    continue
+                # Check for the base integral written for this image.
                 if self.skip_processed_files.isChecked():
                     integral_filename = os.path.join(
                         self.output_directory,
                         "integrals",
-                        results.group("name") + "-" + results.group("number") + "_base.chi"
+                        results.group("name") + "_base.chi"
                     )
                     if os.path.exists(integral_filename):
                         logging.getLogger(__name__).info(f"Skipping {filename}")
                         continue
-                if results is not None:
-                    self.queue.append(
-                        [
-                            filename,
-                            results.group("name"),
-                            results.group("ext"),
-                        ]
-                    )
-                    print(
+                self.queue.append(
+                    [
                         filename,
                         results.group("name"),
                         results.group("ext"),
-                    )
+                    ]
+                )
+                print(
+                    filename,
+                    results.group("name"),
+                    results.group("ext"),
+                )
 
         # Start queue
         print("Starting queue")
@@ -1381,8 +1379,7 @@ class main_window(QtWidgets.QWidget):
         if self.process_new_only_radio.isChecked() or self.process_both_radio.isChecked():
             self.observer.stop()
             self.observer.join()
-        # if self.cache_thread.isRunning():
-        if not self.has_made_cache:
+        if self.cache_thread is not None and self.cache_thread.isRunning():
             self.cache_worker.stopEarly = True
             self.cache_thread.quit()
             self.cache_thread.finished.connect(self.really_stopped)
@@ -1427,7 +1424,11 @@ class main_window(QtWidgets.QWidget):
         """
         Open the mask widget in a separate window and output its result back to the pipeline.
         """
-        self.mask_widget = MainWindow(opened_from_pipeline=True, imctrl_file=self.config_widget.file_name.text())
+        self.mask_widget = MainWindow(
+            opened_from_pipeline=True,
+            imctrl_file=self.config_widget.file_name.text(),
+            image_directory=self.input_directory_widget.file_name.text(),
+        )
         self.mask_widget.show()
         self.mask_widget.mask_location.connect(self.update_predef_mask)
 
@@ -1476,10 +1477,11 @@ class main_window(QtWidgets.QWidget):
                 self._handle_calibration_program_error(error, path, proc)
         )
         self.calibration_process = process
-        process.start(
-            sys.executable,
-            [calibration_script, "--pipeline-handoff", handoff_file],
-        )
+        arguments = [calibration_script, "--pipeline-handoff", handoff_file]
+        image_directory = self.input_directory_widget.file_name.text()
+        if image_directory:
+            arguments.extend(["--image-directory", image_directory])
+        process.start(sys.executable, arguments)
 
     def _handle_calibration_program_finished(self, handoff_file):
         self.calibration_process = None

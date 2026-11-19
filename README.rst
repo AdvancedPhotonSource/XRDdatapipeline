@@ -34,7 +34,7 @@ Features
 Installation
 ------------
 
-This software was designed for Python version 3.10.8, download this version of python from https://www.python.org/downloads/release/python-3108/
+This updated version is for Python version 3.14.x, download this version of python from https://www.python.org/downloads/release/python-31410/
 
 Create a project folder on your local machine, set up a `virtual environment`_ in that folder by:
 
@@ -67,10 +67,6 @@ These commands should install this module and all of its prerequisites.
         fmask and polymask should work fine for Windows, but need to be recompiled in Linux.
         Need to include extra steps, ie installing and running the compiler
         Add extra linux_requirements.txt to install it, add the makefile for compiling
-
-If you just want to run the pipeline without using the UI, you can instead set up the virtual environment with:
-
-``python -m pip install -r requirements_noui.txt``
 
 Instructions: Pipeline
 ----------------------
