@@ -21,6 +21,12 @@ import re
 from mainUI.main_image import image_mask
 from general.GSASII_imports import *
 
+if sys.version_info < (3, 14):
+    sys.exit(
+        f"ERROR: XRDPipeline now requires Python 3.14+ (you are running {sys.version.split()[0]}).\n"
+        "Either recreate your .venv with Python 3.14, or run 'git checkout python-3.10' to use the legacy version."
+    )
+
 pg.setConfigOptions(imageAxisOrder="row-major")
 
 
